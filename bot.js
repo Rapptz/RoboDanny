@@ -144,10 +144,6 @@ function get_splatoon_map_callback(index, prefix, current_channel) {
     };
 }
 
-function to_percent(value) {
-    return (value * 100).toString() + '%';
-}
-
 commands.maps = {
     help: 'shows the current Splatoon maps in rotation',
     command: function(message) {
@@ -165,7 +161,7 @@ commands.nextmaps = {
 commands.quit = {
     authority: 3,
     command: function(message) {
-        bot.disconnect();
+        bot.logout();
         process.exit(0);
     }
 };
@@ -281,6 +277,36 @@ commands.authority = {
         config.authority[user.id] = authority;
         save_config();
         bot.sendMessage(message.channel, user.username + ' now has an authority of **' + authority_prettify[authority] + '**');
+    }
+}
+
+commands.timer = {
+    help: 'reminds you after a certain amount of time',
+    command: function(message) {
+        var time = parseInt(message.args[0]);
+        if(isNaN(time)) {
+            bot.sendMessage(message.channel, message.author.mention() + ', your time is incorrect. It has to be a number.');
+            return;
+        }
+
+        var what = message.args.slice(1).join(' ');
+        var reminder_message;
+        var reminder_text = '';
+        var complete_text = '';
+
+        if(what) {
+            reminder_text = message.author.mention() + ", I'll remind you to _\"" + what + "_\" in " + time + " seconds.";
+            complete_text = message.author.mention() + ':\nTime is up! You asked to be remined for _"' + what + '_"!';
+        }
+        else {
+            reminder_text = message.author.mention() + ", You've set a reminder in " + time + " seconds.";
+            complete_text = message.author.mention() + ':\nTime is up! You asked to be reminded about something earlier.';
+        }
+        bot.sendMessage(message.channel, reminder_text, function(msg) { reminder_message = msg; });
+        setTimeout(function() {
+            bot.sendMessage(message.channel, complete_text);
+            bot.deleteMessage(reminder_message);
+        }, time * 1000);
     }
 }
 
