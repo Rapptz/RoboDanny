@@ -125,7 +125,8 @@ commands.random = {
         var type = message.args[0].toLowerCase();
         if(type == 'weapon') {
             var index = Math.floor(Math.random() * config.splatoon.weapons.length);
-            bot.sendMessage(message.channel, config.splatoon.weapons[index]);
+            var weapon = config.splatoon.weapons[index]
+            bot.sendMessage(message.channel, weapon.name + ' (sub: ' + weapon.sub + ', special: ' + weapon.special + ')');
         }
         else if(type == 'number') {
             bot.sendMessage(message.channel, Math.floor(Math.random() * 100).toString());
@@ -136,6 +137,57 @@ commands.random = {
         }
         else {
             bot.sendMessage(message.channel, error_string);
+        }
+    }
+};
+
+commands.weapon = {
+    help: 'displays weapons or a weapon info',
+    help_args: 'query',
+    command: function(message) {
+        if(message.args.length < 1) {
+            bot.sendMessage(message.channel, 'No query given. Try e.g. !weapon disruptor or !weapon splattershot jr. or !weapon inkstrike');
+            return;
+        }
+
+        var input = message.args.join(' ').toLowerCase();
+        if(input.length < 3) {
+            bot.sendMessage(message.channel, 'The query must be at least 3 characters long');
+            return;
+        }
+
+        // alright, first search for a weapon name.
+        var weapons = config.splatoon.weapons;
+        var result = weapons.filter(function(weapon) {
+            return weapon.name.toLowerCase().indexOf(input) > -1;
+        });
+
+        if(result.length === 0) {
+            // try sub search query
+            result = weapons.filter(function(weapon) {
+                return weapon.sub.toLowerCase().indexOf(input) > -1;
+            });
+        }
+
+        if(result.length === 0) {
+            // try special weapon query
+            result = weapons.filter(function(weapon) {
+                return weapon.special.toLowerCase().indexOf(input) > -1;
+            });
+        }
+
+        if(result.length > 0) {
+            // by now we must have found something...
+            var text = 'Found the following weapons:\n';
+            for(var i = 0; i < result.length; ++i) {
+                var weapon = result[i];
+                text = text.concat('Name: ', weapon.name, ' Sub: ', weapon.sub, ' Special: ', weapon.special, '\n');
+            }
+
+            bot.sendMessage(message.channel, text);
+        }
+        else {
+            bot.sendMessage(message.channel, 'Sorry. The query "' + message.args.join(' ') + '" returned nothing.');
         }
     }
 };
