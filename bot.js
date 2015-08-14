@@ -3,6 +3,7 @@ var request = require('request');
 var fs = require('fs');
 
 var config = {};
+var raw = {};
 
 function load_config() {
     config = JSON.parse(fs.readFileSync('config.json').toString());
@@ -48,6 +49,7 @@ function get_user_authority(userID) {
 // 'authority' -- specifies that the userID must have x authority or higher, default 0.
 // 'command' -- specifies the actual function to be called
 // 'help' -- the help text given when !help is called
+// 'help_args' -- something to prefix the !help output with
 
 function get_command_from_message(message) {
     if(message.indexOf(config.command_prefix) !== 0) {
@@ -72,18 +74,33 @@ function command_is_hidden(key) {
 commands.help = {
     help: 'shows this message',
     command: function(message) {
-        var text = 'available commands:\n';
+        var text = 'available commands for you:\n';
+        var authority = get_user_authority(message.author.id);
         for(var key in commands) {
-            if(command_is_hidden(key)) {
+            var command = commands[key];
+            if(command.hidden) {
                 continue;
             }
-            if(commands[key].help) {
-                text = text.concat(config.command_prefix, key, ' -- ', commands[key].help, '\n');
+
+            if(command.authority) {
+                if(authority < command.authority || command.authority === 3) {
+                    continue;
+                }
             }
-            else {
-                text = text.concat(config.command_prefix, key, '\n');
+
+            text = text.concat(config.command_prefix, key);
+            if(command.help_args) {
+                text = text.concat(' ', command.help_args);
             }
+
+            if(command.help) {
+                text = text.concat(' -- ', command.help);
+            }
+
+            text = text.concat('\n');
         }
+
+        text = text.concat('\n[arg] means the argument is optional, arg with no brackets means the argument is required\n');
         bot.sendMessage(message.channel, text);
     }
 };
@@ -97,6 +114,7 @@ commands.hello = {
 
 commands.random = {
     help: 'displays a random weapon, map, or number',
+    help_args: 'type',
     command: function(message) {
         var error_string = 'Random what? weapon, map, or number? (e.g. !random weapon)'
         if(message.args.length < 1) {
@@ -125,7 +143,9 @@ commands.random = {
 function get_splatoon_map_callback(index, prefix, current_channel) {
     return function(error, response, body) {
         if(error || response.statusCode != 200) {
-            bot.sendMessage(current_channel, "Unfortunately an error occurred. Tell Danny the error was " + error);
+            var error_message = "An error occurred. Tell Danny the error was " + error + ' [code: ' + response.statusCode + ']';
+            error_message = error_message.concat('\nMaybe try again later.');
+            bot.sendMessage(current_channel, error_message);
             return;
         }
 
@@ -168,6 +188,7 @@ commands.quit = {
 
 commands.choose = {
     help: 'helps choose between multiple choices',
+    help_args: 'choices...',
     command: function(message) {
         if(message.args.length < 2) {
             bot.sendMessage(message.channel, 'Not enough choices to choose from... (e.g. !choose 1 2 3)');
@@ -181,6 +202,7 @@ commands.choose = {
 
 commands.brand = {
     help: 'shows info about a splatoon brand',
+    help_args: 'name',
     command: function(message) {
         var input = message.args.join(' ');
         var lower_case_input = input.toLowerCase();
@@ -236,6 +258,7 @@ commands.info = {
 commands.cleanup = {
     help: 'cleans up past messages',
     authority: 1,
+    help_args: '[messages]',
     command: function(message) {
         var amount = parseInt(message.args[0]) || 100;
         var text = '';
@@ -258,6 +281,7 @@ commands.cleanup = {
 commands.authority = {
     help: 'manages the authority of a user',
     authority: 1,
+    help_args: 'new_authority username',
     command: function(message) {
         var server = message.channel.server;
         var authority = parseInt(message.args[0]) || 0;
@@ -282,6 +306,7 @@ commands.authority = {
 
 commands.timer = {
     help: 'reminds you after a certain amount of time',
+    help_args: 'seconds [reminder]',
     command: function(message) {
         var time = parseInt(message.args[0]);
         if(isNaN(time)) {
@@ -318,6 +343,7 @@ function message_callback(message) {
 
     if(command) {
         message.args = words.slice(1);
+        console.log(message.time + ': <' + message.author.username + ' @' + message.author.id + '> ' + message.content);
         if(typeof(command) == 'object') {
             var authority_required = command.authority || 0;
             if(get_user_authority(message.author.id) >= authority_required) {
@@ -339,4 +365,8 @@ bot.on('ready', function() {
     console.log(bot.user.username);
     console.log(bot.user.id);
     console.log('-----');
+});
+
+bot.on('raw', function(e) {
+    raw = JSON.parse(e.data);
 });
