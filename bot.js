@@ -457,6 +457,13 @@ commands.coolkids = {
     }
 };
 
+commands.marie = {
+    hidden: true,
+    command: function(message) {
+        bot.sendMessage(message.channel, 'http://i.stack.imgur.com/0OT9X.png');
+    }
+};
+
 commands.splatwiki = {
     help: 'shows a page to the splatoon wiki',
     help_args: 'title',
