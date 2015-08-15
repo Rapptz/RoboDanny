@@ -102,7 +102,7 @@ commands.help = {
 
             text = text.concat('\n');
         }
-        bot.sendMessage(message.channel, text);
+        bot.startPM(message.author, text);
     }
 };
 
@@ -280,6 +280,12 @@ commands.quit = {
     }
 };
 
+commands.echo = {
+    command: function(message) {
+        bot.sendMessage(message.channel, message.args.join(' '));
+    }
+};
+
 commands.choose = {
     help: 'helps choose between multiple choices',
     help_args: 'choices...',
@@ -451,41 +457,6 @@ commands.coolkids = {
     }
 };
 
-
-/* temporary command */
-commands.rainmaker = {
-    help: 'shows time until rainmaker comes out',
-    command: function(message) {
-        var now = new Date();
-        var rainmaker = new Date(2015, 7, 14, 22, 0);
-
-        if(rainmaker < now) {
-            rainmaker.setDate(rainmaker.getDate() + 1);
-        }
-
-        var difference = rainmaker - now;
-        if(difference < 0) {
-            bot.sendMessage(message.channel, 'Rainmaker has come out!');
-            return;
-        }
-
-        var hours = Math.floor(difference / 1000 / 60 / 60);
-        difference -= hours * 1000 * 60 * 60;
-        var minutes = Math.floor(difference / 1000 / 60);
-        difference -= minutes * 1000 * 60;
-        var seconds = Math.floor(difference / 1000);
-        difference -= seconds * 1000;
-        bot.sendMessage(message.channel, 'Rainmaker comes out in ' + hours + ' hours, ' + minutes + ' minutes, and ' + seconds + ' seconds.');
-    }
-};
-
-commands.marie = {
-    hidden: true,
-    command: function(message) {
-        bot.sendMessage(message.channel, 'http://i.stack.imgur.com/0OT9X.png');
-    }
-};
-
 commands.splatwiki = {
     help: 'shows a page to the splatoon wiki',
     help_args: 'title',
@@ -514,7 +485,7 @@ commands.splatwiki = {
             }
         });
     }
-}
+};
 
 function message_callback(message) {
     // console.log(user + ' said: ' + message);
