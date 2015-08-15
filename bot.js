@@ -27,6 +27,8 @@ var authority_prettify = {
     3: "Creator"
 };
 
+authority_prettify[-1] = "Banned";
+
 
 function find_from(list, predicate) {
     for(var i = 0; i < list.length; ++i) {
@@ -73,6 +75,7 @@ function command_is_hidden(key) {
 
 commands.help = {
     help: 'shows this message',
+    hidden: true,
     command: function(message) {
         var text = 'available commands for you:\n';
         var authority = get_user_authority(message.author.id);
@@ -99,14 +102,13 @@ commands.help = {
 
             text = text.concat('\n');
         }
-
-        text = text.concat('\n[arg] means the argument is optional, arg with no brackets means the argument is required\n');
         bot.sendMessage(message.channel, text);
     }
 };
 
 commands.hello = {
     help: 'displays my intro message!',
+    hidden: true,
     command: function(message) {
         bot.sendMessage(message.channel, "Hello! I'm a robot! Danny made me.");
     }
@@ -134,6 +136,16 @@ commands.random = {
         else if(type == 'map') {
             var index = Math.floor(Math.random() * config.splatoon.maps.length);
             bot.sendMessage(message.channel, config.splatoon.maps[index]);
+        }
+        else if(type == 'lenny') {
+            // top sekret
+            var lennies = [
+                "( ͡° ͜ʖ ͡°)", "( ͠° ͟ʖ ͡°)", "ᕦ( ͡° ͜ʖ ͡°)ᕤ", "( ͡~ ͜ʖ ͡°)",
+                "( ͡o ͜ʖ ͡o)", "͡(° ͜ʖ ͡ -)", "( ͡͡ ° ͜ ʖ ͡ °)﻿", "(ง ͠° ͟ل͜ ͡°)ง",
+                "ヽ༼ຈل͜ຈ༽ﾉ"
+            ];
+            var index = Math.floor(Math.random() * lennies.length);
+            bot.sendMessage(message.channel, lennies[index]);
         }
         else {
             bot.sendMessage(message.channel, error_string);
@@ -192,7 +204,7 @@ commands.weapon = {
     }
 };
 
-function get_splatoon_map_callback(index, prefix, current_channel) {
+function get_splatoon_map_callback(indices, current_channel) {
     return function(error, response, body) {
         if(error || response.statusCode != 200) {
             var error_message = "An error occurred. Tell Danny the error was " + error + ' [code: ' + response.statusCode + ']';
@@ -208,25 +220,55 @@ function get_splatoon_map_callback(index, prefix, current_channel) {
             return;
         }
 
-        var current_maps = schedule[index];
-        var result = '';
-        result = result.concat(prefix, ' regular maps: ', current_maps.regular.maps[0].nameEN, ' and ', current_maps.regular.maps[1].nameEN, '\n');
-        result = result.concat(prefix, ' ', current_maps.ranked.rulesEN, ' maps: ', current_maps.ranked.maps[0].nameEN, ' and ', current_maps.ranked.maps[1].nameEN);
-        bot.sendMessage(current_channel, result);
+        var result = [];
+        var prefixes = {
+            0: 'Current',
+            1: 'Next',
+            2: 'Last scheduled'
+        };
+
+        for(var i = 0; i < indices.length; ++i) {
+            var index = indices[i];
+            var prefix = prefixes[index];
+            var current_maps = schedule[index];
+            var ranked_name = current_maps.ranked.rulesEN;
+            if(ranked_name == 'ガチホコ') {
+                ranked_name = 'Rainmaker';
+            }
+            result.push(prefix + ' regular maps: ' + current_maps.regular.maps[0].nameEN + ' and ' + current_maps.regular.maps[1].nameEN);
+            result.push(prefix + ' ' + ranked_name + ' maps: ' + current_maps.ranked.maps[0].nameEN + ' and ' + current_maps.ranked.maps[1].nameEN);
+        }
+        bot.sendMessage(current_channel, result.join('\n'));
     };
 }
 
 commands.maps = {
     help: 'shows the current Splatoon maps in rotation',
     command: function(message) {
-        request(config.splatoon.schedule_url, get_splatoon_map_callback(0, 'Current', message.channel));
+        request(config.splatoon.schedule_url, get_splatoon_map_callback([0], message.channel));
     }
 };
 
 commands.nextmaps = {
     help: 'shows the next Splatoon maps in rotation',
     command: function(message) {
-        request(config.splatoon.schedule_url, get_splatoon_map_callback(1, 'Next', message.channel));
+        request(config.splatoon.schedule_url, get_splatoon_map_callback([1], message.channel));
+    }
+};
+
+commands.lastmaps = {
+    help: 'shows the last Splatoon maps in schedule',
+    hidden: true,
+    command: function(message) {
+        request(config.splatoon.schedule_url, get_splatoon_map_callback([2], message.channel));
+    }
+}
+
+commands.schedule = {
+    help: 'shows the entire map schedule in Splatoon',
+    hidden: true,
+    command: function(message) {
+        request(config.splatoon.schedule_url, get_splatoon_map_callback([0, 1, 2], message.channel));
     }
 };
 
@@ -295,6 +337,7 @@ commands.reloadconfig = {
 
 commands.info = {
     help: 'shows information about the current user or another user',
+    hidden: true,
     command: function(message) {
         var server = message.channel.server;
         var user = server.members.filter('username', message.args.join(' '), true) || message.author;
@@ -316,7 +359,7 @@ commands.cleanup = {
         var text = '';
         var count = 0;
         var done;
-        bot.getChannelLogs(message.channel, amount, function(logs) {
+        bot.getChannelLogs(message.channel, amount, function(error, logs) {
             for(message of logs.contents) {
                 if(message.author.id === bot.user.id) {
                     ++count;
@@ -326,9 +369,9 @@ commands.cleanup = {
             bot.deleteMessage(done);
             bot.sendMessage(message.channel, 'Cleanup has completed. ' + count + ' messages were deleted', false, true, { selfDestruct: 3000 });
         });
-        bot.sendMessage(message.channel, 'Cleaning up...', function(arg) { done = arg; });
+        bot.sendMessage(message.channel, 'Cleaning up...', function(error, arg) { done = arg; });
     }
-}
+};
 
 commands.authority = {
     help: 'manages the authority of a user',
@@ -354,7 +397,7 @@ commands.authority = {
         save_config();
         bot.sendMessage(message.channel, user.username + ' now has an authority of **' + authority_prettify[authority] + '**');
     }
-}
+};
 
 commands.timer = {
     help: 'reminds you after a certain amount of time',
@@ -379,11 +422,83 @@ commands.timer = {
             reminder_text = message.author.mention() + ", You've set a reminder in " + time + " seconds.";
             complete_text = message.author.mention() + ':\nTime is up! You asked to be reminded about something earlier.';
         }
-        bot.sendMessage(message.channel, reminder_text, function(msg) { reminder_message = msg; });
+        bot.sendMessage(message.channel, reminder_text, function(error, msg) { reminder_message = msg; });
         setTimeout(function() {
             bot.sendMessage(message.channel, complete_text);
             bot.deleteMessage(reminder_message);
         }, time * 1000);
+    }
+};
+
+commands.coolkids = {
+    help: 'are you cool?',
+    command: function(message) {
+        bot.sendMessage(message.channel, config.cool_kids.join(', '));
+    }
+};
+
+
+/* temporary command */
+commands.rainmaker = {
+    help: 'shows time until rainmaker comes out',
+    command: function(message) {
+        var now = new Date();
+        var rainmaker = new Date(2015, 7, 14, 22, 0);
+
+        if(rainmaker < now) {
+            rainmaker.setDate(rainmaker.getDate() + 1);
+        }
+
+        var difference = rainmaker - now;
+        if(difference < 0) {
+            bot.sendMessage(message.channel, 'Rainmaker has come out!');
+            return;
+        }
+
+        var hours = Math.floor(difference / 1000 / 60 / 60);
+        difference -= hours * 1000 * 60 * 60;
+        var minutes = Math.floor(difference / 1000 / 60);
+        difference -= minutes * 1000 * 60;
+        var seconds = Math.floor(difference / 1000);
+        difference -= seconds * 1000;
+        bot.sendMessage(message.channel, 'Rainmaker comes out in ' + hours + ' hours, ' + minutes + ' minutes, and ' + seconds + ' seconds.');
+    }
+};
+
+commands.marie = {
+    hidden: true,
+    command: function(message) {
+        bot.sendMessage(message.channel, 'http://i.stack.imgur.com/0OT9X.png');
+    }
+};
+
+commands.splatwiki = {
+    help: 'shows a page to the splatoon wiki',
+    help_args: 'title',
+    command: function(message) {
+        var title = message.args.join(' ');
+        if(title.length === 0) {
+            bot.sendMessage(message.channel, 'Title to search for is required');
+            return;
+        }
+
+        var url = 'http://splatoonwiki.org/w/index.php?title=' + encodeURIComponent(title);
+
+        request(url, function(error, response, body) {
+            if(error) {
+                bot.sendMessage(message.channel, 'An error has occurred ' + error + '. Tell Danny.');
+                return;
+            }
+
+            if(response.statusCode === 404) {
+                // page not found so..
+                bot.sendMessage(message.channel, 'Could not find a page with the title. Try searching: http://splatoonwiki.org/wiki/Special:Search/' + encodeURIComponent(title));
+            }
+            else if(response.statusCode === 200) {
+                // actually found it so..
+                bot.sendMessage(message.channel, url);
+            }
+        });
     }
 }
 
