@@ -379,6 +379,15 @@ commands.authority = {
     help_args: 'new_authority username',
     command: function(message) {
         var server = message.channel.server;
+        if(message.args[0] == 'list') {
+            var text = '';
+            for(key in authority_prettify) {
+                text = text.concat(key, ' => ', authority_prettify[key], '\n');
+            }
+            bot.sendMessage(message.channel, text);
+            return;
+        }
+
         var authority = parseInt(message.args[0]) || 0;
         var author_authority = get_user_authority(message.author.id);
         var user = server.members.filter('username', message.args.slice(1).join(' '), true);
