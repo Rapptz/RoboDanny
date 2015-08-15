@@ -402,6 +402,11 @@ commands.authority = {
             return;
         }
 
+        if(!(authority in authority_prettify)) {
+            bot.sendMessage(message.channel, "This authority does not exist.");
+            return;
+        }
+
         config.authority[user.id] = authority;
         save_config();
         bot.sendMessage(message.channel, user.username + ' now has an authority of **' + authority_prettify[authority] + '**');
