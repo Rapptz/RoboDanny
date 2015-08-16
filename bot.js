@@ -232,9 +232,6 @@ function get_splatoon_map_callback(indices, current_channel) {
             var prefix = prefixes[index];
             var current_maps = schedule[index];
             var ranked_name = current_maps.ranked.rulesEN;
-            if(ranked_name == 'ガチホコ') {
-                ranked_name = 'Rainmaker';
-            }
             result.push(prefix + ' regular maps: ' + current_maps.regular.maps[0].nameEN + ' and ' + current_maps.regular.maps[1].nameEN);
             result.push(prefix + ' ' + ranked_name + ' maps: ' + current_maps.ranked.maps[0].nameEN + ' and ' + current_maps.ranked.maps[1].nameEN);
         }
