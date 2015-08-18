@@ -115,10 +115,10 @@ commands.hello = {
 };
 
 commands.random = {
-    help: 'displays a random weapon, map, or number',
+    help: 'displays a random weapon, map, mode, or number',
     help_args: 'type',
     command: function(message) {
-        var error_string = 'Random what? weapon, map, or number? (e.g. !random weapon)'
+        var error_string = 'Random what? weapon, map, mode, or number? (e.g. !random weapon)'
         if(message.args.length < 1) {
             bot.sendMessage(message.channel, error_string);
             return;
@@ -146,6 +146,13 @@ commands.random = {
             ];
             var index = Math.floor(Math.random() * lennies.length);
             bot.sendMessage(message.channel, lennies[index]);
+        }
+        else if(type == 'mode') {
+            var modes = [
+                'Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control'
+            ];
+            var index = Math.floor(Math.random() * modes.length);
+            bot.sendMessage(message.channel, modes[index]);
         }
         else {
             bot.sendMessage(message.channel, error_string);
@@ -200,6 +207,121 @@ commands.weapon = {
         }
         else {
             bot.sendMessage(message.channel, 'Sorry. The query "' + message.args.join(' ') + '" returned nothing.');
+        }
+    }
+};
+
+function get_profile_reply(profile) {
+    var reply = 'Profile for ' + profile.name + ':\n';
+    reply = reply.concat('NNID: ', !profile.nnid ? '*None found*' : profile.nnid, '\n');
+    reply = reply.concat('Rank: ', !profile.rank ? '*None found*' : profile.rank, '\n');
+    return reply;
+}
+
+function create_profile_if_none_exists(user, force) {
+    var profiles = config.splatoon.profiles;
+    var userid = user.id;
+    if(force || !(userid in profiles)) {
+        profiles[userid] = { name: user.username, nnid: null, rank: null };
+        save_config();
+    }
+}
+
+commands.profile = {
+    help: 'manages your profile',
+    help_args: 'action',
+    command: function(message) {
+        var error_message = 'Unknown action to do on profile.\n' +
+                             'Valid actions are: get, nnid, rank, or delete'
+        if(message.args.length === 0) {
+            bot.sendMessage(message.channel, error_message);
+            return;
+        }
+        var type = message.args[0].toLowerCase();
+        var profiles = config.splatoon.profiles;
+        var userid = message.author.id;
+        create_profile_if_none_exists(message.author);
+        var profile = profiles[userid];
+
+        // There are different operations you can do with a profile..
+        // !profile get <user>
+        // !profile nnid <nnid here>
+        // !profile delete
+        if(type == 'get') {
+            // !profile get user
+            // gives the info for a specific user
+            if(message.args.length < 2) {
+                bot.sendMessage(message.channel, get_profile_reply(profile));
+            }
+            else {
+                var username = message.args.slice(1).join(' ');
+                var user = null;
+
+                for(profileid in profiles) {
+                    var value = profiles[profileid];
+                    if(value.name == username) {
+                        user = { id: profileid, name: value.name };
+                        break;
+                    }
+                }
+
+                if(user === null) {
+                    bot.sendMessage(message.channel, 'User not found');
+                    return;
+                }
+                create_profile_if_none_exists(user);
+                bot.sendMessage(message.channel, get_profile_reply(profiles[user.id]));
+            }
+        }
+        else if(type == 'nnid') {
+            // !profile nnid <nnid here>
+            // sets the NNID for a specific user
+            if(message.args.length < 2) {
+                bot.startPM(message.author, 'Missing your NNID to set to your profile');
+            }
+            else {
+                var nnid = message.args[1];
+                profile.nnid = nnid;
+                save_config();
+                bot.startPM(message.author, 'Your profile NNID is now set to ' + nnid);
+            }
+        }
+        else if(type == 'delete') {
+            // !profile delete [type]
+            // deletes your profile
+            if(message.args.length < 2) {
+                create_profile_if_none_exists(message.author, true);
+            }
+            else {
+                var delete_type = message.args[1].toLowerCase();
+                if(!(delete_type in profile)) {
+                    bot.startPM(message.author, 'Invalid delete action');
+                }
+                else {
+                    profile[delete_type] = null;
+                    save_config();
+                }
+            }
+        }
+        else if(type == 'rank') {
+            var valid_ranks = ['C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+', 'S', 'S+'];
+            if(message.args.length < 2) {
+                bot.startPM(message.author, 'No Splatoon rank given');
+            }
+            else {
+                var rank = message.args[1].toUpperCase();
+                if(valid_ranks.indexOf(rank) !== -1) {
+                    profile.rank = rank;
+                    save_config();
+                    bot.startPM(message.author, 'Your rank was successfully set to ' + rank);
+                }
+                else {
+                    bot.startPM(message.author, 'Invalid rank given');
+                }
+            }
+        }
+        else {
+            bot.sendMessage(message.channel, error_message);
         }
     }
 };
@@ -342,13 +464,22 @@ commands.info = {
     help: 'shows information about the current user or another user',
     hidden: true,
     command: function(message) {
-        var server = message.channel.server;
-        var user = server.members.filter('username', message.args.join(' '), true) || message.author;
-        var owner = server.members.filter('id', server.ownerID, true).username;
+        var user;
+        var text = '';
+        if(!message.isPM()) {
+            var server = message.channel.server;
+            user = server.members.filter('username', message.args.join(' '), true) || message.author;
+            var owner = server.members.filter('id', server.ownerID, true).username;
+            text = 'Info for ' + user.mention() + ':\nYou\'re currently in #' + message.channel.name + ' in server ' + server.name;
+            text = text.concat(' (', server.region, ')\n', 'The owner of this group is ', owner, '\n');
+        }
+        else {
+            user = message.author;
+            text = 'Info for ' + user.mention() + ':\nYou\'re currently in a private conversation with me!\n';
+        }
+
         var authority = get_user_authority(user.id);
-        var text = 'Info for ' + user.mention() + ':\nYou\'re currently in #' + message.channel.name + ' in server ' + server.name;
-        text = text.concat(' (', server.region, ')\n', 'The owner of this group is ', owner, '\n', 'Your Discord ID is: ', user.id);
-        text = text.concat('\nYour authority on me is **' + authority_prettify[authority] + '**');
+        text = text.concat('Your discord ID is: ' + user.id + '\nYour authority on me is **' + authority_prettify[authority] + '**');
         bot.sendMessage(message.channel, text);
     }
 };
@@ -490,6 +621,42 @@ commands.splatwiki = {
         });
     }
 };
+
+commands.raw = {
+    hidden: true,
+    authority: 3,
+    command: function(message) {
+        bot.sendMessage(message.channel, JSON.stringify(raw));
+    }
+};
+
+// commands.define = {
+//     help: 'helps you define a phrase',
+//     command: function(message) {
+//         var title = message.args.join(' ');
+//         if(title.length === 0) {
+//             bot.sendMessage(message.channel, 'No word was given to define');
+//             return;
+//         }
+
+//         var url = 'http://www.thefreedictionary.com/' + encodeURIComponent(title);
+//         request(url, function(error, response, body) {
+//             if(error) {
+//                 bot.sendMessage(message.channel, 'An error has occurred (' + error + '), tell Danny.');
+//                 return;
+//             }
+
+//             if(response.statusCode === 200) {
+//                 if(body.indexOf('Word not found') !== -1) {
+//                     bot.sendMessage(message.channel, 'Word not found');
+//                 }
+//                 else {
+//                     bot.sendMessage(message.channel, url);
+//                 }
+//             }
+//         });
+//     }
+// };
 
 function message_callback(message) {
     // console.log(user + ' said: ' + message);
