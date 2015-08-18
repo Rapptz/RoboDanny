@@ -400,6 +400,7 @@ commands.quit = {
 };
 
 commands.echo = {
+    authority: 2,
     command: function(message) {
         bot.sendMessage(message.channel, message.args.join(' '));
     }
@@ -629,34 +630,6 @@ commands.raw = {
         bot.sendMessage(message.channel, JSON.stringify(raw));
     }
 };
-
-// commands.define = {
-//     help: 'helps you define a phrase',
-//     command: function(message) {
-//         var title = message.args.join(' ');
-//         if(title.length === 0) {
-//             bot.sendMessage(message.channel, 'No word was given to define');
-//             return;
-//         }
-
-//         var url = 'http://www.thefreedictionary.com/' + encodeURIComponent(title);
-//         request(url, function(error, response, body) {
-//             if(error) {
-//                 bot.sendMessage(message.channel, 'An error has occurred (' + error + '), tell Danny.');
-//                 return;
-//             }
-
-//             if(response.statusCode === 200) {
-//                 if(body.indexOf('Word not found') !== -1) {
-//                     bot.sendMessage(message.channel, 'Word not found');
-//                 }
-//                 else {
-//                     bot.sendMessage(message.channel, url);
-//                 }
-//             }
-//         });
-//     }
-// };
 
 function message_callback(message) {
     // console.log(user + ' said: ' + message);
