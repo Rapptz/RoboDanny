@@ -137,7 +137,17 @@ commands.random = {
             bot.sendMessage(message.channel, weapon.name + ' (sub: ' + weapon.sub + ', special: ' + weapon.special + ')');
         }
         else if(type == 'number') {
-            bot.sendMessage(message.channel, Math.floor(Math.random() * 100).toString());
+            var min = 0;
+            var max = 100;
+            if(message.args.length === 2) {
+                 max = parseInt(message.args[1]) || 100;
+            }
+            else if(message.args.length > 2) {
+                min = parseInt(message.args[1]) || 0;
+                max = parseInt(message.args[2]) || 100;
+            }
+            var number = Math.floor(Math.random() * (max - min + 1) + min);
+            bot.sendMessage(message.channel, number.toString());
         }
         else if(type == 'map') {
             var index = Math.floor(Math.random() * config.splatoon.maps.length);
