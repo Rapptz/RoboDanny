@@ -40,6 +40,12 @@ function find_from(list, predicate) {
     return null;
 }
 
+function toTitleCase(str) {
+    return str.replace(/\w\S*/g, function(txt) {
+        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    });
+}
+
 function get_user_authority(userID) {
     return config.authority[userID] || 0;
 }
@@ -215,6 +221,13 @@ function get_profile_reply(profile) {
     var reply = 'Profile for ' + profile.name + ':\n';
     reply = reply.concat('NNID: ', !profile.nnid ? '*None found*' : profile.nnid, '\n');
     reply = reply.concat('Rank: ', !profile.rank ? '*None found*' : profile.rank, '\n');
+    reply = reply.concat('Squad: ', !profile.squad ? '*None found*' : profile.squad, '\n');
+    if(profile.weapon) {
+        reply = reply.concat('Weapon: ', profile.weapon.name, ' (sub: ', profile.weapon.sub, ', special: ', profile.weapon.special, ')\n');
+    }
+    else {
+        reply = reply.concat('Weapon: *None Found*\n');
+    }
     return reply;
 }
 
@@ -222,7 +235,7 @@ function create_profile_if_none_exists(user, force) {
     var profiles = config.splatoon.profiles;
     var userid = user.id;
     if(force || !(userid in profiles)) {
-        profiles[userid] = { name: user.username, nnid: null, rank: null };
+        profiles[userid] = { name: user.username, nnid: null, rank: null, squad: null, weapon: null };
         save_config();
     }
 }
@@ -232,12 +245,8 @@ commands.profile = {
     help_args: 'action',
     command: function(message) {
         var error_message = 'Unknown action to do on profile.\n' +
-                             'Valid actions are: get, nnid, rank, or delete'
-        if(message.args.length === 0) {
-            bot.sendMessage(message.channel, error_message);
-            return;
-        }
-        var type = message.args[0].toLowerCase();
+                             'Valid actions are: get, nnid, rank, weapon, or delete'
+        var type = message.args.length === 0 ? '' : message.args[0].toLowerCase();
         var profiles = config.splatoon.profiles;
         var userid = message.author.id;
         create_profile_if_none_exists(message.author);
@@ -247,7 +256,7 @@ commands.profile = {
         // !profile get <user>
         // !profile nnid <nnid here>
         // !profile delete
-        if(type == 'get') {
+        if(type == 'get' || type == '') {
             // !profile get user
             // gives the info for a specific user
             if(message.args.length < 2) {
@@ -317,6 +326,37 @@ commands.profile = {
                 }
                 else {
                     bot.startPM(message.author, 'Invalid rank given');
+                }
+            }
+        }
+        else if(type == 'squad') {
+            if(message.args.length < 2) {
+                bot.startPM(message.author, 'No squad given');
+                return;
+            }
+            var squad = message.args.slice(1).join(' ');
+            profile.squad = squad;
+            save_config();
+            bot.startPM(message.author, 'Your squad was successfully set to *' + squad + '*.');
+
+        }
+        else if(type == 'weapon') {
+            if(message.args.length < 2) {
+                bot.startPM(message.author, 'No weapon given');
+            }
+            else {
+                var weapon = message.args.slice(1).join(' ').toLowerCase();
+                var valid_weapon = find_from(config.splatoon.weapons, function(wep) {
+                    return wep.name.toLowerCase() == weapon;
+                });
+
+                if(valid_weapon) {
+                    profile.weapon = valid_weapon
+                    save_config();
+                    bot.startPM(message.author, 'Your main weapon was successfully set to ' + valid_weapon.name);
+                }
+                else {
+                    bot.startPM(message.author, 'Invalid weapon given');
                 }
             }
         }
@@ -637,7 +677,7 @@ function message_callback(message) {
     var prefix = words[0];
     var command = get_command_from_message(prefix);
 
-    if(command) {
+    if(command && message.author.id != bot.user.id) {
         message.args = words.slice(1);
         console.log(message.time + ': <' + message.author.username + ' @' + message.author.id + '> ' + message.content);
         if(typeof(command) == 'object') {
