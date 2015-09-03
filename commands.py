@@ -6,8 +6,11 @@ from threading import Timer
 from collections import Counter
 import urllib
 import shlex
+import datetime
 import json
+import traceback
 import random as rng
+from discord.permissions import Permissions
 
 commands = {}
 config = {}
@@ -19,6 +22,11 @@ authority_prettify = {
     2: 'Admin',
     3: 'Creator'
 }
+
+help_prolog = """
+Note that <argument> means the argument is required and [argument] means it is optional.
+Also, having the argument name be in ellipsis means it takes 1 or more. e.g. <arguments...>
+You do not type the brackets. If spaces are needed, put them in quotes. e.g. "Tentatek Splattershot"."""
 
 def load_config():
     with open('config.json') as f:
@@ -81,7 +89,7 @@ def command(authority=0, hidden=False, help=None, params=None):
                     name = prefix + ' ' + subcommand
                     output.append(_get_help_text(name, data['help'], data['params']))
 
-                bot.send_message(message.channel, '\n'.join(output))
+                bot.send_message(message.channel, '\n'.join(output) + '\n' + help_prolog)
                 return
 
             function(bot, message)
@@ -124,9 +132,7 @@ def help(bot, message):
         output.append(_get_help_text(name, func.help, func.params))
     output.append('')
     output.append('If you want more info, you can do !command help, e.g. !hello help')
-    output.append('Note that <argument> means the argument is required and [argument] means it is optional.')
-    output.append('You do not type the brackets.')
-    bot.send_message(message.author, '\n'.join(output))
+    bot.send_message(message.author, '\n'.join(output) + help_prolog)
 
 
 def try_parse(s, default=None, cls=int):
@@ -168,11 +174,11 @@ def random(bot, message):
         bot.send_message(message.channel, rng.choice(splatoon['maps']))
     elif random_type == 'lenny':
         lenny = rng.choice([
-            u"( ͡° ͜ʖ ͡°)", u"( ͠° ͟ʖ ͡°)", u"ᕦ( ͡° ͜ʖ ͡°)ᕤ", u"( ͡~ ͜ʖ ͡°)",
-            u"( ͡o ͜ʖ ͡o)", u"͡(° ͜ʖ ͡ -)", u"( ͡͡ ° ͜ ʖ ͡ °)﻿", u"(ง ͠° ͟ل͜ ͡°)ง",
-            u"ヽ༼ຈل͜ຈ༽ﾉ"
+            "( ͡° ͜ʖ ͡°)", "( ͠° ͟ʖ ͡°)", "ᕦ( ͡° ͜ʖ ͡°)ᕤ", "( ͡~ ͜ʖ ͡°)",
+            "( ͡o ͜ʖ ͡o)", "͡(° ͜ʖ ͡ -)", "( ͡͡ ° ͜ ʖ ͡ °)﻿", "(ง ͠° ͟ل͜ ͡°)ง",
+            "ヽ༼ຈل͜ຈ༽ﾉ"
         ])
-        bot.send_message(message.channel, lenny.encode('utf-8'))
+        bot.send_message(message.channel, lenny)
     elif random_type == 'mode':
         mode = rng.choice(['Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control'])
         bot.send_message(message.channel, mode)
@@ -201,7 +207,7 @@ def weapon(bot, message):
     def query_handler(weapon):
         tup = [weapon[attr].lower() for attr in weapon]
         return any(query in x for x in tup)
-    result = filter(query_handler, weapons)
+    result = list(filter(query_handler, weapons))
     output = []
     if len(result):
         output.append('Found {} weapon(s):'.format(len(result)))
@@ -245,6 +251,7 @@ def create_profile_if_none_exists(user, force=False):
 @subcommand('squad', help='sets your Splatoon squad of your profile', params='<squad-name>')
 @subcommand('weapon', help='sets your Splatoon weapon of your profile', params='<weapon-name>')
 @subcommand('delete', help='clears an element of your profile or the entire thing', params='[element]')
+@subcommand('username', help='updates the username of your profile', params='[name]')
 def profile(bot, message):
     create_profile_if_none_exists(message.author)
     profiles = config['splatoon']['profiles']
@@ -260,7 +267,6 @@ def profile(bot, message):
             return bot.send_message(message.channel, get_profile_reply(profile))
         # !profile get <username>
         username = message.args[1]
-        print(username)
         found_id = None
         for profile_id in profiles:
             value = profiles[profile_id]
@@ -269,7 +275,7 @@ def profile(bot, message):
                 break
 
         if found_id is None:
-            return bot.send_message(message.channel, 'User not found. Note this is case sensitive.')
+            return bot.send_message(message.channel, 'User not found. Note this is case sensitive or they do not have a profile set up yet.')
         bot.send_message(message.channel, get_profile_reply(profiles[profile_id]))
     elif action == 'nnid':
         # !profile nnid <nnid>
@@ -341,6 +347,14 @@ def profile(bot, message):
 
         reply = rank_intro + ', '.join(rank_stats) + weapon_intro + ', '.join(weapon_stats)
         bot.send_message(message.channel, reply)
+    elif action == 'username':
+        # !profile username [name]
+        name = message.author.name
+        if len(message.args) > 1:
+            name = message.args[1]
+        profile['name'] = name
+        save_config()
+        bot.send_message(message.author, 'Profile username successfully changed to "{}".'.format(name))
     else:
         bot.send_message('Invalid profile action given. Type !profile help for more info.')
 
@@ -595,6 +609,68 @@ def changelog(bot, message):
     with open('changelog.txt') as f:
         bot.send_message(message.author, f.read())
 
+# @command(help='quotes a specific user', params='<author> <keywords...>')
+# subcommand()
+
+@command(hidden=True)
+def myid(bot, message):
+    msg = 'Your message ID is: {}.'.format(message.id)
+    r = bot.send_message(message.channel, msg)
+    msg = msg + '\nThis message ID is: {}'.format(r.id)
+    bot.edit_message(r, msg)
+
+@command(help='shows you info about you or someone else as a member of a server', params='[username]')
+def info(bot, message):
+    if message.channel.is_private:
+        return bot.send_message(message.channel, 'You cannot use this via PMs. Sorry.')
+
+    username = message.author.name if len(message.args) == 0 else message.args[0]
+    server = message.channel.server
+    members = server.members
+    member = find_from(members, lambda m: m.name == username)
+    owner = find_from(members, lambda m: m.id == server.owner_id)
+    if member is None:
+        return bot.send_message(message.channel, 'User not found. You might have misspelled their name. The name is case sensitive.')
+
+
+    output = []
+    output.append('Info about **{}**:'.format(username))
+    output.append('Their roles are {}.'.format(', '.join(map(lambda x: x.name, member.roles))))
+    output.append('They joined this server at {}.'.format(member.joined_at.isoformat()))
+    output.append('We are currently in server {}, channel {}. This server is owned by {}.'.format(server.name, message.channel.name, owner.name))
+    bot.send_message(message.channel, '\n'.join(output))
+
+@command(hidden=True, help='shows you your permissions in the channel')
+def permissions(bot, message):
+    if message.channel.is_private:
+        return bot.send_message(message.author, 'You have no permissions in private messages.')
+    member = next((m for m in message.channel.server.members if m.id == message.author.id), None)
+    if member is None:
+        return bot.send_message(message.author, 'Apparently I cannot find you in my list.')
+
+    perm = find_from(member.server.roles, lambda r: r.name == '@everyone').permissions
+    for role in member.roles:
+        perm.value = perm.value | role.permissions.value
+
+    output = ['Your Permissions Are:']
+    for attr in dir(perm):
+        if attr.startswith('can_'):
+            output.append('{} -> {}'.format(attr, getattr(perm, attr)()))
+
+    bot.send_message(message.author, '\n'.join(output))
+
+@command(help='shows the current tournament bracket')
+def bracket(bot, message):
+    bot.send_message(message.channel, 'http://hypest.challonge.com/BooyahBattle/')
+
+@command(help='shows the tournament rules')
+def rules(bot, message):
+    bot.send_message(message.channel, 'https://docs.google.com/document/d/1TyPFEaFOb1zbRRImQHJ_Er4N5IKNy5RN4y9Ej9mFMoU')
+
+@command(help='shows the tournament squads')
+def squidsquads(bot, message):
+    bot.send_message(message.channel, 'https://docs.google.com/spreadsheets/d/1uOO3yktxj9fP7pNZArfpjnChDQYRqevHSnrJ_TfppRc')
+
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
 
@@ -608,18 +684,17 @@ def dispatch_messages(bot, message, debug=True):
 
     if message.content.startswith(command_prefix) and prefix in commands and message.author != bot.user:
         if debug:
-            print('On {} {} has said {}'.format(message.timestamp.isoformat(), message.author.name, message.content.encode('utf-8')))
+            print('On {} {} has said {}'.format(message.timestamp.isoformat(), message.author.name.encode('utf-8'), message.content.encode('utf-8')))
         try:
-            args = shlex.split(message.content.encode('utf-8'))
+            args = shlex.split(message.content)
         except Exception as e:
             return bot.send_message(message.channel, 'An error occurred in your message: ' + str(e))
         message.args = args[1:]
         func = commands[prefix]
-        if debug:
-            print(u'The message was split into ' + str(message.args).encode('utf-8'))
-
         try:
             func(bot, message)
         except Exception as e:
+
             if debug:
-                print('An error happened: {}: {}'.format(type(e).__name__, str(e)))
+                print('An error happened:')
+                traceback.print_exc(limit=4)
