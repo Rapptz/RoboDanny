@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
 
 import requests
-from functools import wraps
+import functools
 from threading import Timer
 from collections import Counter
-import urllib
+try:
+    from urllib.parse import quote as urlquote
+except ImportError:
+    from urllib import quote as urlquote
 import shlex
 import datetime
 import json
 import traceback
 import random as rng
 from discord.permissions import Permissions
+import math
+import sys
 
 commands = {}
 config = {}
@@ -68,7 +73,7 @@ def command(authority=0, hidden=False, help=None, params=None):
         function.help = help
         function.params = params
 
-        @wraps(function)
+        @functools.wraps(function)
         def wrapped(bot, message):
             # check authority
             user_authority = config['authority'].get(message.author.id, 0)
@@ -356,7 +361,7 @@ def profile(bot, message):
         save_config()
         bot.send_message(message.author, 'Profile username successfully changed to "{}".'.format(name))
     else:
-        bot.send_message('Invalid profile action given. Type !profile help for more info.')
+        bot.send_message(message.channel, 'Invalid profile action given. Type !profile help for more info.')
 
 def get_splatoon_map_string(indices, response):
     if response.status_code == 502:
@@ -530,7 +535,7 @@ def splatwiki(bot, message):
     }
     response = requests.get('http://splatoonwiki.org/w/index.php', params=params)
     if response.status_code == 404:
-        search = 'http://splatoonwiki.org/wiki/Special:Search/' + urllib.quote(message.args[0])
+        search = 'http://splatoonwiki.org/wiki/Special:Search/' + urlquote(message.args[0])
         bot.send_message(message.channel, 'Could not find a page with the specified title.\nTry searching at ' + search)
     elif response.status_code == 200:
         bot.send_message(message.channel, response.url)
@@ -577,6 +582,8 @@ def tag(bot, message):
             return bot.send_message(message.channel, 'Missing name or text for the created tag. e.g. !tag create "test" "hello"')
         name = message.args[1].lower()
         content = message.args[2]
+        if name in tag.subcommands:
+            return bot.send_message(message.channel, 'That tag name is reserved and cannot be used.')
         if name in tags:
             return bot.send_message(message.channel, 'Tag already exists. If you are the owner of the tag, do !tag remove and recreate it.')
         tags[name] = {
@@ -628,7 +635,6 @@ def info(bot, message):
     server = message.channel.server
     members = server.members
     member = find_from(members, lambda m: m.name == username)
-    owner = find_from(members, lambda m: m.id == server.owner_id)
     if member is None:
         return bot.send_message(message.channel, 'User not found. You might have misspelled their name. The name is case sensitive.')
 
@@ -637,7 +643,7 @@ def info(bot, message):
     output.append('Info about **{}**:'.format(username))
     output.append('Their roles are {}.'.format(', '.join(map(lambda x: x.name, member.roles))))
     output.append('They joined this server at {}.'.format(member.joined_at.isoformat()))
-    output.append('We are currently in server {}, channel {}. This server is owned by {}.'.format(server.name, message.channel.name, owner.name))
+    output.append('We are currently in server {}, channel {}. This server is owned by {}.'.format(server.name, message.channel.name, server.owner.name))
     bot.send_message(message.channel, '\n'.join(output))
 
 @command(hidden=True, help='shows you your permissions in the channel')
@@ -655,7 +661,7 @@ def permissions(bot, message):
     output = ['Your Permissions Are:']
     for attr in dir(perm):
         if attr.startswith('can_'):
-            output.append('{} -> {}'.format(attr, getattr(perm, attr)()))
+            output.append('{} -> {}'.format(attr, getattr(perm, attr)))
 
     bot.send_message(message.author, '\n'.join(output))
 
@@ -670,6 +676,87 @@ def rules(bot, message):
 @command(help='shows the tournament squads')
 def squidsquads(bot, message):
     bot.send_message(message.channel, 'https://docs.google.com/spreadsheets/d/1uOO3yktxj9fP7pNZArfpjnChDQYRqevHSnrJ_TfppRc')
+
+def nested_get(data, attrs):
+    return functools.reduce(lambda d, k: d[k], attrs, data)
+
+def nested_set(data, attrs, value):
+    nested_get(data, attrs[:-1])[attrs[-1]] = value
+
+@command(authority=3, help='edits the config file', params='<action> <key> <value>')
+@subcommand('append', help='appends the value to the key if the key value is a list')
+@subcommand('remove', help='removes the value to the key if the key value is a list')
+@subcommand('delete', help='deletes the key entirely')
+@subcommand('set', help='sets the value to the specified key (this also creates the key if needed)')
+@subcommand('get', help='gets the value to the specified key')
+def conf(bot, message):
+    # !conf <action> <key> [value]
+    if len(message.args) < 2:
+        return bot.send_message(message.channel, 'Not enough arguments given.')
+
+    action = message.args[0]
+    keys = message.args[1].split('.')
+    key = None
+    if action != 'set':
+        try:
+            key = nested_get(config, keys)
+        except KeyError as e:
+            return bot.send_message(message.channel, 'Key not found.')
+
+    if action == 'delete':
+        del key
+        save_config()
+        return bot.send_message(message.channel, 'Key "{}" successfully deleted.'.format(message.args[1]))
+    elif action == 'get':
+        return bot.send_message(message.author, key)
+
+    # rest require a value
+    if len(message.args) < 3:
+        return bot.send_message(message.channel, 'Value is required.')
+
+    try:
+        value = eval(message.args[2]) # dangerous but YOLO
+        if action == 'append':
+            key.append(value)
+        elif action == 'remove':
+            key.remove(value)
+        elif action == 'set':
+            nested_set(config, keys, value)
+        save_config()
+        return bot.send_message(message.channel, 'Key "{}" successfully updated.'.format(message.args[1]))
+    except Exception as e:
+        return bot.send_message(message.channel, 'An error occurred: {}: {}'.format(type(e).__name__, str(e)))
+
+
+@command(hidden=True, authority=2, help='calculates a python expression subset')
+def calculate(bot, message):
+    env = {
+        'locals': None,
+        'globals': None,
+        '__name__': None,
+        '__file__': None,
+        '__builtins__': None,
+    }
+
+    safe_functions = {
+        'max': max,
+        'min': min,
+        'round': round,
+        'range': range,
+        'sum': sum,
+        'filter': filter,
+        'map': map,
+        'abs': abs
+    }
+
+    for index, argument in enumerate(message.args):
+        try:
+            result = eval(argument, env, safe_functions)
+            bot.send_message(message.channel, '[{}]: {}'.format(index, result))
+        except Exception as e:
+            bot.send_message(message.channel, 'An error happened: {}.'.format(e))
+
+
 
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
