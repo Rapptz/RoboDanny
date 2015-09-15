@@ -639,11 +639,16 @@ def info(bot, message):
         return bot.send_message(message.channel, 'User not found. You might have misspelled their name. The name is case sensitive.')
 
 
+    roles = list(map(lambda x: x.name, member.roles))
     output = []
     output.append('Info about **{}**:'.format(username))
-    output.append('Their roles are {}.'.format(', '.join(map(lambda x: x.name, member.roles))))
+    if len(roles) > 0:
+        output.append('Their roles are {}.'.format(', '.join(roles)))
+    else:
+        output.append('They have no roles!')
     output.append('They joined this server at {}.'.format(member.joined_at.isoformat()))
-    output.append('We are currently in server {}, channel {}. This server is owned by {}.'.format(server.name, message.channel.name, server.owner.name))
+    output.append('We are currently in server {}, channel {}.'.format(server.name, message.channel.name))
+    output.append('This server is owned by {} and has {} members.'.format(server.owner.name, len(members)))
     bot.send_message(message.channel, '\n'.join(output))
 
 @command(hidden=True, help='shows you your permissions in the channel')
