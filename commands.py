@@ -546,6 +546,7 @@ def splatwiki(bot, message):
 
 @command(help='allows you tag text for later retrieval', params='<name>')
 @subcommand('create', help='creates a new tag under your ID', params='<name> <text>')
+@subcommand('edit', help='edits a new tag under your ID', params='<name> <text>')
 @subcommand('remove', help='removes a tag if it belongs to you', params='<name>')
 @subcommand('list', help='lists all tags that belong to you')
 def tag(bot, message):
@@ -585,7 +586,7 @@ def tag(bot, message):
         if name in tag.subcommands:
             return bot.send_message(message.channel, 'That tag name is reserved and cannot be used.')
         if name in tags:
-            return bot.send_message(message.channel, 'Tag already exists. If you are the owner of the tag, do !tag remove and recreate it.')
+            return bot.send_message(message.channel, 'Tag already exists. If you are the owner of the tag, do !tag edit.')
         tags[name] = {
             'content': content,
             'owner_id': message.author.id
@@ -610,6 +611,24 @@ def tag(bot, message):
             bot.send_message(message.channel, 'Tag successfully deleted.')
         else:
             bot.send_message(message.channel, 'You do not have the proper permissions to delete this tag.')
+    elif action == 'edit':
+        if len(message.args) < 3:
+            return bot.send_message(message.channel, 'Missing name or text for the created tag. e.g. !tag edit "test" "hello"')
+
+        name = message.args[1].lower()
+        content = message.args[2]
+
+        if name not in tags:
+            return bot.send_message(message.channel, 'Tag "{}" does not exist.'.format(name))
+
+        found_tag = tags[name]
+        auth = config['authority'].get(message.author.id, 0)
+        if auth >= 1 or mesage.author.id == found_tag['owner_id']:
+            tags[name]['content'] = content
+            save_config()
+            bot.send_message(message.channel, 'Tag successfully edited.')
+        else:
+            bot.send_message(message.channel, 'You do not have the proper permissions to edit this tag.')
 
 @command(help='shows you my changelog for my current version')
 def changelog(bot, message):
