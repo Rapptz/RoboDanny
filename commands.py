@@ -3,7 +3,8 @@
 import requests
 import functools
 from threading import Timer
-from collections import Counter
+import datetime
+from collections import Counter, namedtuple
 try:
     from urllib.parse import quote as urlquote
 except ImportError:
@@ -156,6 +157,7 @@ def hello(bot, message):
 @subcommand('map', help='displays a random Splatoon map')
 @subcommand('mode', help='displays a random Splatoon mode')
 @subcommand('lenny', help='displays a random lenny face')
+@subcommand('game', help='displays a random map/mode combination (without Turf War)')
 @subcommand('number', help='displays a random number with an optional range', params='[range]')
 def random(bot, message):
     error_message = 'Random what? weapon, map, mode, or number? (e.g. !random weapon)'
@@ -196,6 +198,10 @@ def random(bot, message):
             minimum = try_parse(message.args[1], default=0)
             maximum = try_parse(message.args[2], default=100)
         bot.send_message(message.channel, rng.randrange(minimum, maximum + 1))
+    elif random_type == 'game':
+        mode = rng.choice(['Splat Zones', 'Rainmaker', 'Tower Control'])
+        stage = rng.choice(splatoon['maps'])
+        bot.send_message(message.channel, '{} on {}'.format(mode, stage))
 
 @command(help='displays weapon info from a query', params='<query>')
 def weapon(bot, message):
@@ -363,53 +369,85 @@ def profile(bot, message):
     else:
         bot.send_message(message.channel, 'Invalid profile action given. Type !profile help for more info.')
 
-def get_splatoon_map_string(indices, response):
+
+class SplatoonMap(object):
+    """Represents a Splatoon Map entry in the future."""
+    def __init__(self, **data):
+        self.start_time = datetime.datetime.utcfromtimestamp(data.get('startTime', 0.0) / 1000.0)
+        self.end_time = datetime.datetime.utcfromtimestamp(data.get('endTime', 0.0) / 1000.0)
+        regular_maps = data.get('regular', {}).get('maps', [])
+        self.regular = [m.get('nameEN') for m in regular_maps]
+
+        ranked_data = data.get('ranked', {})
+        ranked_maps = ranked_data.get('maps', [])
+        self.ranked = [m.get('nameEN') for m in ranked_maps]
+        self.mode = ranked_data.get('rulesEN', 'Unknown')
+
+        # check if the map date is over
+        self.is_over = self.end_time < datetime.datetime.utcnow()
+
+    def __str__(self):
+        now = datetime.datetime.utcnow()
+        prefix = ''
+        if self.start_time > now:
+            minutes_delta = int((self.start_time - now) / datetime.timedelta(minutes=1))
+            hours = int(minutes_delta / 60)
+            minutes = minutes_delta % 60
+            prefix = '**In {0} hours and {1} minutes**:\n'.format(hours, minutes)
+        else:
+            prefix = '**Current Rotation**:\n'
+
+        fmt = 'Turf War is {0[0]} and {0[1]}\n{1} is {2[0]} and {2[1]}'
+        return prefix + fmt.format(self.regular, self.mode, self.ranked)
+
+def get_splatoon_maps():
+    response = requests.get(config['splatoon']['schedule_url'])
     if response.status_code == 502:
-        return 'Request took too long. Try again later.'
+        raise RuntimeError('Request took too long. Try again later.')
     elif response.status_code != 200:
-        return 'An error has occurred. Status code {}. Tell Danny.'.format(response.status_code)
+        raise RuntimeError('An error occurred. Status code {}. Tell Danny'.format(response.status_code))
 
     data = response.json()
-    schedule = data.get('schedule')
-    if schedule is None or len(schedule) == 0:
-        return 'Maps could not be found.'
+    sched = data.get('schedule', [])
+    if sched is None or len(sched) == 0:
+        raise RuntimeError('No map data could be found.')
 
-    output = []
-    prefixes = {
-        0: 'Current',
-        1: 'Next',
-        2: 'Last scheduled'
-    }
+    result = []
+    for element in sched:
+        m = SplatoonMap(**element)
+        if m.is_over:
+            continue
+        result.append(m)
+    return result
 
-    for index in indices:
-        prefix = prefixes[index]
-        maps = schedule[index]
-        regular_maps = maps['regular']['maps']
-        ranked_maps = maps['ranked']['maps']
-        output.append('{} regular maps: {} and {}'.format(prefix, regular_maps[0].get('nameEN'), regular_maps[1].get('nameEN')))
-        output.append('{} {} maps: {} and {}'.format(prefix, maps['ranked'].get('rulesEN'), ranked_maps[0].get('nameEN'), ranked_maps[1].get('nameEN')))
-
-    return '\n'.join(output)
+def send_splatoon_map_message(bot, message, index):
+    try:
+        maps = get_splatoon_maps()
+        bot.send_message(message.channel, maps[index])
+    except RuntimeError as e:
+        bot.send_message(message.channel, e)
+    except Exception as e:
+        bot.send_message(message.channel, 'No map data found.')
 
 @command(help='shows the current Splatoon maps in rotation')
 def maps(bot, message):
-    response = requests.get(config['splatoon']['schedule_url'])
-    bot.send_message(message.channel, get_splatoon_map_string([0], response))
+    send_splatoon_map_message(bot, message, 0)
 
 @command(help='shows the next Splatoon maps in rotation')
 def nextmaps(bot, message):
-    response = requests.get(config['splatoon']['schedule_url'])
-    bot.send_message(message.channel, get_splatoon_map_string([1], response))
+    send_splatoon_map_message(bot, message, 1)
 
 @command(help='shows the last Splatoon maps in rotation', hidden=True)
 def lastmaps(bot, message):
-    response = requests.get(config['splatoon']['schedule_url'])
-    bot.send_message(message.channel, get_splatoon_map_string([2], response))
+    send_splatoon_map_message(bot, message, 2)
 
 @command(help='shows the current Splatoon map schedule')
 def schedule(bot, message):
-    response = requests.get(config['splatoon']['schedule_url'])
-    bot.send_message(message.channel, get_splatoon_map_string([0, 1, 2], response))
+    try:
+        maps = get_splatoon_maps()
+        bot.send_message(message.channel, '\n'.join(map(str, maps)))
+    except RuntimeError as e:
+        bot.send_message(message.channel, e)
 
 @command(help='echoes text', authority=2)
 def echo(bot, message):
@@ -623,7 +661,7 @@ def tag(bot, message):
 
         found_tag = tags[name]
         auth = config['authority'].get(message.author.id, 0)
-        if auth >= 1 or mesage.author.id == found_tag['owner_id']:
+        if auth >= 1 or message.author.id == found_tag['owner_id']:
             tags[name]['content'] = content
             save_config()
             bot.send_message(message.channel, 'Tag successfully edited.')
@@ -634,16 +672,6 @@ def tag(bot, message):
 def changelog(bot, message):
     with open('changelog.txt') as f:
         bot.send_message(message.author, f.read())
-
-# @command(help='quotes a specific user', params='<author> <keywords...>')
-# subcommand()
-
-@command(hidden=True)
-def myid(bot, message):
-    msg = 'Your message ID is: {}.'.format(message.id)
-    r = bot.send_message(message.channel, msg)
-    msg = msg + '\nThis message ID is: {}'.format(r.id)
-    bot.edit_message(r, msg)
 
 @command(help='shows you info about you or someone else as a member of a server', params='[username]')
 def info(bot, message):
@@ -666,6 +694,7 @@ def info(bot, message):
     else:
         output.append('They have no roles!')
     output.append('They joined this server at {}.'.format(member.joined_at.isoformat()))
+    output.append('Their authority on me is **{}**.'.format(authority_prettify.get(config['authority'].get(member.id, 0))))
     output.append('We are currently in server {}, channel {}.'.format(server.name, message.channel.name))
     output.append('This server is owned by {} and has {} members.'.format(server.owner.name, len(members)))
     bot.send_message(message.channel, '\n'.join(output))
@@ -713,6 +742,7 @@ def nested_set(data, attrs, value):
 @subcommand('delete', help='deletes the key entirely')
 @subcommand('set', help='sets the value to the specified key (this also creates the key if needed)')
 @subcommand('get', help='gets the value to the specified key')
+@subcommand('debug', help='calculates a command and executes it on a key')
 def conf(bot, message):
     # !conf <action> <key> [value]
     if len(message.args) < 2:
@@ -746,6 +776,8 @@ def conf(bot, message):
             key.remove(value)
         elif action == 'set':
             nested_set(config, keys, value)
+        elif action == 'debug':
+            return bot.send_message(message.channel, value)
         save_config()
         return bot.send_message(message.channel, 'Key "{}" successfully updated.'.format(message.args[1]))
     except Exception as e:
@@ -781,6 +813,12 @@ def calculate(bot, message):
             bot.send_message(message.channel, 'An error happened: {}.'.format(e))
 
 
+@command(hidden=True, authority=3)
+def debug(bot, message):
+    try:
+        bot.send_message(message.channel, eval(message.args[0]))
+    except Exception as e:
+        bot.send_message(message.channel, 'Error: {}.'.format(e))
 
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
