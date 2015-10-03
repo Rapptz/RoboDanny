@@ -813,6 +813,35 @@ def calculate(bot, message):
             bot.send_message(message.channel, 'An error happened: {}.'.format(e))
 
 
+def mod_action(bot, message, action):
+    # delete the old message
+    bot.delete_message(message)
+    if len(message.args) == 0:
+        return bot.send_message(message.author, 'You forgot to specify which user to {}.'.format(action))
+
+    output = []
+    members = message.channel.server.members
+    past_tense = 'banned' if action == 'ban' else action + 'ed'
+    for username in message.args:
+        member = find_from(members, lambda m: m.name == username)
+        if member is None:
+            output.append('User "{}" not found. Note that it is case sensitive.'.format(username))
+            continue
+
+        getattr(bot, action)(member.server, member)
+        output.append('User "{}" probably got {}. I cannot tell at the moment.'.format(username, past_tense))
+
+    bot.send_message(message.author, '\n'.join(output))
+
+@command(authority=2, help='bans users from the server', params='<username>...')
+def ban(bot, message):
+    mod_action(bot, message, 'ban')
+
+@command(authority=2, help='kicks users from the server', params='<username>...')
+def kick(bot, message):
+    mod_action(bot, message, 'kick')
+
+
 @command(hidden=True, authority=3)
 def debug(bot, message):
     try:
