@@ -13,6 +13,7 @@ import shlex
 import datetime
 import json
 import traceback
+import itertools
 import random as rng
 from discord.permissions import Permissions
 import math
@@ -22,11 +23,11 @@ commands = {}
 config = {}
 
 authority_prettify = {
-    -1: 'Banned',
-    0: 'User',
-    1: 'Moderator',
-    2: 'Admin',
-    3: 'Creator'
+    -1: 'Bot Banned',
+    0: 'Bot User',
+    1: 'Bot Moderator',
+    2: 'Bot Admin',
+    3: 'Bot Creator'
 }
 
 help_prolog = """
@@ -418,6 +419,10 @@ def get_splatoon_maps():
         if m.is_over:
             continue
         result.append(m)
+
+    if len(result) == 0:
+        raise RuntimeError('No map data could be found.')
+
     return result
 
 def send_splatoon_map_message(bot, message, index):
@@ -845,6 +850,8 @@ def kick(bot, message):
 @command(hidden=True, authority=3)
 def debug(bot, message):
     try:
+        bot = bot
+        message = message
         bot.send_message(message.channel, eval(message.args[0]))
     except Exception as e:
         bot.send_message(message.channel, 'Error: {}.'.format(e))
