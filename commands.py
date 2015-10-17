@@ -26,8 +26,9 @@ authority_prettify = {
     -1: 'Bot Banned',
     0: 'Bot User',
     1: 'Bot Moderator',
-    2: 'Bot Admin',
-    3: 'Bot Creator'
+    2: 'Bot Super Moderator',
+    3: 'Bot Admin',
+    4: 'Bot Creator'
 }
 
 help_prolog = """
@@ -487,12 +488,11 @@ def brand(bot, message):
         abilities = config['splatoon']['abilities']
         bot.send_message(message.channel, fmt.format(brand['name'], abilities[buffed - 1], abilities[nerfed - 1]))
 
-# Some creator only commands
 @command(authority=3)
 def quit(bot, message):
     bot.logout()
 
-@command(authority=3)
+@command(authority=4)
 def reloadconfig(bot, message):
     load_config()
 
@@ -847,14 +847,18 @@ def kick(bot, message):
     mod_action(bot, message, 'kick')
 
 
-@command(hidden=True, authority=3)
+@command(hidden=True, authority=4)
 def debug(bot, message):
     try:
         bot = bot
         message = message
         bot.send_message(message.channel, eval(message.args[0]))
     except Exception as e:
-        bot.send_message(message.channel, 'Error: {}.'.format(e))
+        bot.send_message(message.channel, '{}: {}.'.format(type(e).__name__, e))
+
+@command(authority=3, help='joins a server', params='<invite URL>')
+def join(bot, message):
+    bot.accept_invite(message.args[0])
 
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
