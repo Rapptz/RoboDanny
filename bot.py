@@ -1,5 +1,6 @@
 import discord
 import commands
+import datetime
 
 bot = discord.Client()
 
@@ -9,6 +10,7 @@ def on_ready():
     print('Username: ' + bot.user.name)
     print('ID: ' + bot.user.id)
     print('------')
+    bot.uptime = datetime.datetime.utcnow()
 
 @bot.event
 def on_message(message):

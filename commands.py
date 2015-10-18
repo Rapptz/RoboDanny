@@ -860,6 +860,16 @@ def debug(bot, message):
 def join(bot, message):
     bot.accept_invite(message.args[0])
 
+@command(help='shows the bot uptime')
+def uptime(bot, message):
+    now = datetime.datetime.utcnow()
+    delta = now - bot.uptime
+    hours, remainder = divmod(int(delta.total_seconds()), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    fmt = 'Bot has been up for **{} hours, {} minutes, and {} seconds**'
+    bot.send_message(message.channel, fmt.format(hours, minutes, seconds))
+
+
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
 
