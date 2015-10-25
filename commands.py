@@ -10,12 +10,12 @@ try:
 except ImportError:
     from urllib import quote as urlquote
 import shlex
-import datetime
-import json
+import datetime, re
+import json, threading
 import traceback
 import itertools
 import random as rng
-from discord.permissions import Permissions
+import discord
 import math
 import sys
 
@@ -501,19 +501,30 @@ def cleanup(bot, message):
     limit = 100
     if len(message.args) > 0:
         limit = try_parse(message.args[0], default=100)
+
+    spammers = Counter()
+
     count = 0
     done = bot.send_message(message.channel, 'Cleaning up...')
+    rx = re.compile(r'^{}\w+'.format(config['command_prefix']))
+
     for entry in bot.logs_from(message.channel, limit=limit):
         if entry.author == bot.user:
-            count += 1
             bot.delete_message(entry)
+            count += 1
+
+        elif rx.match(entry.content):
+            spammers[entry.author.name] += 1
+            bot.delete_message(entry)
+            count += 1
+
     bot.delete_message(done)
     bot.send_message(message.channel, 'Clean up has completed. {} message(s) were deleted.'.format(count))
+    bot.send_message(message.author, 'The following users were cleaned up: {}'.format(str(spammers)))
 
 @command(help='manages the authority of a user', authority=1, params='<username> <new_authority>')
 @subcommand('list', help='lists all the currently available authority')
 def authority(bot, message):
-    server = message.channel.server
     if len(message.args) == 0:
         return bot.send_message(message.channel, 'No username or authority given.')
     if len(message.args) == 1:
@@ -523,6 +534,7 @@ def authority(bot, message):
         return bot.send_message(message.channel, 'No authority given for the user.')
 
     # at this point we have two arguments..
+    server = message.channel.server
     authority = try_parse(message.args[1], default=0)
     author_authority = config['authority'].get(message.author.id, 0)
     user = find_from(server.members, lambda x: x.name == message.args[0])
@@ -708,18 +720,13 @@ def info(bot, message):
 def permissions(bot, message):
     if message.channel.is_private:
         return bot.send_message(message.author, 'You have no permissions in private messages.')
-    member = next((m for m in message.channel.server.members if m.id == message.author.id), None)
-    if member is None:
-        return bot.send_message(message.author, 'Apparently I cannot find you in my list.')
 
-    perm = find_from(member.server.roles, lambda r: r.name == '@everyone').permissions
-    for role in member.roles:
-        perm.value = perm.value | role.permissions.value
+    permissions = message.channel.permissions_for(message.author)
 
     output = ['Your Permissions Are:']
-    for attr in dir(perm):
+    for attr in dir(permissions):
         if attr.startswith('can_'):
-            output.append('{} -> {}'.format(attr, getattr(perm, attr)))
+            output.append('{} -> {}'.format(attr, getattr(permissions, attr)))
 
     bot.send_message(message.author, '\n'.join(output))
 
@@ -850,11 +857,11 @@ def kick(bot, message):
 @command(hidden=True, authority=4)
 def debug(bot, message):
     try:
-        bot = bot
-        message = message
-        bot.send_message(message.channel, eval(message.args[0]))
+        code = message.content[6:].strip(r'` ')
+        result = eval(code)
+        bot.send_message(message.channel, '```py\n{}\n```'.format(result))
     except Exception as e:
-        bot.send_message(message.channel, '{}: {}.'.format(type(e).__name__, e))
+        bot.send_message(message.channel, '```py\n{}\n```'.format(traceback.format_exc()))
 
 @command(authority=3, help='joins a server', params='<invite URL>')
 def join(bot, message):
@@ -869,6 +876,71 @@ def uptime(bot, message):
     fmt = 'Bot has been up for **{} hours, {} minutes, and {} seconds**'
     bot.send_message(message.channel, fmt.format(hours, minutes, seconds))
 
+@command(help='remove messages that meet a criteria', params='<criteria>', authority=2)
+@subcommand('embeds', help='remove messages that have any embedded things', params='[search-limit]')
+@subcommand('files', help='remove messages that have any attachments', params='[search-limit]')
+@subcommand('images', help='remove messages that have attachments or embedded things', params='[search-limit]')
+@subcommand('all', help='remove all messages', params='[count]')
+@subcommand('user', help='remove messages made by the case-sensitive username', params='<username> [search-limit]')
+def remove(bot, message):
+    if len(message.args) < 1:
+        return bot.send_message(message.channel, 'Not enough arguments')
+
+    limit_arg = 1
+    action = message.args[0].lower()
+    username = ''
+
+    criteria = {
+        'embeds': lambda e: len(e.embeds),
+        'files':  lambda e: len(e.attachments),
+        'images': lambda e: len(e.embeds) or len(e.attachments),
+        'all':    lambda e: True,
+        'user':   lambda e: e.author.name == username
+    }
+
+    if action not in criteria:
+        return bot.send_message(message.author, 'Unrecognised criteria: ' + action)
+
+    if action == 'user':
+        username = message.args[1]
+        limit_arg = 2
+
+    limit = 100
+    if len(message.args) > limit_arg:
+        limit = try_parse(message.args[limit_arg], default=100)
+
+    spammers = Counter()
+    predicate = criteria[action]
+
+    done = bot.send_message(message.channel, 'Cleaning up...')
+
+    for entry in bot.logs_from(message.channel, limit=limit):
+        if predicate(entry):
+            bot.delete_message(entry)
+            spammers[entry.author.name] += 1
+
+    bot.delete_message(done)
+    bot.send_message(message.channel, 'Clean up has completed. {} message(s) were deleted.'.format(sum(spammers.values())))
+    bot.send_message(message.author, 'The following users were cleaned up: {}'.format(str(spammers)))
+
+
+@command(help='shows you previous mentions in the channel', params='[posts-to-search]')
+def mentions(bot, message):
+    limit = 1000
+    if len(message.args) > 0:
+        limit = try_parse(message.args[0], default=1000)
+
+    def worker():
+        bot.send_message(message.author, 'Please wait... scanning mentions')
+        for entry in bot.logs_from(message.channel, limit=limit):
+            if entry.mention_everyone or message.author in entry.mentions:
+                reply = 'On {1}, {0.author.name} said: {0.content}'.format(entry, entry.timestamp.isoformat())
+                bot.send_message(message.author, reply)
+        bot.send_message(message.author, 'Mention scanning complete...')
+
+    t = threading.Thread(target=worker)
+    t.daemon = True
+    t.start()
 
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
