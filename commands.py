@@ -160,17 +160,15 @@ def hello(bot, message):
 @subcommand('mode', help='displays a random Splatoon mode')
 @subcommand('lenny', help='displays a random lenny face')
 @subcommand('game', help='displays a random map/mode combination (without Turf War)')
+@subcommand('tag', help='displays a random tag')
 @subcommand('number', help='displays a random number with an optional range', params='[range]')
 def random(bot, message):
-    error_message = 'Random what? weapon, map, mode, or number? (e.g. !random weapon)'
+    error_message = 'Random what? weapon, map, mode, game, tag, or number? (e.g. !random weapon)'
     if len(message.args) == 0:
         bot.send_message(message.channel, error_message)
         return
 
     random_type = message.args[0].lower()
-    if random_type not in random.subcommands:
-        bot.send_message(message.channel, error_message)
-        return
 
     splatoon = config['splatoon']
     if random_type == 'weapon':
@@ -199,11 +197,22 @@ def random(bot, message):
         elif len(message.args) > 2:
             minimum = try_parse(message.args[1], default=0)
             maximum = try_parse(message.args[2], default=100)
+        if maximum > 1000000:
+            maximum = 1000000
+
+        if minimum >= maximum:
+            return bot.send_message(message.channel, 'Maximum number smaller than minimum number.')
+
         bot.send_message(message.channel, rng.randrange(minimum, maximum + 1))
     elif random_type == 'game':
         mode = rng.choice(['Splat Zones', 'Rainmaker', 'Tower Control'])
         stage = rng.choice(splatoon['maps'])
         bot.send_message(message.channel, '{} on {}'.format(mode, stage))
+    elif random_type == 'tag':
+        name = rng.choice(list(config['tags'].keys()))
+        bot.send_message(message.channel, 'Tag "{}":\n{}'.format(name, config['tags'][name]['content']))
+    else:
+        bot.send_message(message.channel, error_message)
 
 @command(help='displays weapon info from a query', params='<query>')
 def weapon(bot, message):
@@ -375,18 +384,18 @@ def profile(bot, message):
 class SplatoonMap(object):
     """Represents a Splatoon Map entry in the future."""
     def __init__(self, **data):
-        self.start_time = datetime.datetime.utcfromtimestamp(data.get('startTime', 0.0) / 1000.0)
-        self.end_time = datetime.datetime.utcfromtimestamp(data.get('endTime', 0.0) / 1000.0)
-        regular_maps = data.get('regular', {}).get('maps', [])
-        self.regular = [m.get('nameEN') for m in regular_maps]
-
-        ranked_data = data.get('ranked', {})
-        ranked_maps = ranked_data.get('maps', [])
-        self.ranked = [m.get('nameEN') for m in ranked_maps]
-        self.mode = ranked_data.get('rulesEN', 'Unknown')
+        self.parse_time(data, 'start_time')
+        self.parse_time(data, 'end_time')
+        self.regular = data.get('regular', [])
+        self.ranked = data.get('ranked', [])
+        self.mode = data.get('ranked_mode')
 
         # check if the map date is over
         self.is_over = self.end_time < datetime.datetime.utcnow()
+
+    def parse_time(self, data, name):
+        l = list(map(int, re.split(r'\D', data[name])))[:-1]
+        setattr(self, name, datetime.datetime(*l))
 
     def __str__(self):
         now = datetime.datetime.utcnow()
@@ -403,16 +412,16 @@ class SplatoonMap(object):
         return prefix + fmt.format(self.regular, self.mode, self.ranked)
 
 def get_splatoon_maps():
-    response = requests.get(config['splatoon']['schedule_url'])
-    if response.status_code == 502:
-        raise RuntimeError('Request took too long. Try again later.')
-    elif response.status_code != 200:
-        raise RuntimeError('An error occurred. Status code {}. Tell Danny'.format(response.status_code))
+    data = {}
+    try:
+        with open('schedule.json', 'r') as f:
+            data = json.load(f)
+    except:
+        pass
 
-    data = response.json()
     sched = data.get('schedule', [])
     if sched is None or len(sched) == 0:
-        raise RuntimeError('No map data could be found.')
+        raise RuntimeError('No schedule data could be found.')
 
     result = []
     for element in sched:
@@ -603,12 +612,15 @@ def splatwiki(bot, message):
 @subcommand('create', help='creates a new tag under your ID', params='<name> <text>')
 @subcommand('edit', help='edits a new tag under your ID', params='<name> <text>')
 @subcommand('remove', help='removes a tag if it belongs to you', params='<name>')
+@subcommand('owner', help='tells you the owner of the tag', params='<tag>')
 @subcommand('list', help='lists all tags that belong to you')
+@subcommand('search', help='searches for a tag name', params='<query>')
 def tag(bot, message):
     if 'tags' not in config:
         config['tags'] = {}
 
     tags = config['tags']
+    subcommands = ('create', 'edit', 'remove', 'owner', 'list', 'search')
     if len(message.args) == 1:
         # !tag <name> (retrieval)
         name = message.args[0].lower()
@@ -616,10 +628,9 @@ def tag(bot, message):
             return bot.send_message(message.channel, tags[name]['content'])
         elif name == 'list':
             # !tag list
-            auth = config['authority'].get(message.author.id, 0)
             my_tags = []
             for tagname in tags:
-                if auth >= 2 or tags[tagname]['owner_id'] == message.author.id:
+                if tags[tagname]['owner_id'] == message.author.id:
                     my_tags.append('"' + tagname + '"')
 
             if len(my_tags) > 0:
@@ -630,7 +641,7 @@ def tag(bot, message):
             return bot.send_message(message.channel, 'Could not find a tag with the name "{}".'.format(name))
 
     action = message.args[0]
-    if action not in tag.subcommands:
+    if action not in subcommands:
         return bot.send_message(message.channel, 'Invalid action given. Type !tag help for more info.')
 
     if action == 'create':
@@ -638,7 +649,7 @@ def tag(bot, message):
             return bot.send_message(message.channel, 'Missing name or text for the created tag. e.g. !tag create "test" "hello"')
         name = message.args[1].lower()
         content = message.args[2]
-        if name in tag.subcommands:
+        if name in subcommands:
             return bot.send_message(message.channel, 'That tag name is reserved and cannot be used.')
         if name in tags:
             return bot.send_message(message.channel, 'Tag already exists. If you are the owner of the tag, do !tag edit.')
@@ -684,6 +695,34 @@ def tag(bot, message):
             bot.send_message(message.channel, 'Tag successfully edited.')
         else:
             bot.send_message(message.channel, 'You do not have the proper permissions to edit this tag.')
+    elif action == 'owner':
+        if message.channel.is_private:
+            return bot.send_message(message.channel, 'This functionality cannot be done inside private messages.')
+        if len(message.args) < 2:
+            return bot.send_message(message.channel, 'Missing the tag to search for. e.g. !tag owner "hello"')
+        name = message.args[1].lower()
+
+        if name not in tags:
+            return bot.send_message(message.channel, 'Tag "{}" does not exist.'.format(name))
+
+        tag = tags[name]
+        owner_id = tag['owner_id']
+        member = discord.utils.find(lambda m: m.id == owner_id, message.channel.server.members)
+        if member is None:
+            return bot.send_message(message.channel, 'The tag owner is not in this server.')
+        return bot.send_message(message.channel, 'The tag owner is "{}".'.format(member.name))
+    elif action == 'search':
+        if len(message.args) < 2:
+            return bot.send_message(message.channel, 'Missing the query to search with. e.g. !tag search ika')
+
+        query = message.args[1].lower()
+        if len(query) == 1:
+            return bot.send_message(message.channel, 'Query length must be at least 2 characters.')
+
+        result = ['"' + tag + '"' for tag in tags if query in tag]
+        bot.send_message(message.channel, 'The following {} tag(s) were found:\n{}'.format(len(result), ', '.join(result)))
+
+
 
 @command(help='shows you my changelog for my current version')
 def changelog(bot, message):
@@ -695,21 +734,34 @@ def info(bot, message):
     if message.channel.is_private:
         return bot.send_message(message.channel, 'You cannot use this via PMs. Sorry.')
 
-    username = message.author.name if len(message.args) == 0 else message.args[0]
+    member = message.author
     server = message.channel.server
     members = server.members
-    member = find_from(members, lambda m: m.name == username)
-    if member is None:
-        return bot.send_message(message.channel, 'User not found. You might have misspelled their name. The name is case sensitive.')
+
+    if len(message.args) != 0:
+        username = message.args[0]
+        member = find_from(members, lambda m: m.name == username)
+        if member is None:
+            msg = 'User not found. You might have misspelled their name. The name is case sensitive.'
+            return bot.send_message(message.channel, msg)
 
 
     roles = list(map(lambda x: x.name, member.roles))
     output = []
-    output.append('Info about **{}**:'.format(username))
+    output.append('Info about **{}**:'.format(member.name))
     if len(roles) > 0:
         output.append('Their roles are {}.'.format(', '.join(roles)))
     else:
         output.append('They have no roles!')
+    output.append('Their user ID is {0.id}'.format(member))
+
+    if member.voice_channel is not None:
+        other_members = len(member.voice_channel.voice_members) - 1
+        english = 'by themselves' if other_members == 0 else 'with {} others'.format(other_members)
+        voice_name = member.voice_channel.name
+        output.append('They are currently in voice room {0} {1}'.format(voice_name, english))
+    else:
+        output.append('They are currently not in a voice room in this server.')
     output.append('They joined this server at {}.'.format(member.joined_at.isoformat()))
     output.append('Their authority on me is **{}**.'.format(authority_prettify.get(config['authority'].get(member.id, 0))))
     output.append('We are currently in server {}, channel {}.'.format(server.name, message.channel.name))
@@ -729,6 +781,10 @@ def permissions(bot, message):
             output.append('{} -> {}'.format(attr, getattr(permissions, attr)))
 
     bot.send_message(message.author, '\n'.join(output))
+
+@command(hidden=True)
+def avatar(bot, message):
+    bot.send_message(message.channel, message.author.avatar_url())
 
 @command(help='shows the current tournament bracket')
 def bracket(bot, message):
@@ -941,6 +997,14 @@ def mentions(bot, message):
     t = threading.Thread(target=worker)
     t.daemon = True
     t.start()
+
+@command(hidden=True, authority=2)
+def colour(bot, message):
+    title = message.args[0]
+    color = int(message.args[1], base=16)
+    role = discord.utils.find(lambda r: r.name == title, message.channel.server.roles)
+    result = bot.edit_role(message.channel.server, role, color=discord.Color(color))
+    bot.send_message(message.channel, result)
 
 def dispatch_messages(bot, message, debug=True):
     """Handles the dispatching of the messages to commands.
