@@ -923,14 +923,35 @@ def debug(bot, message):
 def join(bot, message):
     bot.accept_invite(message.args[0])
 
-@command(help='shows the bot uptime')
-def uptime(bot, message):
+def get_bot_uptime(bot):
     now = datetime.datetime.utcnow()
     delta = now - bot.uptime
     hours, remainder = divmod(int(delta.total_seconds()), 3600)
     minutes, seconds = divmod(remainder, 60)
-    fmt = 'Bot has been up for **{} hours, {} minutes, and {} seconds**'
-    bot.send_message(message.channel, fmt.format(hours, minutes, seconds))
+    days, hours = divmod(hours, 24)
+    if days:
+        fmt = 'Bot has been up for **{d} days, {h} hours, {m} minutes, and {s} seconds**'
+    else:
+        fmt = 'Bot has been up for **{h} hours, {m} minutes, and {s} seconds**'
+
+    return fmt.format(d=days, h=hours, m=minutes, s=seconds)
+
+@command(help='shows the bot uptime')
+def uptime(bot, message):
+    bot.send_message(message.channel, get_bot_uptime(bot))
+
+@command(help='shows bot statistics')
+def stats(bot, message):
+    result = [get_bot_uptime(bot)]
+    result.append('I am connected to **{} servers**.'.format(len(bot.servers)))
+    total_members = sum(len(s.members) for s in bot.servers)
+    result.append('These servers are composed of **{} total members**.'.format(total_members))
+    channel_types = Counter(c.type for s in bot.servers for c in s.channels)
+    voice = channel_types['voice']
+    text = channel_types['text']
+    result.append('They also have **{} voice channels** and **{} text channels.**'.format(voice, text))
+    bot.send_message(message.channel, '\n'.join(result))
+
 
 @command(help='remove messages that meet a criteria', params='<criteria>', authority=2)
 @subcommand('embeds', help='remove messages that have any embedded things', params='[search-limit]')
