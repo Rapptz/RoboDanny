@@ -81,7 +81,6 @@ def command(authority=0, hidden=False, help=None, params=None):
             # check authority
             user_authority = config['authority'].get(message.author.id, 0)
             if user_authority < authority:
-                bot.send_message(message.channel, "Sorry, you're not authorised to do this command.")
                 return
 
             # check !command help
