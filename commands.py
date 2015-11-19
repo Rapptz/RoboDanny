@@ -17,7 +17,7 @@ import itertools
 import random as rng
 import discord
 import math
-import sys
+import sys, os
 
 commands = {}
 config = {}
@@ -940,9 +940,16 @@ def get_bot_uptime(bot):
 def uptime(bot, message):
     bot.send_message(message.channel, get_bot_uptime(bot))
 
-@command(help='shows bot statistics')
-def stats(bot, message):
-    result = [get_bot_uptime(bot)]
+@command(help='shows bot information and statistics')
+def about(bot, message):
+    revision = os.popen('git show -s HEAD --format="- Current revision: `%h` (%cr)"').read().strip()
+    result = ['**About Me:**']
+    result.append('- Author: Danny (Discord ID: 80088516616269824)')
+    result.append('- Library: discord.py (Python)')
+    result.append(str(revision))
+    result.append('')
+    result.append('**Statistics:**')
+    result.append(get_bot_uptime(bot))
     result.append('I am connected to **{} servers**.'.format(len(bot.servers)))
     total_members = sum(len(s.members) for s in bot.servers)
     result.append('These servers are composed of **{} total members**.'.format(total_members))
