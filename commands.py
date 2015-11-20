@@ -1025,6 +1025,51 @@ def mentions(bot, message):
     t.daemon = True
     t.start()
 
+@command(hidden=True, help='bot dances around')
+def dance(bot, message):
+    bot.send_message(message.channel, ' ♪┏(°.°)┛┗(°.°)┓┗(°.°)┛┏(°.°)┓ ♪ ')
+
+@command(hidden=True, help='tells you happy birthday')
+def hbd(bot, message):
+    bot.send_message(message.channel, ' ¸¸♬·¯·♩¸¸♪·¯·♫¸¸Happy Birthday To You¸¸♬·¯·♩¸¸♪·¯·♫¸¸ ')
+
+@command(hidden=True, help='bot hugs you')
+def hug(bot, message):
+    bot.send_message(message.channel, '(づ｡◕‿‿◕｡)づ')
+
+@command(hidden=True, authority=3, help='A command for Michelle')
+def michelle(bot, message):
+    ascii_art = '''
+.                   ooo
+                  o$$$$$$          o$$$$$o             ooo
+                 $$$$$$"""""""""$o$$$$$$$$oo"""""""o o$$$$$$o
+                  ""$             $$$$$"            $$$$$$$$$
+                   $                $                 $$$$$$$
+                 o ooooo                               "$$$"
+               o  $$$o$$   o$$o   o" ooo                "$
+               $   """    "$ o$$ o o$" $    $$"$$$
+               o     ooo    ""$"  o"$$"      "$$$$$      $
+           oo$$$"" "o "$""         "    o      """     oo"
+         o$$$$o        """"oo$$$$oo"$ $"$"  o     o"$$$$
+       o$$$$$$$$"$$$$$$$$$$$$$$$$$ $$$o$""""          "$$$
+       $$$$$$$$$o$$$$$$$$$$$$$$$$$o$$$$$$$o             $$$$
+       $$$$$$$$$$$$$$$$$$$$$$$$$$ $$$$$$$$$$o     oo$$$$$$$$o
+      o$$$$$$$$$$$$$$$$$$$$$$$$$$ $$$$$$$$$$$$$oo$$$$$$$$$$$$
+   o$$$$$o"$$$$"          "$$$""  $$$$$$$$$$$$$$o"$$$$$$$$$""o
+ o$$$$$$$                          "$$$$$$$$$$$$$$o"$$$$$"     $$o    ooo
+ $$$$$$$$                        $     "$$$$$$$$$$$$           $$$$$o$$$$$
+ $$$$$$$$o              ooo$$$$$$$         """""""$"          $$$$$$$$$$$"
+  $$$$$$$$   o$$$$$$$$$$$$$$$$$$$$o   oo$$$$$$$$$o     o$$$$$ $$$$$$$$$$$
+   $$$$$$$"o$$$$$$$$$$$$$$$$$$$$$$$oo$$$$$$$$$$$$$$$$$$$$$$$$$o$$$$$$$$"
+   o$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"$$$$$
+  $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"""
+ $$$$$$$$ $$$$$$$$$$$$$$$$$$$$$$$$"    "$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+ "$$$$"" $$$$$$$$"""$$$$$$""""           "$$$$$$$$$$$$$$$$$""$$$$$"
+          $$$$$"                              """"$$$$$""
+'''
+
+    bot.send_message(message.channel, '```\n{}\n```'.format(ascii_art))
+
 @command(hidden=True, authority=2)
 def colour(bot, message):
     title = message.args[0]
