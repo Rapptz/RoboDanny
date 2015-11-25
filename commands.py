@@ -3,7 +3,6 @@
 import requests
 import functools
 from threading import Timer
-import datetime
 from collections import Counter, namedtuple
 try:
     from urllib.parse import quote as urlquote
@@ -610,7 +609,7 @@ def splatwiki(bot, message):
 @command(help='allows you tag text for later retrieval', params='<name>')
 @subcommand('create', help='creates a new tag under your ID', params='<name> <text>')
 @subcommand('edit', help='edits a new tag under your ID', params='<name> <text>')
-@subcommand('remove', help='removes a tag if it belongs to you', params='<name>')
+@subcommand('remove', help='removes a tag if it belongs to you (alias: delete)', params='<name>')
 @subcommand('owner', help='tells you the owner of the tag', params='<tag>')
 @subcommand('list', help='lists all tags that belong to you')
 @subcommand('search', help='searches for a tag name', params='<query>')
@@ -619,7 +618,7 @@ def tag(bot, message):
         config['tags'] = {}
 
     tags = config['tags']
-    subcommands = ('create', 'edit', 'remove', 'owner', 'list', 'search')
+    subcommands = ('create', 'edit', 'remove', 'owner', 'list', 'search', 'delete')
     if len(message.args) == 1:
         # !tag <name> (retrieval)
         name = message.args[0].lower()
@@ -659,7 +658,7 @@ def tag(bot, message):
         save_config()
         bot.send_message(message.channel, 'Tag "{}" successfully created.'.format(name))
 
-    elif action == 'remove':
+    elif action == 'remove' or action == 'delete':
         if len(message.args) < 2:
             return bot.send_message(message.channel, 'Missing the name of the tag to remove.')
 
@@ -715,7 +714,7 @@ def tag(bot, message):
             return bot.send_message(message.channel, 'Missing the query to search with. e.g. !tag search ika')
 
         query = message.args[1].lower()
-        if len(query) == 1:
+        if len(query) < 2:
             return bot.send_message(message.channel, 'Query length must be at least 2 characters.')
 
         result = ['"' + tag + '"' for tag in tags if query in tag]
