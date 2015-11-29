@@ -651,6 +651,9 @@ def tag(bot, message):
             return bot.send_message(message.channel, 'That tag name is reserved and cannot be used.')
         if name in tags:
             return bot.send_message(message.channel, 'Tag already exists. If you are the owner of the tag, do !tag edit.')
+        if '@everyone' in content:
+            return bot.send_message(message.channel, 'Tag contains content that is not allowed.')
+
         tags[name] = {
             'content': content,
             'owner_id': message.author.id
