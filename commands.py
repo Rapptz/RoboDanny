@@ -1093,7 +1093,17 @@ def dispatch_messages(bot, message, debug=True):
 
     if message.content.startswith(command_prefix) and prefix in commands and message.author != bot.user:
         if debug:
-            print('On {} {} has said {}'.format(message.timestamp.isoformat(), message.author.name.encode('utf-8'), message.content.encode('utf-8')))
+            timestamp = message.timestamp.isoformat()
+            author = message.author.name.encode('utf-8')
+            content = message.content.encode('utf-8')
+            destination = None
+            # <timestamp>: <author> in <destination>: <content>
+            if message.channel.is_private:
+                destination = 'Private Message'
+            else:
+                destination = '{} ({})'.format(b'#' + message.channel.name.encode('utf-8'), message.channel.server.name)
+
+            print('{}: {} in {}: {}'.format(timestamp, author, destination, content))
         try:
             args = shlex.split(message.content)
         except Exception as e:
