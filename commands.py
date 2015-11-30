@@ -619,6 +619,10 @@ def tag(bot, message):
 
     tags = config['tags']
     subcommands = ('create', 'edit', 'remove', 'owner', 'list', 'search', 'delete')
+
+    if '@everyone' in message.content:
+        return bot.send_message(message.channel, "Don't do that.")
+
     if len(message.args) == 1:
         # !tag <name> (retrieval)
         name = message.args[0].lower()
@@ -651,8 +655,6 @@ def tag(bot, message):
             return bot.send_message(message.channel, 'That tag name is reserved and cannot be used.')
         if name in tags:
             return bot.send_message(message.channel, 'Tag already exists. If you are the owner of the tag, do !tag edit.')
-        if '@everyone' in content:
-            return bot.send_message(message.channel, 'Tag contains content that is not allowed.')
 
         tags[name] = {
             'content': content,
