@@ -945,7 +945,7 @@ def uptime(bot, message):
 
 @command(help='shows bot information and statistics')
 def about(bot, message):
-    revision = os.popen('git show -s HEAD --format="- Current revision: `%h` (%cr)"').read().strip()
+    revision = os.popen(r'git show -s HEAD --format="- Current revision: \`%h\` (%cr)"').read().strip()
     result = ['**About Me:**']
     result.append('- Author: Danny (Discord ID: 80088516616269824)')
     result.append('- Library: discord.py (Python)')
