@@ -749,7 +749,7 @@ def info(bot, message):
             return bot.send_message(message.channel, msg)
 
 
-    roles = list(map(lambda x: x.name, member.roles))
+    roles = [role.name for role in member.roles if role.name != '@everyone']
     output = []
     output.append('Info about **{}**:'.format(member.name))
     if len(roles) > 0:
