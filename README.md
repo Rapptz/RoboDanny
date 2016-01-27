@@ -63,3 +63,4 @@ After you do the setup required just edit the `cogs/utils/checks.py` file with y
 
 - Python 3.5+
 - Async version of discord.py
+- lxml
