@@ -29,6 +29,22 @@ class RNG:
 
         del splatoon
 
+    @random.command(pass_context=True)
+    async def tag(self, ctx):
+        """Displays a random tag.
+
+        A tag showing up in this does not get its usage count increased.
+        """
+        tags = self.bot.get_cog('Tags')
+        if tags is None:
+            await self.bot.say('Tags cog is not loaded.')
+            return
+
+        db = tags.get_possible_tags(ctx.message.server)
+        name = rng.sample(list(db), 1)[0]
+        await self.bot.say('Random tag found: {}\n{}'.format(name, db[name]))
+        del tags
+
     @random.command(name='map')
     async def _map(self):
         """Displays a random Splatoon map."""

@@ -77,6 +77,19 @@ class Tags:
     def get_database_location(self, message):
         return 'generic' if message.channel.is_private else message.server.id
 
+    def get_possible_tags(self, server):
+        """Returns a dict of possible tags that the server can execute.
+
+        If this is a private message then only the generic tags are possible.
+        Server specific tags will override the generic tags.
+        """
+        generic = self.config.get('generic', {}).copy()
+        if server is None:
+            return generic
+
+        generic.update(self.config.get(server.id, {}))
+        return generic
+
     @commands.group(pass_context=True, invoke_without_command=True)
     async def tag(self, ctx, *, name : str):
         """Allows you to tag text for later retrieval.
