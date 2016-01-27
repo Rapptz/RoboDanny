@@ -71,9 +71,14 @@ async def on_message(message):
         perms = message.channel.permissions_for(message.author)
         bypass_ignore = perms.manage_roles
 
+        # if we don't have manage roles then we should
+        # check if it's the owner of the bot or they have Bot Admin role.
+
         if not bypass_ignore:
             if not message.channel.is_private:
                 bypass_ignore = discord.utils.get(message.author.roles, name='Bot Admin') is not None
+
+        # now we can finally realise if we can actually bypass the ignore.
 
         if not bypass_ignore:
             if message.channel.id in mod.config.get('ignored', []):
