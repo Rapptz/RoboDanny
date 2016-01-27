@@ -2,7 +2,64 @@
 
 A personal bot that runs on Discord.
 
-You won't be able to run this more than likely. It requires a cron for a specific script
-and a convoluted configuration file. This is mainly here for educational purposes.
+## Running
 
-In the future the cron job will probably not be required. This requires discord.py version 0.8.0 and will be rewritten for `asyncio` in the future. Until then, good luck running this.
+I would prefer if you don't run an instance of my bot. Just call the join command with an invite URL to have it on your server. The source here is provided for educational purposes for discord.py.
+
+However...
+
+You should only need two main configuration files while the rest will be created automatically.
+
+First is a credentials.json file with the credentials:
+
+```js
+{
+    "email": "myemail@gmail.com",
+    "password": "mypassword"
+}
+```
+
+Second is a splatoon.json file with your Nintendo Network credentials and Splatoon-related data.
+
+```js
+{
+    "username": "nnid",
+    "password": "nnid password",
+    "maps": [
+        "Urchin Underpass",
+        ...
+    ],
+    "abilities": [
+        "Bomb Range Up",
+        ...
+    ],
+    "weapons": [
+        {
+            "special": "Kraken",
+            "sub": "Burst Bomb",
+            "name": "L-3 Nozzlenose D"
+        },
+        ...
+    ],
+    "brands": [
+        {
+            "nerfed": null,
+            "buffed": null,
+            "name": "Famitsu"
+        },
+        {
+            "nerfed": "Ink Recovery Up",
+            "buffed": "Ink Saver (Sub)",
+            "name": "Firefin"
+        },
+        ...
+    ]
+}
+```
+
+After you do the setup required just edit the `cogs/utils/checks.py` file with your owner ID.
+
+## Requirements
+
+- Python 3.5+
+- Async version of discord.py
