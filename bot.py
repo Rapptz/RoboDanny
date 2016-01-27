@@ -9,6 +9,8 @@ description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
 """
 
+formatter = commands.HelpFormatter(show_check_failure=True)
+
 initial_extensions = [
     'cogs.meta',
     'cogs.splatoon',
@@ -18,7 +20,8 @@ initial_extensions = [
     'cogs.tags'
 ]
 
-bot = commands.Bot(command_prefix=['?', '\u2757'], description=description, pm_help=None)
+bot = commands.Bot(command_prefix=['?', '\u2757'], formatter=formatter,
+                   description=description, pm_help=None)
 
 @bot.event
 async def on_ready():
@@ -78,7 +81,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-@bot.command()
+@bot.command(hidden=True)
 @checks.is_owner()
 async def load(*, module : str):
     """Loads a module."""
@@ -91,7 +94,7 @@ async def load(*, module : str):
     else:
         await bot.say('\U0001f44c')
 
-@bot.command()
+@bot.command(hidden=True)
 @checks.is_owner()
 async def unload(*, module : str):
     """Unloads a module."""
@@ -123,7 +126,7 @@ async def debug(ctx, *, code : str):
 
     await bot.say(python.format(result))
 
-@bot.command(pass_context=True)
+@bot.command(pass_context=True, hidden=True)
 async def do(ctx, times : int, *, command):
     """Repeats a command a specified number of times."""
     msg = copy.copy(ctx.message)
