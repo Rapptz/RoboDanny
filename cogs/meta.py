@@ -199,11 +199,11 @@ class Meta:
     @commands.command()
     async def about(self):
         """Tells you information about the bot itself."""
-        revision = os.popen(r'git show -s HEAD --format="- Current revision: \`%h\` (%cr)"').read().strip()
+        revision = os.popen(r'git show -s HEAD --format="%s (%cr)"').read().strip()
         result = ['**About Me:**']
         result.append('- Author: Danny (Discord ID: 80088516616269824)')
         result.append('- Library: discord.py (Python)')
-        result.append(str(revision))
+        result.append('- Latest Change: {}'.format(revision))
         result.append('- Uptime: {}'.format(self.get_bot_uptime()))
         result.append('- Servers: {}'.format(len(self.bot.servers)))
         result.append('- Commands Run: {}'.format(self.bot.commands_executed))
