@@ -58,6 +58,9 @@ class Weapon:
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
 
+    def __str__(self):
+        return self.name
+
 class ProfileInfo:
     def __init__(self, **kwargs):
         self.nnid = kwargs.get('nnid')
@@ -161,7 +164,7 @@ class Profile:
         profile = self.config.get(user_id, ProfileInfo())
         setattr(profile, attr, data)
         await self.config.put(user_id, profile)
-        await self.bot.say('Field successfully edited.')
+        await self.bot.say('Field {} set to {}.'.format(attr, data))
 
     @profile.command(pass_context=True)
     async def nnid(self, ctx, *, NNID : str):
@@ -254,7 +257,6 @@ class Profile:
             entries.append((weapon, count))
 
         await formats.entry_to_code(self.bot, entries)
-
 
 def setup(bot):
     bot.add_cog(Profile(bot))
