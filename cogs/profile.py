@@ -249,8 +249,10 @@ class Profile:
         ]
 
         entries.append(('Ranked Players', total_ranked))
-        for rank, value in ranks.items():
-            entries.append((rank, format(value / total_ranked, '.2%')))
+        rank_data = [(rank, value / total_ranked) for rank, value in ranks.items()]
+        rank_data.sort(key=lambda t: t[1], reverse=True)        
+        for rank, value in rank_data:
+            entries.append((rank, format(value, '.2%')))
 
         weapons = Counter(profile.weapon.name for profile in profiles if profile.weapon is not None)
         entries.append(('Players with Weapons', sum(weapons.values())))
