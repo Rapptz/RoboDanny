@@ -22,7 +22,7 @@ class MemberParser:
     def member_entry(self, tup):
         index = tup[0]
         member = tup[1]
-        return '{0}. {1.name} from {1.server.name}'.format(index, member)
+        return '{0}. {1.name}#{1.discriminator} from {1.server.name}'.format(index, member)
 
     async def get(self, ctx):
         """Given an invocation context, gets a user."""
