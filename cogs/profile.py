@@ -109,6 +109,7 @@ class Profile:
     def __init__(self, bot):
         self.bot = bot
         self.config = config.Config('profiles.json', encoder=ProfileEncoder, object_hook=profile_decoder)
+        self.valid_ranks = { 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+', 'S', 'S+' }
 
     async def get_profile(self, ctx, parser):
         try:
@@ -131,6 +132,7 @@ class Profile:
             else:
                 await self.bot.say('You did not set up a profile. One has been created for you.')
                 await self.config.put(member.id, ProfileInfo())
+                await ctx.invoke(self.make)
         else:
             fmt = 'Profile for **{0.name}**:\n{1}'
             await self.bot.say(fmt.format(member, profile))
@@ -181,8 +183,7 @@ class Profile:
         If you don't have a profile set up then it'll create one for you.
         """
         rank = rank.upper()
-        valid = { 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+', 'S', 'S+' }
-        if rank not in valid:
+        if rank not in self.valid_ranks:
             await self.bot.say('That is not a valid Splatoon rank.')
         else:
             await self.edit_field('rank', ctx, rank)
@@ -234,6 +235,7 @@ class Profile:
             await self.bot.say(e)
         else:
             await self.edit_field('weapon', ctx, Weapon(**match))
+            return True
 
     @profile.command()
     async def stats(self):
@@ -257,6 +259,35 @@ class Profile:
             entries.append((weapon, count))
 
         await formats.entry_to_code(self.bot, entries)
+
+    @profile.command(pass_context=True)
+    async def make(self, ctx):
+        """Interactively set up a profile.
+
+        This command will walk you through the steps required to create
+        a profile. Note that it only goes through the basics of a profile,
+        a squad, for example, is not asked for.
+        """
+
+        message = ctx.message
+        await self.bot.say('Hello. Let\'s walk you through making a profile!\nWhat is your NNID?')
+        nnid = await self.bot.wait_for_message(author=message.author, channel=message.channel)
+        await ctx.invoke(self.nnid, NNID=nnid.content)
+        await self.bot.say('Now tell me, what is your Splatoon rank? Please don\'t put the number.')
+        check = lambda m: m.content.upper() in self.valid_ranks
+        rank = await self.bot.wait_for_message(author=message.author, channel=message.channel, check=check, timeout=60.0)
+        if rank is None:
+            await self.bot.say('Alright.. you took too long to give me a proper rank. Goodbye.')
+            return
+
+        await self.edit_field('rank', ctx, rank.content.upper())
+        await self.bot.say('What weapon do you main?')
+        weapon = await self.bot.wait_for_message(author=message.author, channel=message.channel)
+        success = await ctx.invoke(self.weapon, weapon=weapon.content)
+        if success:
+            await self.bot.say('Alright! Your profile is all ready now.')
+        else:
+            await self.bot.say('Make sure to use {0.prefix}profile weapon to change your weapon.'.format(ctx))
 
 def setup(bot):
     bot.add_cog(Profile(bot))
