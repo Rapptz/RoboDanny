@@ -227,25 +227,17 @@ class Splatoon:
     @commands.command()
     async def splatwiki(self, *, title : str):
         """Returns a Inkipedia page."""
-        title = title.strip()
-        if not title:
-            await self.bot.say('A title is required to search.')
+        url = 'http://splatoonwiki.org/wiki/Special:Search/' + urlquote(title)
 
-        params = {
-            'title': title
-        }
-
-        resp = await aiohttp.get('http://splatoonwiki.org/w/index.php', params=params)
-        await resp.release()
-        if resp.status == 404:
-            search = 'http://splatoonwiki.org/wiki/Special:Search/' + urlquote(title)
-            await self.bot.say('Could not find a page with the specified title.\nTry searching at ' + search)
-        elif resp.status == 200:
-            await self.bot.say(resp.url)
-        elif resp.status == 502:
-            await self.bot.say('It seems that Inkipedia is taking too long to respond. Try again later.')
-        else:
-            await self.bot.say('An error has occurred of status code {0.status} happened. Tell Danny.'.format(resp))
+        async with aiohttp.get(url) as resp:
+            if 'Special:Search' in resp.url:
+                await self.bot.say('Could not find your page. Try a search:\n{0.url}'.format(resp))
+            elif resp.status == 200:
+                await self.bot.say(resp.url)
+            elif resp.status == 502:
+                await self.bot.say('It seems that Inkipedia is taking too long to respond. Try again later.')
+            else:
+                await self.bot.say('An error has occurred of status code {0.status} happened. Tell Danny.'.format(resp))
 
 
 def setup(bot):
