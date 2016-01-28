@@ -191,7 +191,7 @@ class Splatoon:
         """A nice little easter egg."""
         await self.bot.say('http://i.stack.imgur.com/0OT9X.png')
 
-    @commands.group()
+    @commands.group(hidden=True)
     async def conf(self):
         """Edits the config file"""
         pass
