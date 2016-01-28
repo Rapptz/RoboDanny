@@ -222,7 +222,7 @@ class Profile:
             return
         elif len(result) == 1:
             await self.edit_field('weapon', ctx, Weapon(**result[0]))
-            return
+            return True
 
         def weapon_entry(tup):
             index = tup[0]
