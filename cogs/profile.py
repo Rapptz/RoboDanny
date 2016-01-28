@@ -174,7 +174,7 @@ class Profile:
 
         If you don't have a profile set up then it'll create one for you.
         """
-        await self.edit_field('nnid', ctx, NNID)
+        await self.edit_field('nnid', ctx, NNID.strip('"'))
 
     @profile.command(pass_context=True)
     async def rank(self, ctx, rank : str):
@@ -194,7 +194,7 @@ class Profile:
 
         If you don't have a profile set up then it'll create one for you.
         """
-        await self.edit_field('squad', ctx, squad)
+        await self.edit_field('squad', ctx, squad.strip('"'))
 
     @profile.command(pass_context=True)
     async def weapon(self, ctx, *, weapon : str):
@@ -211,7 +211,7 @@ class Profile:
             return
 
         weapons = splatoon.config.get('weapons', [])
-        query = weapon.lower()
+        query = weapon.lower().strip('"')
         if len(query) < 4:
             await self.bot.say('The weapon name to query must be at least 4 characters long.')
             return
