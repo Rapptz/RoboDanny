@@ -94,8 +94,9 @@ class Tags:
     async def tag(self, ctx, *, name : str):
         """Allows you to tag text for later retrieval.
 
-        If a subcommand is not called, then this will search the tag
-        database for the tag requested.
+        If a subcommand is not called, then this will search the tag database
+        for the tag requested. If a tag is not specified then the bot will
+        prompt you to create one interactively.
         """
         lookup = name.lower()
         server = ctx.message.server
@@ -114,7 +115,7 @@ class Tags:
     @tag.error
     async def tag_error(self, error, ctx):
         if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say('Missing the tag name to retrieve.')
+            await ctx.invoke(self.make)
 
     @tag.command(pass_context=True, aliases=['add'])
     async def create(self, ctx, name : str, *, content : str):
