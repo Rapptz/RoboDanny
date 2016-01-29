@@ -262,6 +262,41 @@ class Profile:
         await formats.entry_to_code(self.bot, entries)
 
     @profile.command(pass_context=True)
+    async def delete(self, ctx, *fields : str):
+        """Deletes certain fields from your profile.
+
+        The valid fields that could be deleted are:
+
+        - nnid
+        - squad
+        - weapon
+        - rank
+
+        Omitting any fields will delete your entire profile.
+        """
+        uid = ctx.message.author.id
+        profile = self.config.get(uid)
+        if profile is None:
+            await self.bot.say('You don\'t have a profile set up.')
+            return
+
+        if len(fields) == 0:
+            await self.config.remove(uid)
+            await self.bot.say('Your profile has been deleted.')
+            return
+
+        for attr in map(str.lower, fields):
+            if hasattr(profile, attr):
+                setattr(profile, attr, None)
+
+        await self.config.put(uid, profile)
+        fmt = 'The fields {} have been deleted.'
+        if len(fields) == 1:
+            fmt = 'The field {} has been deleted'
+        await self.bot.say(fmt.format(', '.join(fields)))
+
+
+    @profile.command(pass_context=True)
     async def make(self, ctx):
         """Interactively set up a profile.
 

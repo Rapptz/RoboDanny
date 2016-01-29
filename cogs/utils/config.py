@@ -40,6 +40,11 @@ class Config:
         self._db[key] = value
         await self.save()
 
+    async def remove(self, key):
+        """Removes a config entry."""
+        del self._db[key]
+        await self.save()
+
     def __contains__(self, item):
         return self._db.__contains__(item)
 
