@@ -152,6 +152,39 @@ class Tags:
         await self.config.put('generic', db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
 
+    @tag.command(pass_context=True)
+    async def make(self, ctx):
+        """Interactive makes a tag for you.
+
+        This walks you through the process of creating a tag with
+        its name and its content. This works similar to the tag
+        create command.
+        """
+        message = ctx.message
+        location = self.get_database_location(message)
+        db = self.config.get(location, {})
+        await self.bot.say('Hello. What would you like the name tag to be?')
+        name = await self.bot.wait_for_message(author=message.author, channel=message.channel, timeout=60.0)
+        if name is None:
+            await self.bot.say('You took too long. Goodbye.')
+            return
+
+        lookup = name.content.lower()
+        if lookup in db:
+            fmt = 'Sorry. A tag with that name exists already. Use {0.prefix}tag make again.'
+            await self.bot.say(fmt.format(ctx))
+            return
+
+        await self.bot.say('Alright. So the name is {0.content}. What about the tag\'s content?'.format(name))
+        content = await self.bot.wait_for_message(author=name.author, channel=name.channel, timeout=60.0)
+        if content is None:
+            await self.bot.say('You took too long. Goodbye.')
+            return
+
+        db[lookup] = TagInfo(name.content, content.content, content.author.id, location=location)
+        await self.config.put(location, db)
+        await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
+
     @tag.command(pass_context=True, aliases=['update'])
     async def edit(self, ctx, name : str, *, content : str):
         """Modifies an existing tag that you own.

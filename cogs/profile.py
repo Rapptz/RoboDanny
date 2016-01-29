@@ -249,7 +249,7 @@ class Profile:
 
         entries.append(('Ranked Players', total_ranked))
         rank_data = [(rank, value / total_ranked) for rank, value in ranks.items()]
-        rank_data.sort(key=lambda t: t[1], reverse=True)        
+        rank_data.sort(key=lambda t: t[1], reverse=True)
         for rank, value in rank_data:
             entries.append((rank, format(value, '.2%')))
 
