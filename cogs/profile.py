@@ -134,9 +134,8 @@ class Profile:
                 await self.config.put(member.id, ProfileInfo())
                 await ctx.invoke(self.make)
         else:
-            fmt = 'Profile for **{0.name}**:\n{1}'
+            fmt = 'Profile for **{0.name}#{0.discriminator}**:\n{1}'
             await self.bot.say(fmt.format(member, profile))
-
 
     @commands.group(pass_context=True, invoke_without_command=True)
     async def profile(self, ctx, *, member : MemberParser = MyOwnProfile):
