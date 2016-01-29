@@ -186,6 +186,27 @@ class Tags:
         await self.config.put(location, db)
         await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
 
+    def generate_stats(self, db, label):
+        yield '- Total {} tags: {}'.format(label, len(db))
+        if db:
+            popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
+            total_uses = sum(t.uses for t in popular)
+            yield '- Total {} tag uses: {}'.format(label, total_uses)
+            yield '- Most used {0} tag: {1.name} with {1.uses} uses'.format(label, popular[0])
+
+    @tag.command(pass_context=True)
+    async def stats(self, ctx):
+        """Gives stats about the tag database."""
+        result = []
+        server = ctx.message.server
+        generic = self.config.get('generic', {})
+        result.extend(self.generate_stats(generic, 'Generic'))
+
+        if server is not None:
+            result.extend(self.generate_stats(self.config.get(server.id, {}), 'Server Specific'))
+
+        await self.bot.say('\n'.join(result))
+
     @tag.command(pass_context=True, aliases=['update'])
     async def edit(self, ctx, name : str, *, content : str):
         """Modifies an existing tag that you own.
