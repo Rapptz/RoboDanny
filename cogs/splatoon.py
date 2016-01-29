@@ -77,6 +77,8 @@ class Splatoon:
         """Displays weapon info from a query.
 
         The query must be at least 3 characters long, otherwise it'll tell you it failed.
+
+        If 15 or more weapons are found then the results will be PMed to you instead.
         """
         query = query.strip().lower()
         weapons = self.config.get('weapons', [])
@@ -96,7 +98,7 @@ class Splatoon:
         output = ['Found {} weapon(s):'.format(len(result))]
         output.extend(self.weapon_to_string(weapon) for weapon in result)
 
-        if len(result) > 10:
+        if len(result) > 15:
             await self.bot.whisper('\n'.join(output))
         else:
             await self.bot.say('\n'.join(output))
