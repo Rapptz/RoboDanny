@@ -78,7 +78,7 @@ class Splatoon:
 
         The query must be at least 3 characters long, otherwise it'll tell you it failed.
         """
-        query = query.strip()
+        query = query.strip().lower()
         weapons = self.config.get('weapons', [])
         if len(query) < 3:
             await self.bot.say('The query must be at least 3 characters long.')
