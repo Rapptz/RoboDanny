@@ -24,6 +24,13 @@ help_attrs = dict(hidden=True)
 bot = commands.Bot(command_prefix=['?', '!', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
 
 @bot.event
+async def on_command_error(error, ctx):
+    if isinstance(error, commands.NoPrivateMessage):
+        await bot.whisper('This command cannot be used in private messages.')
+    elif isinstance(error, commands.DisabledCommand):
+        await bot.whisper('Sorry. This command is disabled and cannot be used.')
+
+@bot.event
 async def on_ready():
     print('Logged in as:')
     print('Username: ' + bot.user.name)
