@@ -18,9 +18,10 @@ initial_extensions = [
     'cogs.tags'
 ]
 
+shitty_log = open('rdanny.log', 'w', encoding='utf-8')
+
 
 help_attrs = dict(hidden=True)
-
 bot = commands.Bot(command_prefix=['?', '!', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
 
 @bot.event
@@ -49,19 +50,13 @@ async def on_ready():
 async def on_command(command, ctx):
     bot.commands_executed += 1
     message = ctx.message
-    # <timestamp>: <author> in <destination>: <content>
-    timestamp = message.timestamp.isoformat()
-    author = message.author.name.encode('utf-8')
-    content = message.content.encode('utf-8')
     destination = None
     if message.channel.is_private:
         destination = 'Private Message'
     else:
-        channel_name = b'#' + message.channel.name.encode('utf-8')
-        server_name = message.server.name.encode('utf-8')
-        destination = '{} ({})'.format(channel_name, server_name)
+        destination = '#{0.channel.name} ({0.server.name})'.format(message)
 
-    print('{}: {} in {}: {}'.format(timestamp, author, destination, content))
+    print('{0.timestamp}: {0.author.name} in {1}: {0.content}'.format(message, destination), file=shitty_log)
 
 @bot.event
 async def on_message(message):
@@ -196,3 +191,4 @@ def load_credentials():
 if __name__ == '__main__':
     credentials = load_credentials()
     bot.run(credentials['email'], credentials['password'])
+    shitty_log.close()
