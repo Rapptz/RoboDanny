@@ -5,6 +5,7 @@ import datetime, re
 import json, asyncio
 import copy
 import logging
+import sys
 
 description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
@@ -195,6 +196,9 @@ def load_credentials():
         return json.load(f)
 
 if __name__ == '__main__':
+    if any('debug' in arg.lower() for arg in sys.argv):
+        bot.command_prefix = '$'
+
     credentials = load_credentials()
     bot.run(credentials['email'], credentials['password'])
     handlers = logger.handlers[:]
