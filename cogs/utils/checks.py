@@ -1,11 +1,11 @@
 from discord.ext import commands
 import discord.utils
 
-def is_owner_check(ctx):
-    return ctx.message.author.id == '80088516616269824'
+def is_owner_check(message):
+    return message.author.id == '80088516616269824'
 
 def is_owner():
-    return commands.check(is_owner_check)
+    return commands.check(lambda ctx: is_owner_check(ctx.message))
 
 # The permission system of the bot is based on a "just works" basis
 # You have permissions and the bot has permissions. If you meet the permissions
@@ -18,11 +18,12 @@ def is_owner():
 # Of course, the owner will always be able to execute commands.
 
 def check_permissions(ctx, perms):
-    if is_owner_check(ctx):
+    msg = ctx.message
+    if is_owner_check(msg):
         return True
 
-    ch = ctx.message.channel
-    author = ctx.message.author
+    ch = msg.channel
+    author = msg.author
     resolved = ch.permissions_for(author)
     return all(getattr(resolved, name, None) == value for name, value in perms.items())
 

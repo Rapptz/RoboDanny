@@ -60,7 +60,7 @@ async def on_command(command, ctx):
 async def on_message(message):
     mod = bot.get_cog('Mod')
 
-    if mod is not None:
+    if mod is not None and not checks.is_owner_check(message):
         # check if the user is bot banned
         if message.author.id in mod.config.get('plonks', []):
             return
