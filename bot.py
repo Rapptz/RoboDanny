@@ -151,6 +151,7 @@ async def announcement(*, message : str):
             if channel is not None:
                 await bot.send_message(channel, message)
         finally:
+            print('Sent message to {}'.format(server.name.encode('utf-8')))
             # to make sure we don't hit the rate limit, we send one
             # announcement message every 5 seconds.
             await asyncio.sleep(5)

@@ -112,12 +112,17 @@ class Mod:
 
         spammers = Counter()
         channel = ctx.message.channel
+        prefixes = self.bot.command_prefix
+
+        def is_possible_command_invoke(entry):
+            valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
+            return valid_call and entry.content[1:2].isspace()
 
         async for entry in self.bot.logs_from(channel, limit=search):
             if entry.author == self.bot.user:
                 await self.bot.delete_message(entry)
                 spammers['Bot'] += 1
-            if entry.content.startswith(ctx.prefix) and not entry.content[1:2].isspace():
+            if is_possible_command_invoke(entry):
                 try:
                     await self.bot.delete_message(entry)
                 except discord.Forbidden:
