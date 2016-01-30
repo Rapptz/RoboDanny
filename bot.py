@@ -164,6 +164,11 @@ async def do(ctx, times : int, *, command):
     for i in range(times):
         await bot.process_commands(msg)
 
+@bot.command()
+async def changelog():
+    """Gives a URL to the current bot changelog."""
+    await bot.say('https://gist.github.com/Rapptz/7a0d72b836dd0d9620f0')
+
 def load_credentials():
     with open('credentials.json') as f:
         return json.load(f)
