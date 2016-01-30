@@ -207,6 +207,10 @@ class Mod:
         all servers that they access the bot with. So use this with
         caution.
 
+        There is no way to bypass a plonk regardless of role or permissions.
+        The only person who cannot be plonked is the bot creator. So this
+        must be used with caution.
+
         To use this command you must have the Manage Server permission
         or have a Bot Admin role.
         """
@@ -236,6 +240,7 @@ class Mod:
         except ValueError:
             pass
         else:
+            await self.config.put('plonks', plonks)
             await self.bot.say('{0.name} has been unbanned from using the bot.'.format(member))
 
     @commands.command(pass_context=True, no_pm=True)
