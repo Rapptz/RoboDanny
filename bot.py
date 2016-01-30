@@ -84,6 +84,19 @@ async def on_message(message):
             if message.channel.id in mod.config.get('ignored', []):
                 return
 
+    # if someone private messages us with something that looks like a URL then
+    # we should try to see if it's an invite to a discord server and join it if so.
+    if message.channel.is_private and message.content.startswith('http'):
+        try:
+            invite = await bot.get_invite(message.content)
+            await bot.accept_invite(invite)
+            await bot.send_message(message.channel, 'Joined the server.')
+        except:
+            # if an error occurs at this point then ignore it and move on.
+            pass
+        finally:
+            return
+
     await bot.process_commands(message)
 
 @bot.command(hidden=True)

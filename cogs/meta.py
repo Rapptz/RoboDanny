@@ -162,6 +162,7 @@ class Meta:
     async def join(self, invite : discord.Invite):
         """Joins a server via invite."""
         await self.bot.accept_invite(invite)
+        await self.bot.say('\U0001f44c')
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_server=True)
