@@ -29,8 +29,8 @@ class TagInfo:
         # then the server the message belongs to will be the server of the server specific tag.
         members = ctx.bot.get_all_members() if self.is_generic else ctx.message.server.members
         owner = discord.utils.get(members, id=self.owner_id)
-        data.append(('Owner', owner.name))
-        data.append(('Owner ID', owner.id))
+        data.append(('Owner', owner.name if owner is not None else '<Not Found>'))
+        data.append(('Owner ID', self.owner_id))
         return data
 
 
