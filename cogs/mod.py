@@ -116,7 +116,7 @@ class Mod:
 
         def is_possible_command_invoke(entry):
             valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
-            return valid_call and entry.content[1:2].isspace()
+            return valid_call and not entry.content[1:2].isspace()
 
         async for entry in self.bot.logs_from(channel, limit=search):
             if entry.author == self.bot.user:
@@ -132,7 +132,8 @@ class Mod:
 
         await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
 
-        stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers.items()))
+        spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
+        stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
 
     @commands.command(no_pm=True)
@@ -289,8 +290,8 @@ class Mod:
                     spammers[message.author.name] += 1
 
         await self.bot.say('{} messages(s) were removed.'.format(sum(spammers.values())))
-
-        stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers.items()))
+        spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
+        stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
 
     @remove.command(pass_context=True)
