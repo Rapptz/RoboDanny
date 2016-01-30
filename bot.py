@@ -9,8 +9,6 @@ description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
 """
 
-formatter = commands.HelpFormatter(show_check_failure=True)
-
 initial_extensions = [
     'cogs.meta',
     'cogs.splatoon',
@@ -20,8 +18,7 @@ initial_extensions = [
     'cogs.tags'
 ]
 
-bot = commands.Bot(command_prefix=['?', '\u2757'], formatter=formatter,
-                   description=description, pm_help=None)
+bot = commands.Bot(command_prefix=['?', '\u2757'], description=description, pm_help=None)
 
 @bot.event
 async def on_ready():
