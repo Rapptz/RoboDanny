@@ -21,7 +21,7 @@ initial_extensions = [
 
 help_attrs = dict(hidden=True)
 
-bot = commands.Bot(command_prefix=['?', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
+bot = commands.Bot(command_prefix=['?', '!', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
 
 @bot.event
 async def on_ready():
