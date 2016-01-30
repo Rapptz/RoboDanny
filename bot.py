@@ -149,7 +149,7 @@ async def announcement(*, message : str):
 
             channel = discord.utils.find(predicate, server.channels)
             if channel is not None:
-                await bot.send_messages(channel, message)
+                await bot.send_message(channel, message)
         finally:
             # to make sure we don't hit the rate limit, we send one
             # announcement message every 5 seconds.
