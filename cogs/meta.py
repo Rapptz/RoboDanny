@@ -33,7 +33,7 @@ class Meta:
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.command(hidden=True)
     async def hello(self):
         """Displays my intro message."""
         await self.bot.say('Hello! I\'m a robot! I am currently **version 3.0.0**. Danny made me.')
@@ -64,7 +64,7 @@ class Meta:
         await asyncio.sleep(time.seconds)
         await self.bot.say(completed.format(author, message))
 
-    @commands.command(name='quit')
+    @commands.command(name='quit', hidden=True)
     @checks.is_owner()
     async def _quit(self):
         """Quits the bot."""

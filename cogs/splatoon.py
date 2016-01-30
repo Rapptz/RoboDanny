@@ -51,12 +51,12 @@ class Splatoon:
         """Shows the current maps in the Splatoon schedule."""
         await self.bot.say(self.get_map_message(0))
 
-    @commands.command()
+    @commands.command(hidden=True)
     async def nextmaps(self):
         """Shows the next maps in the Splatoon schedule."""
         await self.bot.say(self.get_map_message(1))
 
-    @commands.command()
+    @commands.command(hidden=True)
     async def lastmaps(self):
         """Shows the last maps in the Splatoon schedule."""
         await self.bot.say(self.get_map_message(2))
