@@ -4,6 +4,7 @@ from cogs.utils import checks
 import datetime, re
 import json, asyncio
 import copy
+import logging
 
 description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
@@ -18,7 +19,12 @@ initial_extensions = [
     'cogs.tags'
 ]
 
-shitty_log = open('rdanny.log', 'w', encoding='utf-8')
+discord_logger = logging.getLogger('discord')
+discord_logger.setLevel(logging.CRITICAL)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
+logger.addHandler(handler)
 
 
 help_attrs = dict(hidden=True)
@@ -56,7 +62,7 @@ async def on_command(command, ctx):
     else:
         destination = '#{0.channel.name} ({0.server.name})'.format(message)
 
-    print('{0.timestamp}: {0.author.name} in {1}: {0.content}'.format(message, destination), file=shitty_log)
+    logger.info('{0.timestamp}: {0.author.name} in {1}: {0.content}'.format(message, destination))
 
 @bot.event
 async def on_message(message):
@@ -191,4 +197,7 @@ def load_credentials():
 if __name__ == '__main__':
     credentials = load_credentials()
     bot.run(credentials['email'], credentials['password'])
-    shitty_log.close()
+    handlers = logger.handlers[:]
+    for hdlr in handlers:
+        hdlr.close()
+        logger.removeHandler(hdlr)
