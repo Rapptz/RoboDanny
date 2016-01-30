@@ -125,6 +125,7 @@ class Tags:
         tag that can be accessed in all servers. Otherwise the tag you
         create can only be accessed in the server that it was created in.
         """
+        content = content.replace('@everyone', '@\u200beveryone')
         lookup = name.lower()
         location = self.get_database_location(ctx.message)
         db = self.config.get(location, {})
@@ -143,6 +144,7 @@ class Tags:
         Unlike the create tag subcommand,  this will always attempt to create
         a generic tag and not a server-specific one.
         """
+        content = content.replace('@everyone', '@\u200beveryone')
         lookup = name.lower()
         db = self.config.get('generic', {})
         if lookup in db:
@@ -182,7 +184,8 @@ class Tags:
             await self.bot.say('You took too long. Goodbye.')
             return
 
-        db[lookup] = TagInfo(name.content, content.content, content.author.id, location=location)
+        content = content.content.replace('@everyone', '@\u200beveryone')
+        db[lookup] = TagInfo(name.content, content, name.author.id, location=location)
         await self.config.put(location, db)
         await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
 
@@ -216,6 +219,7 @@ class Tags:
         tag database. Otherwise it looks at the server-specific database.
         """
 
+        content = content.replace('@everyone', '@\u200beveryone')
         lookup = name.lower()
         server = ctx.message.server
         tag = self.get_tag(server, lookup)
