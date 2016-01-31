@@ -184,7 +184,12 @@ class Tags:
             await self.bot.say('You took too long. Goodbye.')
             return
 
-        content = content.content.replace('@everyone', '@\u200beveryone')
+        if len(content.content) == 0 and len(content.attachments) > 0:
+            # we have an attachment
+            content = content.attachments[0].get('url', '*Could not get attachment data*')
+        else:
+            content = content.content.replace('@everyone', '@\u200beveryone')
+
         db[lookup] = TagInfo(name.content, content, name.author.id, location=location)
         await self.config.put(location, db)
         await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
