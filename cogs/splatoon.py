@@ -103,7 +103,7 @@ class Splatoon:
         else:
             await self.bot.say('\n'.join(output))
 
-    @commands.group(invoke_without_command=True)
+    @commands.command(invoke_without_command=True)
     async def scrim(self, games=5):
         """Generates scrim map and mode combinations.
 
