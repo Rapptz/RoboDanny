@@ -46,7 +46,7 @@ class Splatoon:
         except IndexError:
             return 'No map data found. Try again later.'
 
-    @commands.command()
+    @commands.command(aliases=['rotation'])
     async def maps(self):
         """Shows the current maps in the Splatoon schedule."""
         await self.bot.say(self.get_map_message(0))
