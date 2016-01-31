@@ -249,6 +249,9 @@ class Mod:
     async def colour(self, ctx, colour : discord.Colour, *, role : discord.Role):
         """Changes the colour of a role.
 
+        The colour must be a hexadecimal value, e.g. FF2AEF. Don't prefix it
+        with a pound (#) as it won't work. Colour names are also not supported.
+
         To use this command you must have the Manage Roles permission or
         have the Bot Admin role. The bot must also have Manage Roles permissions.
 
