@@ -342,7 +342,7 @@ class Tags:
 
         fmt = '{} tag(s) found.\n{}'
         if results:
-            await self.bot.say(fmt.format(len(results), '\n'.join(results)))
+            await self.bot.say(fmt.format(len(results), ', '.join(results)))
         else:
             await self.bot.say('No tags found.')
 
