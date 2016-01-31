@@ -306,19 +306,26 @@ class Profile:
         """
 
         message = ctx.message
-        await self.bot.say('Hello. Let\'s walk you through making a profile!\nWhat is your NNID?')
-        nnid = await self.bot.wait_for_message(author=message.author, channel=message.channel)
+        author = message.author
+
+        await self.bot.say('Hello {0.mention}. Let\'s walk you through making a profile!\nWhat is your NNID?'.format(author))
+        check = lambda m: len(m.content) >= 4
+        nnid = await self.bot.wait_for_message(author=author, channel=message.channel, timeout=60.0, check=check)
+
+        if nnid is None:
+            await self.bot.say('You took too long {0.mention}. Goodbye.'.format(author))
+
         await ctx.invoke(self.nnid, NNID=nnid.content)
         await self.bot.say('Now tell me, what is your Splatoon rank? Please don\'t put the number.')
         check = lambda m: m.content.upper() in self.valid_ranks
-        rank = await self.bot.wait_for_message(author=message.author, channel=message.channel, check=check, timeout=60.0)
+        rank = await self.bot.wait_for_message(author=author, channel=message.channel, check=check, timeout=60.0)
         if rank is None:
             await self.bot.say('Alright.. you took too long to give me a proper rank. Goodbye.')
             return
 
         await self.edit_field('rank', ctx, rank.content.upper())
         await self.bot.say('What weapon do you main?')
-        weapon = await self.bot.wait_for_message(author=message.author, channel=message.channel)
+        weapon = await self.bot.wait_for_message(author=author, channel=message.channel)
         success = await ctx.invoke(self.weapon, weapon=weapon.content)
         if success:
             await self.bot.say('Alright! Your profile is all ready now.')
