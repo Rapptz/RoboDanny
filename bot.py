@@ -95,7 +95,7 @@ async def on_message(message):
 
     # if someone private messages us with something that looks like a URL then
     # we should try to see if it's an invite to a discord server and join it if so.
-    if message.channel.is_private and message.content.startswith('http'):
+    if message.channel.is_private and message.content.startswith('http') and message.author != bot.user:
         try:
             invite = await bot.get_invite(message.content)
             if isinstance(invite.server, discord.Object):
