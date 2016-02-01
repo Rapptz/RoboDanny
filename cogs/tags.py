@@ -259,7 +259,11 @@ class Tags:
             await self.bot.say('Tag not found.')
             return
 
-        can_delete = checks.role_or_permissions(ctx, lambda r: r.name == 'Bot Admin', manage_messages=True)
+        if not tag.is_generic:
+            can_delete = checks.role_or_permissions(ctx, lambda r: r.name == 'Bot Admin', manage_messages=True)
+        else:
+            can_delete = checks.is_owner_check(ctx.message)
+
         can_delete = can_delete or tag.owner_id == ctx.message.author.id
 
         if not can_delete:
