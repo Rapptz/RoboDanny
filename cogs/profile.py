@@ -332,5 +332,43 @@ class Profile:
         else:
             await self.bot.say('Make sure to use {0.prefix}profile weapon to change your weapon.'.format(ctx))
 
+    @profile.command()
+    async def search(self, *, query : str):
+        """Searches profiles via either NNID or Squad.
+
+        The query must be at least 3 characters long.
+
+        First a search is passed through the NNID database and then we pass
+        through the Squad database. Results are returned matching whichever
+        criteria is met.
+        """
+        lowered = query.lower()
+        if len(lowered) < 3:
+            await self.bot.say('Query must be at least 3 characters long.')
+            return
+
+        profiles = self.config.all().items()
+        members = set()
+        def predicate(t):
+            p = t[1]
+            if p.squad is not None:
+                if lowered in p.squad.lower():
+                    return True
+
+            if p.nnid is not None:
+                if lowered in p.nnid.lower():
+                    return True
+
+            return False
+
+        for user_id, profile in filter(predicate, profiles):
+            for server in self.bot.servers:
+                member = server.get_member(user_id)
+                if member is not None:
+                    members.add(member.name)
+
+        fmt = 'Found the {} members matching the search:\n{}'
+        await self.bot.say(fmt.format(len(members), ', '.join(members)))
+
 def setup(bot):
     bot.add_cog(Profile(bot))
