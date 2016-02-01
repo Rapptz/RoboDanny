@@ -179,7 +179,7 @@ class Tags:
             return
 
         await self.bot.say('Alright. So the name is {0.content}. What about the tag\'s content?'.format(name))
-        content = await self.bot.wait_for_message(author=name.author, channel=name.channel, timeout=60.0)
+        content = await self.bot.wait_for_message(author=name.author, channel=name.channel, timeout=300.0)
         if content is None:
             await self.bot.say('You took too long. Goodbye.')
             return
