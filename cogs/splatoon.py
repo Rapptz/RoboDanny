@@ -186,7 +186,18 @@ class Splatoon:
     async def _list(self):
         """Lists all Splatoon brands."""
         brands = self.config.get('brands', [])
-        await self.bot.say(', '.join(map(lambda x: x['name'], brands)))
+        max_name = max(len(b['name']) for b in brands)
+        max_ability = max(len(b['buffed']) if b['buffed'] else 4 for b in brands)
+        output = ['```']
+        tmp = { 'name': 'Brand', 'nerfed': 'Nerfed', 'buffed': 'Buffed' }
+        fmt = '{0[name]!s:<{n}} {0[buffed]!s:<{a}} {0[nerfed]!s:<{a}}'
+        output.append(fmt.format(tmp, n=max_name, a=max_ability))
+        output.append('-' * (max_name + max_ability * 2))
+
+        for brand in brands:
+            output.append(fmt.format(brand, n=max_name, a=max_ability))
+        output.append('```')
+        await self.bot.say('\n'.join(output))
 
     @commands.command(hidden=True)
     async def marie(self):
