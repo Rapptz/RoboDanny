@@ -130,11 +130,11 @@ class Splatoon:
         If the query is an ability then it attempts to find out what brands
         influence that ability, otherwise it just looks for the brand being given.
 
-        The query must be at least 5 characters long.
+        The query must be at least 2 characters long.
         """
         query = query.strip().lower()
 
-        if len(query) < 5:
+        if len(query) < 2:
             await self.bot.say('The query must be at least 5 characters long.')
             return
 
