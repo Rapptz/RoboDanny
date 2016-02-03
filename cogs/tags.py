@@ -126,7 +126,7 @@ class Tags:
         create can only be accessed in the server that it was created in.
         """
         content = content.replace('@everyone', '@\u200beveryone')
-        lookup = name.lower()
+        lookup = name.lower().strip()
         if not lookup:
             await self.bot.say('You need to actually pass in a tag name.')
             return
