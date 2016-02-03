@@ -127,6 +127,10 @@ class Tags:
         """
         content = content.replace('@everyone', '@\u200beveryone')
         lookup = name.lower()
+        if not lookup:
+            await self.bot.say('You need to actually pass in a tag name.')
+            return
+
         location = self.get_database_location(ctx.message)
         db = self.config.get(location, {})
         if lookup in db:
