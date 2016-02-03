@@ -309,7 +309,7 @@ class Profile:
         author = message.author
 
         await self.bot.say('Hello {0.mention}. Let\'s walk you through making a profile!\nWhat is your NNID?'.format(author))
-        check = lambda m: len(m.content) >= 4
+        check = lambda m: len(m.content) >= 4 and m.content.count('\n') == 0
         nnid = await self.bot.wait_for_message(author=author, channel=message.channel, timeout=60.0, check=check)
 
         if nnid is None:
