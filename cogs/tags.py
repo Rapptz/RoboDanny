@@ -131,6 +131,10 @@ class Tags:
             await self.bot.say('You need to actually pass in a tag name.')
             return
 
+        if len(lookup) > 100:
+            await self.bot.say('Tag name is a maximum of 100 characters.')
+            return
+
         location = self.get_database_location(ctx.message)
         db = self.config.get(location, {})
         if lookup in db:
@@ -155,6 +159,10 @@ class Tags:
             await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
             return
 
+        if len(lookup) > 100:
+            await self.bot.say('Tag name is a maximum of 100 characters.')
+            return
+
         db[lookup] = TagInfo(name, content, ctx.message.author.id, location='generic')
         await self.config.put('generic', db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
@@ -171,14 +179,15 @@ class Tags:
         location = self.get_database_location(message)
         db = self.config.get(location, {})
         await self.bot.say('Hello. What would you like the name tag to be?')
-        name = await self.bot.wait_for_message(author=message.author, channel=message.channel, timeout=60.0)
+        check = lambda m: len(m.content) < 100
+        name = await self.bot.wait_for_message(author=message.author, channel=message.channel, timeout=60.0, check=check)
         if name is None:
             await self.bot.say('You took too long. Goodbye.')
             return
 
         lookup = name.content.lower()
         if lookup in db:
-            fmt = 'Sorry. A tag with that name exists already. Use {0.prefix}tag make again.'
+            fmt = 'Sorry. A tag with that name exists already. Redo the command {0.prefix}tag make.'
             await self.bot.say(fmt.format(ctx))
             return
 
