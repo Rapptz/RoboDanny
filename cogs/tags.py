@@ -204,7 +204,8 @@ class Tags:
             popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
             total_uses = sum(t.uses for t in popular)
             yield '- Total {} tag uses: {}'.format(label, total_uses)
-            yield '- Most used {0} tag: {1.name} with {1.uses} uses'.format(label, popular[0])
+            for i in range(3):
+                yield '- Rank {0} tag: {1.name} with {1.uses} uses'.format(i + 1, popular[i])
 
     @tag.command(pass_context=True)
     async def stats(self, ctx):
