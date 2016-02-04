@@ -247,7 +247,7 @@ class Tags:
 
         await self.bot.say('\n'.join(result))
 
-    @tag.command(pass_context=True, aliases=['update'])
+    @tag.command(pass_context=True)
     async def edit(self, ctx, name : str, *, content : str):
         """Modifies an existing tag that you own.
 
