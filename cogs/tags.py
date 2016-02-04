@@ -117,6 +117,16 @@ class Tags:
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.invoke(self.make)
 
+    def verify_lookup(self, lookup):
+        if '@everyone' in lookup:
+            raise RuntimeError('That tag is using blocked words.')
+
+        if not lookup:
+            raise RuntimeError('You need to actually pass in a tag name.')
+
+        if len(lookup) > 100:
+            raise RuntimeError('Tag name is a maximum of 100 characters.')
+
     @tag.command(pass_context=True, aliases=['add'])
     async def create(self, ctx, name : str, *, content : str):
         """Creates a new tag owned by you.
@@ -127,12 +137,10 @@ class Tags:
         """
         content = content.replace('@everyone', '@\u200beveryone')
         lookup = name.lower().strip()
-        if not lookup:
-            await self.bot.say('You need to actually pass in a tag name.')
-            return
-
-        if len(lookup) > 100:
-            await self.bot.say('Tag name is a maximum of 100 characters.')
+        try:
+            self.verify_lookup(lookup)
+        except RuntimeError as e:
+            await self.bot.say(e)
             return
 
         location = self.get_database_location(ctx.message)
@@ -153,14 +161,16 @@ class Tags:
         a generic tag and not a server-specific one.
         """
         content = content.replace('@everyone', '@\u200beveryone')
-        lookup = name.lower()
+        lookup = name.lower().strip()
+        try:
+            self.verify_lookup(lookup)
+        except RuntimeError as e:
+            await self.bot.say(str(e))
+            return
+
         db = self.config.get('generic', {})
         if lookup in db:
             await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
-            return
-
-        if len(lookup) > 100:
-            await self.bot.say('Tag name is a maximum of 100 characters.')
             return
 
         db[lookup] = TagInfo(name, content, ctx.message.author.id, location='generic')
@@ -178,8 +188,16 @@ class Tags:
         message = ctx.message
         location = self.get_database_location(message)
         db = self.config.get(location, {})
+
         await self.bot.say('Hello. What would you like the name tag to be?')
-        check = lambda m: len(m.content) < 100
+
+        def check(msg):
+            try:
+                self.verify_lookup(msg.content.lower())
+                return True
+            except:
+                return False
+
         name = await self.bot.wait_for_message(author=message.author, channel=message.channel, timeout=60.0, check=check)
         if name is None:
             await self.bot.say('You took too long. Goodbye.')
@@ -244,7 +262,7 @@ class Tags:
         tag = self.get_tag(server, lookup)
 
         if tag is None:
-            await self.bot.say('The tag "{}" does not exist.'.format(name))
+            await self.bot.say('The tag does not exist.')
             return
 
         if tag.owner_id != ctx.message.author.id:
@@ -301,7 +319,7 @@ class Tags:
         tag = self.get_tag(server, lookup)
 
         if tag is None:
-            await self.bot.say('Tag "{}" not found.'.format(name))
+            await self.bot.say('Tag not found.')
             return
 
         entries = tag.info_entries(ctx)
