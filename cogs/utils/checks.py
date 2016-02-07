@@ -50,3 +50,14 @@ def admin_or_permissions(**perms):
         return role_or_permissions(ctx, lambda r: r.name == 'Bot Admin', **perms)
 
     return commands.check(predicate)
+
+def is_in_servers(*server_ids):
+    def predicate(ctx):
+        server = ctx.message.server
+        if server is None:
+            return False
+        return server.id in server_ids
+    return commands.check(predicate)
+
+def is_lounge_cpp():
+    return is_in_servers('145079846832308224')
