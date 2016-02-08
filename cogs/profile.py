@@ -22,7 +22,7 @@ class MemberParser:
     def member_entry(self, tup):
         index = tup[0]
         member = tup[1]
-        return '{0}. {1.name}#{1.discriminator} from {1.server.name}'.format(index, member)
+        return '{0}: {1.name}#{1.discriminator} from {1.server.name}'.format(index, member)
 
     async def get(self, ctx):
         """Given an invocation context, gets a user."""
@@ -226,7 +226,7 @@ class Profile:
         def weapon_entry(tup):
             index = tup[0]
             wep = tup[1]['name']
-            return '#{0}: {1}'.format(index, wep)
+            return '{0}: {1}'.format(index, wep)
 
         try:
             match = await formats.too_many_matches(self.bot, ctx.message, result, weapon_entry)
