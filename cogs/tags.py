@@ -95,8 +95,7 @@ class Tags:
         """Allows you to tag text for later retrieval.
 
         If a subcommand is not called, then this will search the tag database
-        for the tag requested. If a tag is not specified then the bot will
-        prompt you to create one interactively.
+        for the tag requested.
         """
         lookup = name.lower()
         server = ctx.message.server
@@ -115,7 +114,7 @@ class Tags:
     @tag.error
     async def tag_error(self, error, ctx):
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.invoke(self.make)
+            await self.bot.say('You need to pass in a tag name.')
 
     def verify_lookup(self, lookup):
         if '@everyone' in lookup:
