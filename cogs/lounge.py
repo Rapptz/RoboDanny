@@ -35,9 +35,9 @@ class Lounge:
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.command(pass_context=True)
     @checks.is_lounge_cpp()
-    async def coliru(self, *, code : CodeBlock):
+    async def coliru(self, ctx, *, code : CodeBlock):
         """Compiles code via Coliru.
 
         You have to pass in a codeblock with the language syntax
@@ -64,8 +64,33 @@ class Lounge:
                 await self.bot.say('Coliru did not respond in time.')
                 return
             output = await resp.text()
-            fmt = '```\n{}\n```'.format(output)
-            await self.bot.say(fmt[:2000])
+
+            if len(output) < 1992:
+                fmt = '```\n{}\n```'.format(output)
+                await self.bot.say(fmt)
+                return
+
+            # output is too big so post it in gist
+            gist = {
+                'description': 'The response for {0.author}\'s compilation.'.format(ctx.message),
+                'public': True,
+                'files': {
+                    'output': {
+                        'content': output
+                    },
+                    'original': {
+                        'content': code.source
+                    }
+                }
+            }
+
+            async with aiohttp.post('https://api.github.com/gists', data=json.dumps(gist)) as gh:
+                if gh.status != 201:
+                    await self.bot.say('Could not create gist.')
+                else:
+                    js = await gh.json()
+                    await self.bot.say('Output too big. The content is in: {0[html_url]}'.format(js))
+
 
     @coliru.error
     async def coliru_error(self, error, ctx):
