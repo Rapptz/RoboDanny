@@ -307,30 +307,55 @@ class Profile:
 
         message = ctx.message
         author = message.author
+        sentinel = ctx.prefix + 'cancel'
 
-        await self.bot.say('Hello {0.mention}. Let\'s walk you through making a profile!\nWhat is your NNID?'.format(author))
+        fmt = 'Hello {0.mention}. Let\'s walk you through making a profile!\n' \
+              '**You can cancel this process whenever you want by typing {1.prefix}cancel.**\n' \
+              'Now, what is your NNID?'
+
+        await self.bot.say(fmt.format(author, ctx))
         check = lambda m: len(m.content) >= 4 and m.content.count('\n') == 0
         nnid = await self.bot.wait_for_message(author=author, channel=message.channel, timeout=60.0, check=check)
 
         if nnid is None:
             await self.bot.say('You took too long {0.mention}. Goodbye.'.format(author))
 
+        if nnid.content == sentinel:
+            await self.bot.say('Profile making cancelled. Goodbye.')
+            return
+
         await ctx.invoke(self.nnid, NNID=nnid.content)
         await self.bot.say('Now tell me, what is your Splatoon rank? Please don\'t put the number.')
-        check = lambda m: m.content.upper() in self.valid_ranks
+        check = lambda m: m.content.upper() in self.valid_ranks or m.content == sentinel
         rank = await self.bot.wait_for_message(author=author, channel=message.channel, check=check, timeout=60.0)
+
         if rank is None:
             await self.bot.say('Alright.. you took too long to give me a proper rank. Goodbye.')
             return
 
+        if rank.content == sentinel:
+            await self.bot.say('Profile making cancelled. Goodbye.')
+            return
+
         await self.edit_field('rank', ctx, rank.content.upper())
         await self.bot.say('What weapon do you main?')
-        weapon = await self.bot.wait_for_message(author=author, channel=message.channel)
-        success = await ctx.invoke(self.weapon, weapon=weapon.content)
-        if success:
-            await self.bot.say('Alright! Your profile is all ready now.')
+        for i in range(3):
+            weapon = await self.bot.wait_for_message(author=author, channel=message.channel)
+
+            if weapon.content == sentinel:
+                await self.bot.say('Profile making cancelled. Goodbye.')
+                return
+
+            success = await ctx.invoke(self.weapon, weapon=weapon.content)
+            if success:
+                await self.bot.say('Alright! Your profile is all ready now.')
+                break
+            else:
+                await self.bot.say('Oops. You have {} tries remaining.'.format(2 - i))
         else:
-            await self.bot.say('Make sure to use {0.prefix}profile weapon to change your weapon.'.format(ctx))
+            # if we're here then we didn't successfully set up a weapon.
+            tmp = 'Sorry we couldn\'t set up your profile. You should try using {0.prefix}profile weapon'
+            await self.bot.say(tmp.format(ctx))
 
     @profile.command()
     async def search(self, *, query : str):
