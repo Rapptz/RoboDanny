@@ -17,7 +17,6 @@ class Splatoon:
         self.map_updater.cancel()
 
     async def update_maps(self):
-        # we sleep for 5 seconds to give other tasks their time to run
         username = self.config.get('username')
         password = self.config.get('password')
         try:
@@ -25,7 +24,7 @@ class Splatoon:
                 try:
                     cookie = await maps.get_new_splatnet_cookie(username, password)
                     schedule = await maps.get_splatnet_schedule(cookie)
-                except Exception:
+                except:
                     # if we get an exception, keep the old data
                     # make sure to remove the old data that already ended
                     self.map_data = [data for data in self.map_data if not data.is_over]
