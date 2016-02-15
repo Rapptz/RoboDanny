@@ -188,7 +188,7 @@ class Meta:
     def format_message(self, message):
         return 'On {0.timestamp}, {0.author} said {0.content}'.format(message)
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, no_pm=True)
     async def mentions(self, ctx, channel : discord.Channel = None, context : int = 3):
         """Tells you when you were mentioned in a channel.
 
@@ -203,14 +203,19 @@ class Meta:
 
         author = ctx.message.author
         previous = deque(maxlen=context)
+        is_mentioned = False
         async for message in self.bot.logs_from(channel, limit=1000):
             previous.append(message)
             if author in message.mentions or message.mention_everyone:
                 # we're mentioned so..
+                is_mentioned = True
                 try:
                     await self.bot.whisper('\n'.join(map(self.format_message, previous)))
                 except discord.HTTPException:
                     await self.bot.whisper('An error happened while fetching mentions.')
+
+        if not is_mentioned:
+            await self.bot.say('You were not mentioned in the past 1000 messages.')
 
     @commands.command()
     async def about(self):
