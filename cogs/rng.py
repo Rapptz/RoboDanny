@@ -29,6 +29,32 @@ class RNG:
 
         del splatoon
 
+    @random.command()
+    async def private(self):
+        """Displays an all private Splatoon match.
+
+        The map and mode is randomised along with both team's weapons.
+        """
+        splatoon = self.bot.get_cog('Splatoon')
+        if splatoon is None:
+            await self.bot.say('Splatoon cog is not loaded.')
+            return
+
+        maps = splatoon.config.get('maps', [])
+        stage = rng.choice(maps) if maps else 'Random Stage'
+        modes = [ 'Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control' ]
+        mode = rng.choice(modes)
+        result = ['Playing {} on {}'.format(mode, stage), '', '**Team Alpha**']
+        weapons = rng.sample(splatoon.config.get('weapons'), 8)
+        for i in range(8):
+            if i == 4:
+                result.append('')
+                result.append('**Team Bravo**')
+
+            result.append('Player {}: {[name]}'.format(i + 1, weapons[i]))
+
+        await self.bot.say('\n'.join(result))
+
     @random.command(pass_context=True)
     async def tag(self, ctx):
         """Displays a random tag.

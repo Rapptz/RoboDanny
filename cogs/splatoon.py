@@ -251,6 +251,5 @@ class Splatoon:
             else:
                 await self.bot.say('An error has occurred of status code {0.status} happened. Tell Danny.'.format(resp))
 
-
 def setup(bot):
     bot.add_cog(Splatoon(bot))
