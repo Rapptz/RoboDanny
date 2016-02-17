@@ -21,29 +21,38 @@ class Splatoon:
         password = self.config.get('password')
         try:
             while not self.bot.is_closed:
-                try:
-                    cookie = await maps.get_new_splatnet_cookie(username, password)
-                    schedule = await maps.get_splatnet_schedule(cookie)
-                except:
-                    # if we get an exception, keep the old data
-                    # make sure to remove the old data that already ended
-                    self.map_data = [data for data in self.map_data if not data.is_over]
-                else:
-                    self.map_data = []
-                    for entry in schedule:
-                        if entry.is_over:
-                            continue
-                        self.map_data.append(entry)
-                finally:
-                    await asyncio.sleep(120) # task runs every 2 minutes
+                await self.update_schedule(username, password)
+                await asyncio.sleep(120) # task runs every 2 minutes
         except asyncio.CancelledError:
             pass
+
+    async def update_schedule(self, username, password):
+        try:
+            cookie = await maps.get_new_splatnet_cookie(username, password)
+            schedule = await maps.get_splatnet_schedule(cookie)
+        except:
+            # if we get an exception, keep the old data
+            # make sure to remove the old data that already ended
+            self.map_data = [data for data in self.map_data if not data.is_over]
+        else:
+            self.map_data = []
+            for entry in schedule:
+                if entry.is_over:
+                    continue
+                self.map_data.append(entry)
 
     def get_map_message(self, index):
         try:
             return str(self.map_data[index])
         except IndexError:
             return 'No map data found. Try again later.'
+
+    @commands.command(hidden=True)
+    async def refreshmaps(self):
+        """Force refresh the maps in the rotation."""
+        username = self.config.get('username')
+        password = self.config.get('password')
+        await self.update_schedule(username, password)
 
     @commands.command(aliases=['rotation'])
     async def maps(self):
