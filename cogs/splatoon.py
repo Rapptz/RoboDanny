@@ -16,20 +16,23 @@ class Splatoon:
     def __del__(self):
         self.map_updater.cancel()
 
-    async def update_maps(self):
+    async def splatnet_cookie(self):
         username = self.config.get('username')
         password = self.config.get('password')
+        self.cookie = await maps.get_new_splatnet_cookie(username, password)
+
+    async def update_maps(self):
         try:
+            await self.splatnet_cookie()
             while not self.bot.is_closed:
-                await self.update_schedule(username, password)
+                await self.update_schedule()
                 await asyncio.sleep(120) # task runs every 2 minutes
         except asyncio.CancelledError:
             pass
 
-    async def update_schedule(self, username, password):
+    async def update_schedule(self):
         try:
-            cookie = await maps.get_new_splatnet_cookie(username, password)
-            schedule = await maps.get_splatnet_schedule(cookie)
+            schedule = await maps.get_splatnet_schedule(self.cookie)
         except:
             # if we get an exception, keep the old data
             # make sure to remove the old data that already ended
@@ -50,9 +53,8 @@ class Splatoon:
     @commands.command(hidden=True)
     async def refreshmaps(self):
         """Force refresh the maps in the rotation."""
-        username = self.config.get('username')
-        password = self.config.get('password')
-        await self.update_schedule(username, password)
+        await self.update_schedule()
+        await self.bot.say('\U0001f44c')
 
     @commands.command(aliases=['rotation'])
     async def maps(self):
