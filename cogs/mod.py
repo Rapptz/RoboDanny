@@ -15,12 +15,12 @@ class Mod:
         return message.server.me if message.channel.is_private else self.bot.user
 
     @commands.group(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_channel=True)
+    @checks.admin_or_permissions(manage_channels=True)
     async def ignore(self, ctx):
         """Handles the bot's ignore lists.
 
         To use these commands, you must have the Bot Admin role or have
-        Manage Channel permissions. These commands are not allowed to be used
+        Manage Channels permissions. These commands are not allowed to be used
         in a private message context.
 
         Users with Manage Roles or Bot Admin role can still invoke the bot
@@ -60,7 +60,7 @@ class Mod:
         ignored by using the ignore command.
 
         To use this command you must have Manage Server permissions along with
-        Manage Channel permissions. You could also have the Bot Admin role.
+        Manage Channels permissions. You could also have the Bot Admin role.
         """
 
         ignored = self.config.get('ignored', [])
@@ -70,13 +70,13 @@ class Mod:
         await self.bot.say('\U0001f44c')
 
     @commands.command(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_channel=True)
+    @checks.admin_or_permissions(manage_channels=True)
     async def unignore(self, ctx, *, channel : discord.Channel = None):
         """Unignores a specific channel from being processed.
 
         If no channel is specified, it unignores the current channel.
 
-        To use this command you must have the Manage Channel permission or have the
+        To use this command you must have the Manage Channels permission or have the
         Bot Admin role.
         """
 
