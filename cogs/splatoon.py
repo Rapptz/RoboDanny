@@ -3,6 +3,37 @@ from .utils import config, checks, maps
 import asyncio, aiohttp
 from urllib.parse import quote as urlquote
 import random
+from collections import namedtuple
+
+GameEntry = namedtuple('GameEntry', ('stage', 'mode'))
+
+def is_valid_entry(result, entry):
+    # no dupes
+    if entry in result:
+        return False
+
+    # make sure the map isn't played in the last 2 games
+    last_two_games = result[-2:]
+    for prev in last_two_games:
+        if prev.stage == entry.stage:
+            return False
+
+    return True
+
+def get_random_scrims(modes, maps, count):
+    result = []
+    current_mode_index = 0
+    for index in range(count):
+        while True:
+            entry = GameEntry(stage=random.choice(maps), mode=modes[current_mode_index])
+            if is_valid_entry(result, entry):
+                result.append(entry)
+                current_mode_index += 1
+                if current_mode_index >= len(modes):
+                    current_mode_index = 0
+                break
+
+    return result
 
 class Splatoon:
     """Splatoon related commands."""
@@ -114,22 +145,51 @@ class Splatoon:
             await self.bot.say('\n'.join(output))
 
     @commands.command(invoke_without_command=True)
-    async def scrim(self, games=5):
+    async def scrim(self, games=5, *, mode : str = None):
         """Generates scrim map and mode combinations.
 
         The mode combinations do not have Turf War. The number of games must
-        be between 3 and 15.
+        be between 3 and 16.
+
+        The mode is rotated unless you pick a mode to play, in which all map
+        combinations will use that mode instead.
         """
 
         maps = self.config.get('maps', [])
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control']
-        result = []
-        games = max(min(games, 15), 3)
+        game_count = max(min(games, 16), 3)
 
-        for game in range(games):
-            stage = random.choice(maps)
-            mode = random.choice(modes)
-            result.append('{} on {}'.format(mode, stage))
+        if mode is not None:
+            mode = mode.lower()
+
+            # half-assed fuzzy matching
+            lookup = {
+                'tc': modes[2],
+                'tower': modes[2],
+                'tower control': modes[2],
+                'sz': modes[1],
+                'zones': modes[1],
+                'zone': modes[1],
+                'splat zone': modes[1],
+                'splat zones': modes[1],
+                'rainmaker': modes[0],
+                'rm': modes[0],
+                'turf': 'Turf War',
+                'turf war': 'Turf War',
+                'tw': 'Turf War'
+            }
+
+            resulting_mode = lookup.get(mode, None)
+            if resulting_mode is not None:
+                result = ['The following games will be played in {}'.format(resulting_mode)]
+                for index, stage in enumerate(random.sample(maps, game_count), 1):
+                    result.append('Game {}: {}'.format(index, stage))
+            else:
+                await self.bot.say('Could not figure out what mode you meant.')
+                return
+        else:
+            scrims = get_random_scrims(modes, maps, game_count)
+            result = ['Game {0}: {1.mode} on {1.stage}'.format(game, scrim) for game, scrim in enumerate(scrims, 1)]
 
         await self.bot.say('\n'.join(result))
 
