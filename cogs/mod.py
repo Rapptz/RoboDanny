@@ -29,6 +29,22 @@ class Mod:
         if ctx.invoked_subcommand is None:
             await self.bot.say('Invalid subcommand passed: {0.subcommand_passed}'.format(ctx))
 
+    @ignore.command(name='list', pass_context=True)
+    async def ignore_list(self, ctx):
+        """Tells you what channels are currently ignored in this server."""
+
+        ignored = self.config.get('ignored', [])
+        channel_ids = set(c.id for c in ctx.message.server.channels)
+        result = []
+        for channel in ignored:
+            if channel in channel_ids:
+                result.append('<#{}>'.format(channel))
+
+        if result:
+            await self.bot.say('The following channels are ignored:\n\n{}'.format(', '.join(result)))
+        else:
+            await self.bot.say('I am not ignoring any channels here.')
+
     @ignore.command(name='channel', pass_context=True)
     async def channel_cmd(self, ctx, *, channel : discord.Channel = None):
         """Ignores a specific channel from being processed.
