@@ -1,7 +1,6 @@
 from discord.ext import commands
 import random as rng
 
-
 class RNG:
     """Utilities that provide pseudo-RNG."""
 
@@ -15,17 +14,30 @@ class RNG:
             await self.bot.say('Incorrect random subcommand passed.')
 
     @random.command()
-    async def weapon(self):
-        """Displays a random Splatoon weapon."""
+    async def weapon(self, count=1):
+        """Displays a random Splatoon weapon.
+
+        The count parameter is how many to generate. It cannot be
+        negative. If it's negative or zero then only one weapon will be
+        selected. The maximum number of random weapons generated is 8.
+        """
         splatoon = self.bot.get_cog('Splatoon')
         if splatoon is None:
             await self.bot.say('Splatoon cog is not loaded.')
             return
 
+        count = count if count > 0 else 1
+        count = count if count < 8 else 8
+
         weapons = splatoon.config.get('weapons', [])
         if weapons:
-            weapon = rng.choice(weapons)
-            await self.bot.say(splatoon.weapon_to_string(weapon))
+            if count == 1:
+                weapon = rng.choice(weapons)
+                await self.bot.say(splatoon.weapon_to_string(weapon))
+            else:
+                sample = rng.sample(weapons, count)
+                msg = '\n'.join(map(lambda w: w['name'], sample))
+                await self.bot.say(msg)
 
         del splatoon
 
