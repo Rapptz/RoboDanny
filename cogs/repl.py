@@ -67,6 +67,8 @@ class REPL:
                     continue
 
             executor = exec if not use_eval else eval
+            repl_globals['message'] = response
+
             try:
                 result = executor(code, repl_globals, repl_locals)
                 if asyncio.iscoroutine(result):
