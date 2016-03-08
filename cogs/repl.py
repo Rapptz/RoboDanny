@@ -31,16 +31,10 @@ class REPL:
             'message': msg
         }
 
-        await self.bot.say('Enter code to execute or evaluate. `exit()` or `quit` to exit\n'
-                           'Code must be `code` or in code blocks.\n'
-                           'After 10 minutes of no replying I will auto-exit.\n'
-                           'I will auto remove \`\`\`py blocks for you.')
+        await self.bot.say('Enter code to execute or evaluate. `exit()` or `quit` to exit.')
         while True:
             response = await self.bot.wait_for_message(author=msg.author, channel=msg.channel,
-                                                       timeout=600.0, check=lambda m: m.content.startswith('`'))
-            if response is None:
-                await self.bot.say('Auto exiting.')
-                return
+                                                       check=lambda m: m.content.startswith('`'))
 
             cleaned = self.cleanup_code(response.content)
 
@@ -48,8 +42,7 @@ class REPL:
                 await self.bot.say('Exiting.')
                 return
 
-            use_eval = False
-
+            executor = exec
             if cleaned.count('\n') == 0:
                 # single statement, potentially 'eval'
                 try:
@@ -57,16 +50,15 @@ class REPL:
                 except SyntaxError:
                     pass
                 else:
-                    use_eval = True
+                    executor = eval
 
-            if not use_eval:
+            if executor is exec:
                 try:
                     code = compile(cleaned, '<repl session>', 'exec')
                 except SyntaxError as e:
                     await self.bot.say(self.get_syntax_error(e))
                     continue
 
-            executor = exec if not use_eval else eval
             repl_globals['message'] = response
 
             try:
