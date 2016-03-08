@@ -18,7 +18,8 @@ initial_extensions = [
     'cogs.mod',
     'cogs.profile',
     'cogs.tags',
-    'cogs.lounge'
+    'cogs.lounge',
+    'cogs.repl',
 ]
 
 discord_logger = logging.getLogger('discord')
