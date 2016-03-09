@@ -94,13 +94,13 @@ class Meta:
 
         entries = [
             ('Name', member.name),
+            ('Tag', member.discriminator),
             ('User ID', member.id),
             ('Joined', member.joined_at),
+            ('Created', member.created_at),
             ('Roles', ', '.join(roles)),
             ('Servers', '{} shared'.format(shared)),
-            ('Channel', channel.name),
             ('Voice Channel', voice),
-            ('Channel ID', channel.id),
             ('Avatar', member.avatar_url),
         ]
 
