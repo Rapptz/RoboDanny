@@ -71,7 +71,7 @@ class Meta:
         """Quits the bot."""
         await self.bot.logout()
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, no_pm=True)
     async def info(self, ctx, *, member : discord.Member = None):
         """Shows info about a member.
 
@@ -79,10 +79,6 @@ class Meta:
         a member then the info returned will be yours.
         """
         channel = ctx.message.channel
-        if channel.is_private:
-            await self.bot.say('You cannot use this in PMs.')
-            return
-
         if member is None:
             member = ctx.message.author
 
@@ -90,7 +86,9 @@ class Meta:
         shared = sum(1 for m in self.bot.get_all_members() if m.id == member.id)
         voice = member.voice_channel
         if voice is not None:
-            voice = '{} with {} people'.format(voice, len(voice.voice_members))
+            other_people = len(voice.voice_members) - 1
+            voice_fmt = '{} with {} others' if other_people else '{} by themselves'
+            voice = voice_fmt.format(voice.name, other_people)
         else:
             voice = 'Not connected.'
 
