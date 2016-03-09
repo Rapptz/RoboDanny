@@ -4,6 +4,7 @@ import discord
 from collections import OrderedDict, deque, Counter
 import os, datetime
 import re, asyncio
+import copy
 
 class TimeParser:
     def __init__(self, argument):
@@ -71,7 +72,7 @@ class Meta:
         """Quits the bot."""
         await self.bot.logout()
 
-    @commands.command(pass_context=True, no_pm=True)
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     async def info(self, ctx, *, member : discord.Member = None):
         """Shows info about a member.
 
@@ -95,16 +96,53 @@ class Meta:
         entries = [
             ('Name', member.name),
             ('Tag', member.discriminator),
-            ('User ID', member.id),
+            ('ID', member.id),
             ('Joined', member.joined_at),
             ('Created', member.created_at),
             ('Roles', ', '.join(roles)),
             ('Servers', '{} shared'.format(shared)),
-            ('Voice Channel', voice),
+            ('Voice', voice),
             ('Avatar', member.avatar_url),
         ]
 
-        await formats.entry_to_code(self.bot, entries)
+        await formats.indented_entry_to_code(self.bot, entries)
+
+    @info.command(name='server', pass_context=True, no_pm=True)
+    async def server_info(self, ctx):
+        server = ctx.message.server
+        roles = [role.name.replace('@', '@\u200b') for role in server.roles]
+
+        secret_member = copy.copy(server.me)
+        secret_member.id = '0'
+        secret_member.roles = [server.default_role]
+
+        # figure out what channels are 'secret'
+        secret_channels = 0
+        text_channels = 0
+        for channel in server.channels:
+            perms = channel.permissions_for(secret_member)
+            text_channels += channel.type == discord.ChannelType.text
+            if not perms.read_messages:
+                secret_channels += 1
+
+        regular_channels = len(server.channels) - secret_channels
+        voice_channels = len(server.channels) - text_channels
+        member_by_status = Counter(str(m.status) for m in server.members)
+        member_fmt = '{0} ({1[online]} online, {1[idle]} idle, {1[offline]} offline)'
+
+        entries = [
+            ('Name', server.name),
+            ('ID', server.id),
+            ('Channels', '{} (+{} secret)'.format(regular_channels, secret_channels)),
+            ('Types', '{} Text / {} Voice'.format(text_channels, voice_channels)),
+            ('Created', server.created_at),
+            ('Members', member_fmt.format(len(server.members), member_by_status)),
+            ('Owner', server.owner),
+            ('Icon', server.icon_url),
+            ('Roles', ', '.join(roles)),
+        ]
+
+        await formats.indented_entry_to_code(self.bot, entries)
 
     async def say_permissions(self, member, channel):
         permissions = channel.permissions_for(member)
