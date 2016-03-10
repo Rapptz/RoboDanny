@@ -118,23 +118,28 @@ class Meta:
 
         # figure out what channels are 'secret'
         secret_channels = 0
+        secret_voice = 0
         text_channels = 0
         for channel in server.channels:
             perms = channel.permissions_for(secret_member)
-            text_channels += channel.type == discord.ChannelType.text
-            if not perms.read_messages:
+            is_text = channel.type == discord.ChannelType.text
+            text_channels += is_text
+            if is_text and not perms.read_messages:
                 secret_channels += 1
+            elif not is_text and (not perms.connect or not perms.speak):
+                secret_voice += 1
 
         regular_channels = len(server.channels) - secret_channels
         voice_channels = len(server.channels) - text_channels
         member_by_status = Counter(str(m.status) for m in server.members)
         member_fmt = '{0} ({1[online]} online, {1[idle]} idle, {1[offline]} offline)'
+        channels_fmt = '{} Text ({} secret) / {} Voice ({} locked)'
+        channels = channels_fmt.format(text_channels, secret_channels, voice_channels, secret_voice)
 
         entries = [
             ('Name', server.name),
             ('ID', server.id),
-            ('Channels', '{} (+{} secret)'.format(regular_channels, secret_channels)),
-            ('Types', '{} Text / {} Voice'.format(text_channels, voice_channels)),
+            ('Channels', channels),
             ('Created', server.created_at),
             ('Members', member_fmt.format(len(server.members), member_by_status)),
             ('Owner', server.owner),
