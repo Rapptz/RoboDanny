@@ -263,7 +263,7 @@ class Meta:
         """Tells you information about the bot itself."""
         revision = os.popen(r'git show -s HEAD --format="%s (%cr)"').read().strip()
         result = ['**About Me:**']
-        result.append('- Author: Danny (Discord ID: 80088516616269824)')
+        result.append('- Author: Danny#0007 (Discord ID: 80088516616269824)')
         result.append('- Library: discord.py (Python)')
         result.append('- Latest Change: {}'.format(revision))
         result.append('- Uptime: {}'.format(self.get_bot_uptime()))
