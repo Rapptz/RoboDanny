@@ -39,6 +39,36 @@ class Meta:
         """Displays my intro message."""
         await self.bot.say('Hello! I\'m a robot! I am currently **version 3.0.0**. Danny made me.')
 
+    @commands.command()
+    async def source(self, command : str = None):
+        """Displays my full source code or for a specific command.
+
+        To display the source code of a subcommand you have to separate it by
+        periods, e.g. tag.create for the create subcommand of the tag command.
+        """
+        source_url = 'https://github.com/Rapptz/RoboDanny'
+        if command is None:
+            await self.bot.say(source_url)
+            return
+
+        code_path = command.split('.')
+        obj = self.bot
+        for cmd in code_path:
+            try:
+                obj = obj.get_command(cmd)
+                if obj is None:
+                    await self.bot.say('Could not find the command ' + cmd)
+                    return
+            except AttributeError:
+                await self.bot.say('{0.name} command has no subcommands'.format(obj))
+                return
+
+        # since we found the command we're looking for, presumably anyway, let's
+        # try to access the code itself
+        src = obj.callback.__code__
+        location = os.path.relpath(src.co_filename).replace('\\', '/')
+        final_url = '<{}/blob/master/{}#L{}>'.format(source_url, location, src.co_firstlineno)
+        await self.bot.say(final_url)
 
     @commands.command(pass_context=True)
     async def timer(self, ctx, time : TimeParser, *, message=''):
