@@ -3,6 +3,7 @@ from .utils import config, checks
 from collections import Counter
 import re
 import discord
+import asyncio
 
 class Mod:
     """Moderation related commands."""
@@ -146,11 +147,12 @@ class Mod:
                 else:
                     spammers[entry.author.name] += 1
 
-        await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
-
+        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
         stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
+        await asyncio.sleep(3)
+        await self.bot.delete_message(reply)
 
     @commands.command(no_pm=True)
     @checks.admin_or_permissions(kick_members=True)
@@ -308,10 +310,12 @@ class Mod:
                 else:
                     spammers[message.author.name] += 1
 
-        await self.bot.say('{} messages(s) were removed.'.format(sum(spammers.values())))
+        reply = await self.bot.say('{} messages(s) were removed.'.format(sum(spammers.values())))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
         stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
+        await asyncio.sleep(3)
+        await self.bot.delete_message(reply)
 
     @remove.command(pass_context=True)
     async def embeds(self, ctx, search=100):
