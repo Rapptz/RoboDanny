@@ -24,20 +24,40 @@ class MemberParser:
         member = tup[1]
         return '{0}: {1.name}#{1.discriminator} from {1.server.name}'.format(index, member)
 
+    def has_potential_discriminator(self):
+        return len(self.argument) > 5 and self.argument[-5] == '#'
+
+    def get_server_members(self, server):
+        if self.has_potential_discriminator():
+            discrim = self.argument[-4:]
+            direct = discord.utils.get(server.members, name=self.argument[:-5], discriminator=discrim)
+            if direct is not None:
+                return { direct }
+
+        return { m for m in server.members if m.name == self.argument }
+
     async def get(self, ctx):
         """Given an invocation context, gets a user."""
         server = ctx.message.server
         bot = ctx.bot
-        members = server.members if server is not None else bot.get_all_members()
 
         # check if the argument is a mention
         m = self.regex.match(self.argument)
         if m:
             user_id = m.group(1)
-            return discord.utils.get(members, id=user_id)
+            if server:
+                return server.get_member(user_id)
+
+            # get the first member found in all servers with the user ID.
+            gen = filter(None, map(lambda s: s.get_member(user_id), bot.servers))
+            return next(gen, None)
 
         # it isn't, so search by name
-        results = {m for m in members if m.name == self.argument}
+        if server:
+            results = self.get_server_members(server)
+        else:
+            results = set(filter(None, map(lambda s: s.get_member_named(self.argument), bot.servers)))
+
         results = list(results)
         if len(results) == 0:
             # we have no matches... so we must return None
