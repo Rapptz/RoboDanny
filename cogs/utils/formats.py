@@ -18,7 +18,7 @@ async def indented_entry_to_code(bot, entries):
 
 async def too_many_matches(bot, msg, matches, entry):
     check = lambda m: m.content.isdigit()
-    await bot.say('There are too many matches... Which one did you mean?')
+    await bot.say('There are too many matches... Which one did you mean? **Only say the number**.')
     await bot.say('\n'.join(map(entry, enumerate(matches, 1))))
 
     # only give them 3 tries.
