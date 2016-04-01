@@ -319,6 +319,7 @@ class Profile:
 
         if nnid is None:
             await self.bot.say('You took too long {0.mention}. Goodbye.'.format(author))
+            return
 
         if nnid.content == sentinel:
             await self.bot.say('Profile making cancelled. Goodbye.')
