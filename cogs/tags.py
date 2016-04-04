@@ -18,10 +18,17 @@ class TagInfo:
     def __str__(self):
         return self.content
 
-    def info_entries(self, ctx):
+    def info_entries(self, ctx, db):
+        popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
+        try:
+            rank = popular.index(self) + 1
+        except:
+            rank = '<Not found>'
+
         data = [
             ('Name', self.name),
             ('Uses', self.uses),
+            ('Rank', rank),
             ('Type', 'Generic' if self.is_generic else 'Server-specific'),
         ]
 
@@ -321,7 +328,7 @@ class Tags:
             await self.bot.say('Tag not found.')
             return
 
-        entries = tag.info_entries(ctx)
+        entries = tag.info_entries(ctx, self.get_possible_tags(server))
         await formats.entry_to_code(self.bot, entries)
 
     @info.error
