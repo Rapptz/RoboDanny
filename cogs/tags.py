@@ -330,25 +330,25 @@ class Tags:
             await self.bot.say('Missing tag name to get info of.')
 
     @tag.command(name='list', pass_context=True)
-    async def _list(self, ctx):
-        """Lists all the tags that belong to you.
+    async def _list(self, ctx, *, member : discord.Member = None):
+        """Lists all the tags that belong to you or someone else.
 
         This includes the generic tags as well. If this is done in a private
         message then you will only get the generic tags you own and not the
         server specific tags.
         """
 
-        owner = ctx.message.author.id
+        owner = ctx.message.author if member is None else member
         server = ctx.message.server
-        tags = [tag.name for tag in self.config.get('generic', {}).values() if tag.owner_id == owner]
+        tags = [tag.name for tag in self.config.get('generic', {}).values() if tag.owner_id == owner.id]
         if server is not None:
-            tags.extend(tag.name for tag in self.config.get(server.id, {}).values() if tag.owner_id == owner)
+            tags.extend(tag.name for tag in self.config.get(server.id, {}).values() if tag.owner_id == owner.id)
 
         if tags:
-            fmt = 'You have the following tags:\n{}'
-            await self.bot.say(fmt.format(', '.join(tags)))
+            fmt = '{0.name} has the following tags:\n{1}'
+            await self.bot.say(fmt.format(owner, ', '.join(tags)))
         else:
-            await self.bot.say('You have no tags.')
+            await self.bot.say('{0.name} has no tags.'.format(owner))
 
     @tag.command(pass_context=True)
     async def search(self, ctx, *, query : str):
