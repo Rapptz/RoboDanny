@@ -1,6 +1,7 @@
 from discord.ext import commands
 import discord
 from cogs.utils import checks
+from cogs.utils.carbon import CarbonStatistics
 import datetime, re
 import json, asyncio
 import copy
@@ -29,7 +30,6 @@ log.setLevel(logging.INFO)
 handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
 log.addHandler(handler)
 
-
 help_attrs = dict(hidden=True)
 bot = commands.Bot(command_prefix=['?', '!', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
 
@@ -48,6 +48,7 @@ async def on_ready():
     print('------')
     bot.uptime = datetime.datetime.utcnow()
     bot.commands_executed = 0
+    bot.statistics.start()
 
     for extension in initial_extensions:
         try:
@@ -202,11 +203,13 @@ def load_credentials():
     with open('credentials.json') as f:
         return json.load(f)
 
+
 if __name__ == '__main__':
     if any('debug' in arg.lower() for arg in sys.argv):
         bot.command_prefix = '$'
 
     credentials = load_credentials()
+    bot.statistics = CarbonStatistics(key=credentials['carbon_key'], bot=bot)
     bot.run(credentials['email'], credentials['password'])
     handlers = log.handlers[:]
     for hdlr in handlers:
