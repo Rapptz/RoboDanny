@@ -70,6 +70,9 @@ async def on_command(command, ctx):
 
 @bot.event
 async def on_message(message):
+    if message.author == bot.user:
+        return
+
     mod = bot.get_cog('Mod')
 
     if mod is not None and not checks.is_owner_check(message):
@@ -95,24 +98,6 @@ async def on_message(message):
         if not bypass_ignore:
             if message.channel.id in mod.config.get('ignored', []):
                 return
-
-    # if someone private messages us with something that looks like a URL then
-    # we should try to see if it's an invite to a discord server and join it if so.
-    if message.channel.is_private and message.content.startswith('http') and message.author != bot.user:
-        try:
-            invite = await bot.get_invite(message.content)
-            if isinstance(invite.server, discord.Object):
-                await bot.accept_invite(invite)
-                await bot.send_message(message.channel, 'Joined the server.')
-                log.info('Joined server {0.server.name} via {1.author.name}'.format(invite, message))
-            else:
-                log.info('Attempted to rejoin {0.server.name} via {1.author.name}'.format(invite, message))
-                await bot.send_message(message.channel, 'Already in that server.')
-        except:
-            log.info('Failed to join a server invited by {0.author.name}'.format(message))
-            await bot.send_message(message.channel, 'Could not join server.')
-        finally:
-            return
 
     await bot.process_commands(message)
 
@@ -209,8 +194,9 @@ if __name__ == '__main__':
         bot.command_prefix = '$'
 
     credentials = load_credentials()
+    bot.client_id = credentials['client_id']
     bot.statistics = CarbonStatistics(key=credentials['carbon_key'], bot=bot)
-    bot.run(credentials['email'], credentials['password'])
+    bot.run(credentials['token'])
     handlers = log.handlers[:]
     for hdlr in handlers:
         hdlr.close()

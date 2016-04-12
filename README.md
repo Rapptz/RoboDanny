@@ -14,8 +14,9 @@ First is a credentials.json file with the credentials:
 
 ```js
 {
-    "email": "myemail@gmail.com",
-    "password": "mypassword"
+    "token": "your bot token",
+    "client_id": "your client_id",
+    "carbon_key": "the key for carbonitex"
 }
 ```
 
