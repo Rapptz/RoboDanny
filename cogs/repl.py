@@ -28,7 +28,8 @@ class REPL:
         repl_globals = {
             'ctx': ctx,
             'bot': self.bot,
-            'message': msg
+            'message': msg,
+            'last': None
         }
 
         await self.bot.say('Enter code to execute or evaluate. `exit()` or `quit` to exit.')
@@ -70,6 +71,7 @@ class REPL:
             else:
                 if result is not None:
                     await self.bot.say('```py\n{}\n```'.format(result))
+                    repl_globals['last'] = result
 
 def setup(bot):
     bot.add_cog(REPL(bot))
