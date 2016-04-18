@@ -308,7 +308,8 @@ class Meta:
         result.append('- Latest Change: {}'.format(revision))
         result.append('- Uptime: {}'.format(self.get_bot_uptime()))
         result.append('- Servers: {}'.format(len(self.bot.servers)))
-        result.append('- Commands Run: {}'.format(self.bot.commands_executed))
+        result.append('- Commands Run: {}'.format(sum(self.bot.commands_used.values())))
+
         # statistics
         total_members = sum(len(s.members) for s in self.bot.servers)
         total_online  = sum(1 for m in self.bot.get_all_members() if m.status != discord.Status.offline)
@@ -326,6 +327,12 @@ class Meta:
     @checks.is_owner()
     async def echo(self, *, content):
         await self.bot.say(content)
+
+    @commands.command(hidden=True)
+    async def commandstats(self):
+        msg = 'Since startup, {} commands have been used.\n{}'
+        counter = self.bot.commands_used
+        await self.bot.say(msg.format(sum(counter.values()), counter))
 
 def setup(bot):
     bot.add_cog(Meta(bot))

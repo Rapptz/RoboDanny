@@ -7,6 +7,7 @@ import json, asyncio
 import copy
 import logging
 import sys
+from collections import Counter
 
 description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
@@ -47,7 +48,7 @@ async def on_ready():
     print('ID: ' + bot.user.id)
     print('------')
     bot.uptime = datetime.datetime.utcnow()
-    bot.commands_executed = 0
+    bot.commands_used = Counter()
     bot.statistics.start()
 
     for extension in initial_extensions:
@@ -58,7 +59,7 @@ async def on_ready():
 
 @bot.event
 async def on_command(command, ctx):
-    bot.commands_executed += 1
+    bot.commands_used[command.name] += 1
     message = ctx.message
     destination = None
     if message.channel.is_private:
