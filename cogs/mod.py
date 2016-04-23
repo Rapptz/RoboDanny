@@ -5,10 +5,6 @@ import re
 import discord
 import asyncio
 
-DISCORD_API_ID = '81384788765712384'
-MOD_LOG_ID = '173201159761297408'
-
-
 class Mod:
     """Moderation related commands."""
 
@@ -18,20 +14,6 @@ class Mod:
 
     def bot_user(self, message):
         return message.server.me if message.channel.is_private else self.bot.user
-
-    async def on_member_ban(self, member):
-        if member.server.id != DISCORD_API_ID:
-            return
-
-        msg = str(member) + ' has been banned.'
-        await self.bot.send_message(discord.Object(id=MOD_LOG_ID), msg)
-
-    async def on_member_unban(self, server, user):
-        if server.id != DISCORD_API_ID:
-            return
-
-        msg = str(user) + ' has been unbanned.'
-        await self.bot.send_message(discord.Object(id=MOD_LOG_ID), msg)
 
     @commands.group(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_channels=True)
