@@ -2,6 +2,7 @@ from discord.ext import commands
 from .utils import checks
 import asyncio
 import traceback
+import discord
 
 class REPL:
     def __init__(self, bot):
@@ -62,16 +63,25 @@ class REPL:
 
             repl_globals['message'] = response
 
+            fmt = None
+
             try:
                 result = executor(code, repl_globals, repl_locals)
                 if asyncio.iscoroutine(result):
                     result = await result
             except Exception as e:
-                await self.bot.say('```py\n{}\n```'.format(traceback.format_exc()))
+                fmt = '```py\n{}\n```'.format(traceback.format_exc())
             else:
                 if result is not None:
-                    await self.bot.say('```py\n{}\n```'.format(result))
+                    fmt = '```py\n{}\n```'.format(result)
                     repl_globals['last'] = result
+
+            try:
+                await self.bot.send_message(msg.channel, fmt)
+            except discord.Forbidden:
+                pass
+            except discord.HTTPException as e:
+                await self.bot.send_message(msg.channel, 'Unexpected error: `{}`'.format(e))
 
 def setup(bot):
     bot.add_cog(REPL(bot))
