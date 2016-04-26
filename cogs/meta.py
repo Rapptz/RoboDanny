@@ -335,5 +335,15 @@ class Meta:
         counter = self.bot.commands_used
         await self.bot.say(msg.format(sum(counter.values()), counter))
 
+    @commands.command(hidden=True)
+    async def cud(self):
+        """pls no spam"""
+
+        for i in range(3):
+            await self.bot.say(3 - i)
+            await asyncio.sleep(1)
+
+        await self.bot.say('go')
+
 def setup(bot):
     bot.add_cog(Meta(bot))
