@@ -77,7 +77,8 @@ class REPL:
                     repl_globals['last'] = result
 
             try:
-                await self.bot.send_message(msg.channel, fmt)
+                if fmt is not None:
+                    await self.bot.send_message(msg.channel, fmt)
             except discord.Forbidden:
                 pass
             except discord.HTTPException as e:
