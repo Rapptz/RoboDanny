@@ -262,7 +262,10 @@ class Meta:
         await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
 
     def format_message(self, message):
-        return 'On {0.timestamp}, {0.author} said {0.content}'.format(message)
+        prefix = '[{0.timestamp:%I:%M:%S %p} UTC] {0.author}: {0.content}'.format(message)
+        if message.attachments:
+            return prefix + ' (attachment: {0[url]})'.format(message.attachments[0])
+        return prefix
 
     @commands.command(pass_context=True, no_pm=True)
     async def mentions(self, ctx, channel : discord.Channel = None, context : int = 3):
@@ -280,9 +283,9 @@ class Meta:
         author = ctx.message.author
         previous = deque(maxlen=context)
         is_mentioned = False
-        async for message in self.bot.logs_from(channel, limit=1000):
+        async for message in self.bot.logs_from(channel, limit=2000):
             previous.append(message)
-            if author in message.mentions or message.mention_everyone:
+            if author.mentioned_in(message):
                 # we're mentioned so..
                 is_mentioned = True
                 try:
@@ -291,7 +294,7 @@ class Meta:
                     await self.bot.whisper('An error happened while fetching mentions.')
 
         if not is_mentioned:
-            await self.bot.say('You were not mentioned in the past 1000 messages.')
+            await self.bot.say('You were not mentioned in the past 2000 messages.')
 
     @commands.command()
     async def about(self):
