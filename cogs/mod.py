@@ -136,6 +136,10 @@ class Mod:
             return valid_call and not entry.content[1:2].isspace()
 
         async for entry in self.bot.logs_from(channel, limit=search, before=ctx.message):
+            api_calls = sum(spammers.values())
+            if api_calls and api_calls % 5 == 0:
+                await asyncio.sleep(1.2)
+
             if entry.author == self.bot.user:
                 await self.bot.delete_message(entry)
                 spammers['Bot'] += 1
@@ -301,6 +305,10 @@ class Mod:
     async def do_removal(self, message, limit, predicate):
         spammers = Counter()
         async for message in self.bot.logs_from(message.channel, limit=limit, before=message):
+            api_calls = sum(spammers.values())
+            if api_calls and api_calls % 5 == 0:
+                await asyncio.sleep(1.2)
+
             if predicate(message):
                 try:
                     await self.bot.delete_message(message)
