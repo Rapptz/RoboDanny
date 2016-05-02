@@ -262,7 +262,7 @@ class Meta:
         await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
 
     def format_message(self, message):
-        prefix = '[{0.timestamp:%I:%M:%S %p} UTC] {0.author}: {0.clean_content}'.format(message)
+        prefix = '`[{0.timestamp:%I:%M:%S %p} UTC]` {0.author}: {0.clean_content}'.format(message)
         if message.attachments:
             return prefix + ' (attachment: {0[url]})'.format(message.attachments[0])
         return prefix
@@ -281,20 +281,27 @@ class Meta:
         context = min(5, max(0, context))
 
         author = ctx.message.author
-        previous = deque(maxlen=context)
-        is_mentioned = False
-        async for message in self.bot.logs_from(channel, limit=2000):
-            previous.append(message)
+        logs = []
+        mentioned_indexes = []
+        async for message in self.bot.logs_from(channel, limit=1500, before=ctx.message):
             if author.mentioned_in(message):
                 # we're mentioned so..
-                is_mentioned = True
-                try:
-                    await self.bot.whisper('\n'.join(map(self.format_message, reversed(previous))))
-                except discord.HTTPException:
-                    await self.bot.whisper('An error happened while fetching mentions.')
+                mentioned_indexes.append(len(logs))
 
-        if not is_mentioned:
-            await self.bot.say('You were not mentioned in the past 2000 messages.')
+            # these logs are from newest message to oldest
+            # so logs[0] is newest and logs[-1] is oldest
+            logs.append(message)
+
+        if len(mentioned_indexes) == 0:
+            await self.bot.say('You were not mentioned in the past 1500 messages.')
+            return
+
+        for index in mentioned_indexes:
+            view = reversed(logs[index - context - 1:index + context])
+            try:
+                await self.bot.whisper('\n'.join(map(self.format_message, view)))
+            except discord.HTTPException:
+                await self.bot.whisper('An error happened while fetching mentions.')
 
     @commands.command()
     async def about(self):
