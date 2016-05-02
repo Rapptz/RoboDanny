@@ -47,15 +47,10 @@ async def on_ready():
     print('Username: ' + bot.user.name)
     print('ID: ' + bot.user.id)
     print('------')
-    bot.uptime = datetime.datetime.utcnow()
-    bot.commands_used = Counter()
-    bot.statistics.start()
+    if not hasattr(bot, 'uptime'):
+        bot.uptime = datetime.datetime.utcnow()
 
-    for extension in initial_extensions:
-        try:
-            bot.load_extension(extension)
-        except Exception as e:
-            print('Failed to load extension {}\n{}: {}'.format(extension, type(e).__name__, e))
+    bot.statistics.start()
 
 @bot.event
 async def on_command(command, ctx):
@@ -196,7 +191,14 @@ if __name__ == '__main__':
 
     credentials = load_credentials()
     bot.client_id = credentials['client_id']
+    bot.commands_used = Counter()
     bot.statistics = CarbonStatistics(key=credentials['carbon_key'], bot=bot)
+    for extension in initial_extensions:
+        try:
+            bot.load_extension(extension)
+        except Exception as e:
+            print('Failed to load extension {}\n{}: {}'.format(extension, type(e).__name__, e))
+
     bot.run(credentials['token'])
     handlers = log.handlers[:]
     for hdlr in handlers:
