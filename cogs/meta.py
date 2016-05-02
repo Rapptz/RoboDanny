@@ -181,12 +181,7 @@ class Meta:
 
     async def say_permissions(self, member, channel):
         permissions = channel.permissions_for(member)
-        entries = []
-        for attr in dir(permissions):
-            is_property = isinstance(getattr(type(permissions), attr), property)
-            if is_property:
-                entries.append((attr.replace('_', ' ').title(), getattr(permissions, attr)))
-
+        entries = [(attr.replace('_', ' ').title(), val) for attr, val in permissions]
         await formats.entry_to_code(self.bot, entries)
 
     @commands.command(pass_context=True, no_pm=True)
