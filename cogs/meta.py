@@ -262,7 +262,7 @@ class Meta:
         await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
 
     def format_message(self, message):
-        prefix = '[{0.timestamp:%I:%M:%S %p} UTC] {0.author}: {0.content}'.format(message)
+        prefix = '[{0.timestamp:%I:%M:%S %p} UTC] {0.author}: {0.clean_content}'.format(message)
         if message.attachments:
             return prefix + ' (attachment: {0[url]})'.format(message.attachments[0])
         return prefix
@@ -289,7 +289,7 @@ class Meta:
                 # we're mentioned so..
                 is_mentioned = True
                 try:
-                    await self.bot.whisper('\n'.join(map(self.format_message, previous)))
+                    await self.bot.whisper('\n'.join(map(self.format_message, reversed(previous))))
                 except discord.HTTPException:
                     await self.bot.whisper('An error happened while fetching mentions.')
 
