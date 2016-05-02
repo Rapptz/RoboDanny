@@ -70,7 +70,7 @@ class Meta:
         final_url = '<{}/blob/master/{}#L{}>'.format(source_url, location, src.co_firstlineno)
         await self.bot.say(final_url)
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, aliases=['reminder'])
     async def timer(self, ctx, time : TimeParser, *, message=''):
         """Reminds you of something after a certain amount of time.
 
