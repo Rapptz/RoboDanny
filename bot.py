@@ -1,7 +1,6 @@
 from discord.ext import commands
 import discord
 from cogs.utils import checks
-from cogs.utils.carbon import CarbonStatistics
 import datetime, re
 import json, asyncio
 import copy
@@ -22,6 +21,7 @@ initial_extensions = [
     'cogs.tags',
     'cogs.lounge',
     'cogs.repl',
+    'cogs.carbonitex',
 ]
 
 discord_logger = logging.getLogger('discord')
@@ -49,8 +49,6 @@ async def on_ready():
     print('------')
     if not hasattr(bot, 'uptime'):
         bot.uptime = datetime.datetime.utcnow()
-
-    bot.statistics.start()
 
 @bot.event
 async def on_command(command, ctx):
@@ -192,7 +190,7 @@ if __name__ == '__main__':
     credentials = load_credentials()
     bot.client_id = credentials['client_id']
     bot.commands_used = Counter()
-    bot.statistics = CarbonStatistics(key=credentials['carbon_key'], bot=bot)
+    bot.carbon_key = credentials['carbon_key']
     for extension in initial_extensions:
         try:
             bot.load_extension(extension)
