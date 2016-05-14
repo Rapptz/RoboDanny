@@ -127,31 +127,25 @@ class Mod:
         Bot Mod role.
         """
 
-        spammers = Counter()
         channel = ctx.message.channel
         prefixes = self.bot.command_prefix
 
-        def is_possible_command_invoke(entry):
-            valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
-            return valid_call and not entry.content[1:2].isspace()
+        def is_possible_command_invoke(m):
+            valid_call = any(m.content.startswith(prefix) for prefix in prefixes)
+            return valid_call and not m.content[1:2].isspace()
 
-        async for entry in self.bot.logs_from(channel, limit=search, before=ctx.message):
-            api_calls = sum(spammers.values())
-            if api_calls and api_calls % 5 == 0:
-                await asyncio.sleep(1.2)
+        def is_me(m):
+            return m.author == self.bot.user
 
-            if entry.author == self.bot.user:
-                await self.bot.delete_message(entry)
-                spammers['Bot'] += 1
-            if is_possible_command_invoke(entry):
-                try:
-                    await self.bot.delete_message(entry)
-                except discord.Forbidden:
-                    continue
-                else:
-                    spammers[entry.author.name] += 1
+        perms = channel.permissions_for(channel.server.me)
+        if perms.manage_messages:
+            predicate = lambda m: is_me(m) or is_possible_command_invoke(m)
+        else:
+            predicate = is_me
 
-        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
+        deleted = await self.bot.purge_from(channel, limit=search, check=predicate, before=ctx.message)
+        spammers = Counter(m.author.display_name for m in deleted)
+        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(len(deleted)))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
         stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
@@ -303,22 +297,9 @@ class Mod:
             await self.bot.say('Invalid criteria passed "{0.subcommand_passed}"'.format(ctx))
 
     async def do_removal(self, message, limit, predicate):
-        spammers = Counter()
-        async for message in self.bot.logs_from(message.channel, limit=limit, before=message):
-            api_calls = sum(spammers.values())
-            if api_calls and api_calls % 5 == 0:
-                await asyncio.sleep(1.2)
-
-            if predicate(message):
-                try:
-                    await self.bot.delete_message(message)
-                except discord.Forbidden:
-                    await self.bot.say('The bot does not have permissions to delete messages.')
-                    return
-                else:
-                    spammers[message.author.name] += 1
-
-        reply = await self.bot.say('{} messages(s) were removed.'.format(sum(spammers.values())))
+        deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
+        spammers = Counter(m.author.display_name for m in deleted)
+        reply = await self.bot.say('{} messages(s) were removed.'.format(len(deleted)))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
         stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
