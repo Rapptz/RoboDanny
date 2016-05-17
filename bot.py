@@ -22,6 +22,7 @@ initial_extensions = [
     'cogs.lounge',
     'cogs.repl',
     'cogs.carbonitex',
+    'cogs.mentions',
 ]
 
 discord_logger = logging.getLogger('discord')

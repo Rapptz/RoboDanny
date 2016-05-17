@@ -261,48 +261,6 @@ class Meta:
         """Tells you how long the bot has been up for."""
         await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
 
-    def format_message(self, message):
-        prefix = '`[{0.timestamp:%I:%M:%S %p} UTC]` {0.author}: {0.clean_content}'.format(message)
-        if message.attachments:
-            return prefix + ' (attachment: {0[url]})'.format(message.attachments[0])
-        return prefix
-
-    @commands.command(pass_context=True, no_pm=True)
-    async def mentions(self, ctx, channel : discord.Channel = None, context : int = 3):
-        """Tells you when you were mentioned in a channel.
-
-        If a channel is not given, then it tells you when you were mentioned in a
-        the current channel. The context is an integer that tells you how many messages
-        before should be shown. The context cannot be greater than 5 or lower than 0.
-        """
-        if channel is None:
-            channel = ctx.message.channel
-
-        context = min(5, max(0, context))
-
-        author = ctx.message.author
-        logs = []
-        mentioned_indexes = []
-        async for message in self.bot.logs_from(channel, limit=1500, before=ctx.message):
-            if author.mentioned_in(message):
-                # we're mentioned so..
-                mentioned_indexes.append(len(logs))
-
-            # these logs are from newest message to oldest
-            # so logs[0] is newest and logs[-1] is oldest
-            logs.append(message)
-
-        if len(mentioned_indexes) == 0:
-            await self.bot.say('You were not mentioned in the past 1500 messages.')
-            return
-
-        for index in mentioned_indexes:
-            view = reversed(logs[index - context - 1:index + context])
-            try:
-                await self.bot.whisper('\n'.join(map(self.format_message, view)))
-            except discord.HTTPException:
-                await self.bot.whisper('An error happened while fetching mentions.')
-
     @commands.command()
     async def about(self):
         """Tells you information about the bot itself."""
