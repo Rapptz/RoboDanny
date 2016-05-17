@@ -167,7 +167,7 @@ class Mentions:
 
         The settings only apply on a per-server basis.
 
-        @everyone and @here mentions are not kept track of.
+        everyone and here mentions are not kept track of.
 
         The current supported modes are as follows:
 
