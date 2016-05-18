@@ -28,6 +28,9 @@ class TimeParser:
             if seconds is not None:
                 self.seconds += int(seconds)
 
+        if self.seconds < 0:
+            raise commands.BadArgument('I don\'t do negative time.')
+
 class Meta:
     """Commands for utilities related to Discord or the Bot itself."""
 
@@ -95,6 +98,11 @@ class Meta:
         await self.bot.say(reminder.format(author, time, message))
         await asyncio.sleep(time.seconds)
         await self.bot.say(completed.format(author, message))
+
+    @timer.error
+    async def timer_error(self, error, ctx):
+        if type(error) is commands.BadArgument:
+            await self.bot.say(str(error))
 
     @commands.command(name='quit', hidden=True)
     @checks.is_owner()
