@@ -292,6 +292,8 @@ class Meta:
         result.append('- Total Members: {} ({} online)'.format(total_members, total_online))
         result.append('- Unique Members: {} ({} online)'.format(len(unique_members), unique_online))
         result.append('- {} text channels, {} voice channels'.format(text, voice))
+        result.append('')
+        result.append('"Official" R. Danny server: https://discord.gg/0118rJdtd1rVJJfuI')
         await self.bot.say('\n'.join(result))
 
     @commands.command(rest_is_raw=True, hidden=True)
