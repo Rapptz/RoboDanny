@@ -352,8 +352,8 @@ class Tags:
             tags.extend(tag.name for tag in self.config.get(server.id, {}).values() if tag.owner_id == owner.id)
 
         if tags:
-            fmt = '{0.name} has the following tags:\n{1}'
-            await self.bot.say(fmt.format(owner, ', '.join(tags)))
+            fmt = '{0.name} has the following {1} tags:\n{2}'
+            await self.bot.say(fmt.format(owner, len(tags), ', '.join(tags)))
         else:
             await self.bot.say('{0.name} has no tags.'.format(owner))
 
