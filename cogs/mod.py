@@ -127,25 +127,34 @@ class Mod:
         Bot Mod role.
         """
 
+        spammers = Counter()
         channel = ctx.message.channel
         prefixes = self.bot.command_prefix
 
-        def is_possible_command_invoke(m):
-            valid_call = any(m.content.startswith(prefix) for prefix in prefixes)
-            return valid_call and not m.content[1:2].isspace()
+        def is_possible_command_invoke(entry):
+            valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
+            return valid_call and not entry.content[1:2].isspace()
 
-        def is_me(m):
-            return m.author == self.bot.user
+        api_calls = 0
+        async for entry in self.bot.logs_from(channel, limit=search, before=ctx.message):
+            if api_calls and api_calls % 5 == 0:
+                await asyncio.sleep(1.1)
 
-        perms = channel.permissions_for(channel.server.me)
-        if perms.manage_messages:
-            predicate = lambda m: is_me(m) or is_possible_command_invoke(m)
-        else:
-            predicate = is_me
+            if entry.author == self.bot.user:
+                await self.bot.delete_message(entry)
+                spammers['Bot'] += 1
+                api_calls += 1
 
-        deleted = await self.bot.purge_from(channel, limit=search, check=predicate, before=ctx.message)
-        spammers = Counter(m.author.display_name for m in deleted)
-        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(len(deleted)))
+            if is_possible_command_invoke(entry):
+                try:
+                    await self.bot.delete_message(entry)
+                except discord.Forbidden:
+                    continue
+                else:
+                    spammers[entry.author.name] += 1
+                    api_calls += 1
+
+        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
         stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
         await self.bot.whisper(stats)
