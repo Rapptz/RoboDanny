@@ -55,6 +55,10 @@ class API:
 
         transformations = {
             'client': discord.Client,
+            'vc': discord.VoiceClient,
+            'voiceclient': discord.VoiceClient,
+            'voice_client': discord.VoiceClient,
+            'voice': discord.VoiceClient,
             'message': discord.Message,
             'msg': discord.Message,
             'user': discord.User,
@@ -78,7 +82,7 @@ class API:
             await self.bot.say(base_url)
             return
 
-        portions = [x.lower() for x in obj.split('.')]
+        portions = obj.split('.')
         if portions[0] == 'discord':
             portions = portions[1:]
 
@@ -87,7 +91,7 @@ class API:
             await self.bot.say(base_url)
             return
 
-        base = transformations.get(portions[0])
+        base = transformations.get(portions[0].lower())
         anchor = ''
 
         if base is not None:
