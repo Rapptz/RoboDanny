@@ -119,10 +119,12 @@ class Mentions:
             except KeyError:
                 continue
 
-            if mode is MentionMode.on and author.status == discord.Status.online:
+            origin = server.get_member(member)
+
+            if mode is MentionMode.on and origin.status == discord.Status.online:
                 continue
 
-            coro = self.handle_message_mention(server.get_member(member), message)
+            coro = self.handle_message_mention(origin, message)
             self.bot.loop.create_task(coro)
 
     @commands.command(pass_context=True, no_pm=True)
