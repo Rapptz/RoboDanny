@@ -193,7 +193,12 @@ class Profile:
 
         If you don't have a profile set up then it'll create one for you.
         """
-        await self.edit_field('nnid', ctx, NNID.strip('"'))
+        nid = NNID.strip('"')
+        if len(nid) > 16:
+            await self.bot.say('An NNID has a maximum of 16 characters.')
+            return
+
+        await self.edit_field('nnid', ctx, nid)
 
     @profile.command(pass_context=True)
     async def rank(self, ctx, rank : str):
@@ -342,7 +347,7 @@ class Profile:
               'Now, what is your NNID?'
 
         await self.bot.say(fmt.format(author, ctx))
-        check = lambda m: len(m.content) >= 4 and m.content.count('\n') == 0
+        check = lambda m: 16 >= len(m.content) >= 4 and m.content.count('\n') == 0
         nnid = await self.bot.wait_for_message(author=author, channel=message.channel, timeout=60.0, check=check)
 
         if nnid is None:
