@@ -218,6 +218,9 @@ class Profile:
             await self.bot.say('Your squad is way too long. Keep it less than 100 characters.')
             return
 
+        if squad.startswith('http'):
+            squad = '<' + squad + '>'
+
         await self.edit_field('squad', ctx, squad)
 
     @profile.command(pass_context=True)
