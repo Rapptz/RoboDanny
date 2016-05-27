@@ -58,12 +58,12 @@ class Mentions:
         messages.reverse()
         messages.append(message)
 
-        if message.author.status != discord.Status.online:
+        if origin.status != discord.Status.online:
             # wait 30 seconds for context if it's not always on
             await asyncio.sleep(30)
 
             # get an updated reference, server references don't change
-            member = message.server.get_member(message.author.id)
+            member = message.server.get_member(origin.id)
             if member is None or member.status == discord.Status.online:
                 # they've come online, so they might have checked the mention
                 return
