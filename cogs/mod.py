@@ -135,24 +135,31 @@ class Mod:
             valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
             return valid_call and not entry.content[1:2].isspace()
 
-        api_calls = 0
-        async for entry in self.bot.logs_from(channel, limit=search, before=ctx.message):
-            if api_calls and api_calls % 5 == 0:
-                await asyncio.sleep(1.1)
+        can_delete = channel.permissions_for(channel.server.me).manage_messages
 
-            if entry.author == self.bot.user:
-                await self.bot.delete_message(entry)
-                spammers['Bot'] += 1
-                api_calls += 1
+        if not can_delete:
+            api_calls = 0
+            async for entry in self.bot.logs_from(channel, limit=search, before=ctx.message):
+                if api_calls and api_calls % 5 == 0:
+                    await asyncio.sleep(1.1)
 
-            if is_possible_command_invoke(entry):
-                try:
+                if entry.author == self.bot.user:
                     await self.bot.delete_message(entry)
-                except discord.Forbidden:
-                    continue
-                else:
-                    spammers[entry.author.name] += 1
+                    spammers['Bot'] += 1
                     api_calls += 1
+
+                if is_possible_command_invoke(entry):
+                    try:
+                        await self.bot.delete_message(entry)
+                    except discord.Forbidden:
+                        continue
+                    else:
+                        spammers[entry.author.name] += 1
+                        api_calls += 1
+        else:
+            predicate = lambda m: m.author == self.bot.user or is_possible_command_invoke(m)
+            deleted = await self.bot.purge_from(channel, limit=search, before=ctx.message, check=predicate)
+            spammers = Counter(m.author.name for m in deleted)
 
         reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
