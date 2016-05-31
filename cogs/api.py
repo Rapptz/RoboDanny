@@ -21,6 +21,9 @@ class API:
         # <last_use>: datetime.datetime timestamp
         self.config = config.Config('rtfm.json')
 
+        # channel_id to dict with <name> to <role id> mapping
+        self.feeds = config.Config('feeds.json')
+
     async def on_member_join(self, member):
         if member.server.id != DISCORD_API_ID:
             return
@@ -150,6 +153,163 @@ class API:
                 output.append('{}\u20e3 {}: {}'.format(rank, member, uses))
 
         await self.bot.say('\n'.join(output))
+
+    def library_name(self, channel):
+        # language_<name>
+        name = channel.name
+        index = name.find('_')
+        if index != -1:
+            name = name[index + 1:]
+        return name.replace('-', '.')
+
+    @commands.group(name='feeds', pass_context=True, invoke_without_command=True)
+    @is_discord_api()
+    async def _feeds(self, ctx):
+        """Shows the list of feeds that the channel has.
+
+        A feed is something that users can opt-in to
+        to receive news about a certain feed by running
+        the `sub` command (and opt-out by doing the `unsub` command).
+        You can publish to a feed by using the `publish` command.
+        """
+        channel = ctx.message.channel
+        feeds = self.feeds.get(channel.id, {})
+        if len(feeds) == 0:
+            await self.bot.say('This channel has no feeds.')
+            return
+
+        fmt = 'Found {} feeds.\n{}'
+        await self.bot.say(fmt.format(len(feeds), '\n'.join('- ' + r for r in feeds)))
+
+    @_feeds.command(name='create', pass_context=True)
+    @commands.has_permissions(manage_roles=True)
+    @is_discord_api()
+    async def feeds_create(self, ctx, *, name : str):
+        """Creates a feed with the specified name.
+
+        You need Manage Roles permissions to create a feed.
+        """
+        channel = ctx.message.channel
+        server = channel.server
+        feeds = self.feeds.get(channel.id, {})
+        name = name.lower()
+        if name in feeds:
+            await self.bot.say('This feed already exists.')
+            return
+
+        # create the default role
+        role_name = self.library_name(channel) + ' ' + name
+        role = await self.bot.create_role(server, name=role_name, permissions=discord.Permissions.none())
+        feeds[name] = role.id
+        await self.feeds.put(channel.id, feeds)
+        await self.bot.say('\u2705')
+
+    @_feeds.command(name='delete', aliases=['remove'], pass_context=True)
+    @commands.has_permissions(manage_roles=True)
+    @is_discord_api()
+    async def feeds_delete(self, ctx, *, feed : str):
+        """Removes a feed from the channel.
+
+        This will also delete the associated role so this
+        action is irreversible.
+        """
+        channel = ctx.message.channel
+        server = channel.server
+        feeds = self.feeds.get(channel.id, {})
+        feed = feed.lower()
+        if feed not in feeds:
+            await self.bot.say('This feed does not exist.')
+            return
+
+        role = feeds.pop(feed)
+        try:
+            await self.bot.delete_role(server, discord.Object(id=role))
+        except discord.HTTPException:
+            await self.bot.say('\U0001F52B')
+        else:
+            await self.feeds.put(channel.id, feeds)
+            await self.bot.say('\U0001F6AE')
+
+    async def do_subscription(self, ctx, feed, action):
+        channel = ctx.message.channel
+        member = ctx.message.author
+        feeds = self.feeds.get(channel.id, {})
+        feed = feed.lower()
+
+        if feed not in feeds:
+            await self.bot.say('This feed does not exist.')
+            return
+
+        role = feeds[feed]
+        function = getattr(self.bot, action)
+        try:
+            await function(member, discord.Object(id=role))
+        except discord.HTTPException:
+            # muh rate limit
+            await asyncio.sleep(10)
+            await function(member, discord.Object(id=role))
+        else:
+            await self.bot.send_message(channel, '\u2705')
+
+    @commands.command(pass_context=True)
+    @is_discord_api()
+    async def sub(self, ctx, *, feed : str):
+        """Subscribes to the publication of a feed.
+
+        This will allow you to receive updates from the channel
+        owner. To unsubscribe, see the `unsub` command.
+        """
+        await self.do_subscription(ctx, feed, 'add_roles')
+
+    @commands.command(pass_context=True)
+    @is_discord_api()
+    async def unsub(self, ctx, *, feed : str):
+        """Unsubscribe to the publication of a feed.
+
+        This will remove you from notifications of a feed you
+        are no longer interested in. You can always sub back by
+        using the `sub` command.
+        """
+        await self.do_subscription(ctx, feed, 'remove_roles')
+
+    @commands.command(pass_context=True)
+    @commands.has_permissions(manage_roles=True)
+    @is_discord_api()
+    async def publish(self, ctx, feed : str, *, content : str):
+        """Publishes content to a feed.
+
+        Everyone who is subscribed to the feed will be notified
+        with the content. Use this to notify people of important
+        events or changes.
+        """
+        channel = ctx.message.channel
+        server = channel.server
+        feeds = self.feeds.get(channel.id, {})
+        feed = feed.lower()
+        if feed not in feeds:
+            await self.bot.say('This feed does not exist.')
+            return
+
+        role = discord.utils.get(server.roles, id=feeds[feed])
+        if role is None:
+            fmt = 'Uh.. a fatal error occurred here. The role associated with ' \
+                  'this feed has been removed or not found. ' \
+                  'Please recreate the feed.'
+            await self.bot.say(fmt)
+            return
+
+        # delete the message we used to invoke it
+        await self.bot.delete_message(ctx.message)
+
+        # make the role mentionable
+        await self.bot.edit_role(server, role, mentionable=True)
+
+        # then send the message..
+        msg = '{0.mention}: {1}'.format(role, content)[:2000]
+        await self.bot.say(msg)
+
+        # then make the role unmentionable
+        await self.bot.edit_role(server, role, mentionable=False)
 
 def setup(bot):
     bot.add_cog(API(bot))
