@@ -17,12 +17,12 @@ class MemberParser:
 
     def __init__(self, argument):
         self.argument = argument.strip()
-        self.regex = re.compile(r'<@([0-9]+)>')
+        self.regex = re.compile(r'<@\!?([0-9]+)>')
 
     def member_entry(self, tup):
         index = tup[0]
         member = tup[1]
-        return '{0}: {1.name}#{1.discriminator} from {1.server.name}'.format(index, member)
+        return '{0}: {1} from {1.server.name}'.format(index, member)
 
     def has_potential_discriminator(self):
         return len(self.argument) > 5 and self.argument[-5] == '#'
@@ -34,7 +34,7 @@ class MemberParser:
             if direct is not None:
                 return { direct }
 
-        return { m for m in server.members if m.name == self.argument }
+        return { m for m in server.members if m.display_name == self.argument }
 
     async def get(self, ctx):
         """Given an invocation context, gets a user."""
