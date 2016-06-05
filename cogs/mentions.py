@@ -119,6 +119,9 @@ class Mentions:
             except KeyError:
                 continue
 
+            if mode is MentionMode.off:
+                continue
+
             origin = server.get_member(member)
 
             if mode is MentionMode.on and origin.status == discord.Status.online:
