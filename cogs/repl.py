@@ -3,6 +3,7 @@ from .utils import checks
 import asyncio
 import traceback
 import discord
+import inspect
 
 class REPL:
     def __init__(self, bot):
@@ -67,7 +68,7 @@ class REPL:
 
             try:
                 result = executor(code, repl_globals, repl_locals)
-                if asyncio.iscoroutine(result):
+                if inspect.isawaitable(result):
                     result = await result
             except Exception as e:
                 fmt = '```py\n{}\n```'.format(traceback.format_exc())
