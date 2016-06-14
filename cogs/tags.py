@@ -84,6 +84,9 @@ class Tags:
     def get_database_location(self, message):
         return 'generic' if message.channel.is_private else message.server.id
 
+    def clean_tag_content(self, content):
+        return content.replace('@everyone', '@\u200beveryone').replace('@here', '@\u200bhere')
+
     def get_possible_tags(self, server):
         """Returns a dict of possible tags that the server can execute.
 
@@ -124,7 +127,7 @@ class Tags:
             await self.bot.say('You need to pass in a tag name.')
 
     def verify_lookup(self, lookup):
-        if '@everyone' in lookup:
+        if '@everyone' in lookup or '@here' in lookup:
             raise RuntimeError('That tag is using blocked words.')
 
         if not lookup:
@@ -141,7 +144,7 @@ class Tags:
         tag that can be accessed in all servers. Otherwise the tag you
         create can only be accessed in the server that it was created in.
         """
-        content = content.replace('@everyone', '@\u200beveryone')
+        content = self.clean_tag_content(content)
         lookup = name.lower().strip()
         try:
             self.verify_lookup(lookup)
@@ -166,7 +169,7 @@ class Tags:
         Unlike the create tag subcommand,  this will always attempt to create
         a generic tag and not a server-specific one.
         """
-        content = content.replace('@everyone', '@\u200beveryone')
+        content = self.clean_tag_content(content)
         lookup = name.lower().strip()
         try:
             self.verify_lookup(lookup)
@@ -225,7 +228,7 @@ class Tags:
             # we have an attachment
             content = content.attachments[0].get('url', '*Could not get attachment data*')
         else:
-            content = content.content.replace('@everyone', '@\u200beveryone')
+            content = self.clean_tag_content(content.content)
 
         db[lookup] = TagInfo(name.content, content, name.author.id, location=location)
         await self.config.put(location, db)
@@ -262,7 +265,7 @@ class Tags:
         tag database. Otherwise it looks at the server-specific database.
         """
 
-        content = content.replace('@everyone', '@\u200beveryone')
+        content = self.clean_tag_content(content)
         lookup = name.lower()
         server = ctx.message.server
         tag = self.get_tag(server, lookup)
