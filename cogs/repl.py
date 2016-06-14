@@ -88,7 +88,10 @@ class REPL:
 
             try:
                 if fmt is not None:
-                    await self.bot.send_message(msg.channel, fmt)
+                    if len(fmt) > 2000:
+                        await self.bot.say('Content too big to be printed.')
+                    else:
+                        await self.bot.send_message(msg.channel, fmt)
             except discord.Forbidden:
                 pass
             except discord.HTTPException as e:
