@@ -84,12 +84,12 @@ class REPL:
             else:
                 if result is not None:
                     fmt = '```py\n{}\n```'.format(result)
-                    repl_globals['last'] = result
+                    variables['last'] = result
 
             try:
                 if fmt is not None:
                     if len(fmt) > 2000:
-                        await self.bot.say('Content too big to be printed.')
+                        await self.bot.send_message(msg.channel, 'Content too big to be printed.')
                     else:
                         await self.bot.send_message(msg.channel, fmt)
             except discord.Forbidden:
