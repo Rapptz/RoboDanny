@@ -27,8 +27,7 @@ class REPL:
     async def repl(self, ctx):
         msg = ctx.message
 
-        repl_locals = {}
-        repl_globals = {
+        variables = {
             'ctx': ctx,
             'bot': self.bot,
             'message': msg,
@@ -72,12 +71,12 @@ class REPL:
                     await self.bot.say(self.get_syntax_error(e))
                     continue
 
-            repl_globals['message'] = response
+            variables['message'] = response
 
             fmt = None
 
             try:
-                result = executor(code, repl_globals, repl_locals)
+                result = executor(code, variables)
                 if inspect.isawaitable(result):
                     result = await result
             except Exception as e:
