@@ -8,6 +8,7 @@ import inspect
 class REPL:
     def __init__(self, bot):
         self.bot = bot
+        self.sessions = set()
 
     def cleanup_code(self, content):
         """Automatically removes code blocks from the code."""
@@ -31,9 +32,17 @@ class REPL:
             'ctx': ctx,
             'bot': self.bot,
             'message': msg,
-            'last': None
+            'server': msg.server,
+            'channel': msg.channel,
+            'author': msg.channel,
+            'last': None,
         }
 
+        if msg.channel.id in self.sessions:
+            await self.bot.say('Already running a REPL session in this channel. Exit it with `quit`.')
+            return
+
+        self.sessions.add(msg.channel.id)
         await self.bot.say('Enter code to execute or evaluate. `exit()` or `quit` to exit.')
         while True:
             response = await self.bot.wait_for_message(author=msg.author, channel=msg.channel,
@@ -43,6 +52,7 @@ class REPL:
 
             if cleaned in ('quit', 'exit', 'exit()'):
                 await self.bot.say('Exiting.')
+                self.sessions.remove(msg.channel.id)
                 return
 
             executor = exec
