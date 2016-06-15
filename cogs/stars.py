@@ -65,7 +65,7 @@ class Stars:
         If the channel is deleted then the starboard is
         deleted as well.
 
-        You must have Manage Channel permissions to use this
+        You must have Administrator permissions to use this
         command or the Bot Admin role.
         """
 
@@ -86,7 +86,7 @@ class Stars:
 
         if my_permissions.manage_roles:
             mine = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            everyone = discord.PermissionOverwrite(send_messages=False)
+            everyone = discord.PermissionOverwrite(send_messages=False, embed_links=False)
             args.append((server.me, mine))
             args.append((server.default_role, everyone))
 
