@@ -77,6 +77,9 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
+    if message.author.bot:
+        return
+
     mod = bot.get_cog('Mod')
 
     if mod is not None and not checks.is_owner_check(message):
