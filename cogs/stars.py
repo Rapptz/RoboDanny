@@ -255,12 +255,7 @@ class Stars:
             await self.stars.put(guild_id, db)
             return
 
-        # delete and recreate the message
-        # this 'bumps' it up.
-        await self.bot.delete_message(bot_msg)
-        sent = await self.bot.send_message(starboard, to_send)
-        stars[0] = sent.id
-
+        await self.bot.edit_message(bot_msg, to_send)
         await self.stars.put(guild_id, db)
 
     @star.error
