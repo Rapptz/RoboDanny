@@ -108,6 +108,8 @@ class Stars:
 
         before = discord.Object(id=str(int(mid) + 1))
         async for m in self.bot.logs_from(channel, limit=1, before=before):
+            if m.id != mid:
+                return None
             self._message_cache[mid] = m
             return m
         return None
