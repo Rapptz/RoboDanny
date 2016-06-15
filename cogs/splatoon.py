@@ -44,7 +44,7 @@ class Splatoon:
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
 
-    def __del__(self):
+    def __unload(self):
         self.map_updater.cancel()
 
     async def splatnet_cookie(self):
