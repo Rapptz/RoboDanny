@@ -24,7 +24,8 @@ initial_extensions = [
     'cogs.carbonitex',
     'cogs.mentions',
     'cogs.api',
-    'cogs.stars'
+    'cogs.stars',
+    'cogs.admin',
 ]
 
 discord_logger = logging.getLogger('discord')
@@ -54,6 +55,10 @@ async def on_ready():
     print('------')
     if not hasattr(bot, 'uptime'):
         bot.uptime = datetime.datetime.utcnow()
+
+@bot.event
+async def on_resumed():
+    print('resumed...')
 
 @bot.event
 async def on_command(command, ctx):
@@ -99,76 +104,6 @@ async def on_message(message):
                 return
 
     await bot.process_commands(message)
-
-@bot.command(hidden=True)
-@checks.is_owner()
-async def load(*, module : str):
-    """Loads a module."""
-    module = module.strip()
-    try:
-        bot.load_extension(module)
-    except Exception as e:
-        await bot.say('\U0001f52b')
-        await bot.say('{}: {}'.format(type(e).__name__, e))
-    else:
-        await bot.say('\U0001f44c')
-
-@bot.command(hidden=True)
-@checks.is_owner()
-async def unload(*, module : str):
-    """Unloads a module."""
-    module = module.strip()
-    try:
-        bot.unload_extension(module)
-    except Exception as e:
-        await bot.say('\U0001f52b')
-        await bot.say('{}: {}'.format(type(e).__name__, e))
-    else:
-        await bot.say('\U0001f44c')
-
-@bot.command(pass_context=True, hidden=True)
-@checks.is_owner()
-async def debug(ctx, *, code : str):
-    """Evaluates code."""
-    code = code.strip('` ')
-    python = '```py\n{}\n```'
-    result = None
-
-    try:
-        result = eval(code)
-    except Exception as e:
-        await bot.say(python.format(type(e).__name__ + ': ' + str(e)))
-        return
-
-    if asyncio.iscoroutine(result):
-        result = await result
-
-    await bot.say(python.format(result))
-
-@bot.command(hidden=True)
-@checks.is_owner()
-async def announcement(*, message : str):
-    # we copy the list over so it doesn't change while we're iterating over it
-    servers = list(bot.servers)
-    for server in servers:
-        try:
-            await bot.send_message(server, message)
-        except discord.Forbidden:
-            # we can't send a message for some reason in this
-            # channel, so try to look for another one.
-            me = server.me
-            def predicate(ch):
-                text = ch.type == discord.ChannelType.text
-                return text and ch.permissions_for(me).send_messages
-
-            channel = discord.utils.find(predicate, server.channels)
-            if channel is not None:
-                await bot.send_message(channel, message)
-        finally:
-            print('Sent message to {}'.format(server.name.encode('utf-8')))
-            # to make sure we don't hit the rate limit, we send one
-            # announcement message every 5 seconds.
-            await asyncio.sleep(5)
 
 @bot.command(pass_context=True, hidden=True)
 async def do(ctx, times : int, *, command):
