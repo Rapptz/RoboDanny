@@ -40,7 +40,7 @@ class Meta:
     @commands.command(hidden=True)
     async def hello(self):
         """Displays my intro message."""
-        await self.bot.say('Hello! I\'m a robot! I am currently **version 3.0.0**. Danny made me.')
+        await self.bot.say('Hello! I\'m a robot! Danny#0007 made me.')
 
     @commands.command()
     async def source(self, command : str = None):
