@@ -45,7 +45,7 @@ async def on_command_error(error, ctx):
     elif isinstance(error, commands.DisabledCommand):
         await bot.send_message(ctx.message.author, 'Sorry. This command is disabled and cannot be used.')
     elif isinstance(error, commands.CommandInvokeError):
-        print(error, file=sys.stderr)
+        print('In {0.command.qualified_name}: {1}'.format(ctx, error), file=sys.stderr)
 
 @bot.event
 async def on_ready():
