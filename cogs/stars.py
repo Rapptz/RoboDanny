@@ -340,7 +340,7 @@ class Stars:
 
     @star.command(name='clean', pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_messages=True)
-    async def star_clean(self, ctx, stars=1):
+    async def star_clean(self, ctx, stars:int = 1):
         """Cleans the starboard
 
         This removes messages in the starboard that only have less
@@ -355,7 +355,7 @@ class Stars:
 
         guild_id = ctx.message.server.id
         db = self.stars.get(guild_id, {})
-        stars = min(stars, 1)
+        stars = 1 if stars < 0 else stars
 
         if db.get('channel') is None:
             await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
