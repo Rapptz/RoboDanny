@@ -38,13 +38,13 @@ class Stars:
             except:
                 pass
 
-    async def clean_starboard(self, guild_id):
+    async def clean_starboard(self, guild_id, stars):
         db = self.stars.get(guild_id, {}).copy()
         starboard = self.bot.get_channel(db['channel'])
         dead_messages = {
             data[0]
             for _, data in db.items()
-            if type(data) is list and len(data[1]) < 2 and data[0] is not None
+            if type(data) is list and len(data[1]) <= stars and data[0] is not None
         }
 
         await self.bot.purge_from(starboard, limit=1000, check=lambda m: m.id in dead_messages)
@@ -53,7 +53,7 @@ class Stars:
         try:
             await self.bot.wait_until_ready()
             while not self.bot.is_closed:
-                await self.clean_starboard(guild_id)
+                await self.clean_starboard(guild_id, 1)
                 await asyncio.sleep(self.stars.get(guild_id)['janitor'])
         except asyncio.CancelledError:
             pass
@@ -340,12 +340,14 @@ class Stars:
 
     @star.command(name='clean', pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_messages=True)
-    async def clean(self, ctx):
-        """Cleans the starboard from 1 star messages.
+    async def star_clean(self, ctx, stars=1):
+        """Cleans the starboard
 
-        This removes messages in the starboard that only have a
-        single star. To continuously do this over a period of time,
-        see the `janitor` subcommand.
+        This removes messages in the starboard that only have less
+        than or equal to the number of specified stars. This defaults to 1.
+
+        To continuously do this over a period of time see
+        the `janitor` subcommand.
 
         This command requires the Manage Messages permission or the
         Bot Admin role.
@@ -353,12 +355,13 @@ class Stars:
 
         guild_id = ctx.message.server.id
         db = self.stars.get(guild_id, {})
+        stars = min(stars, 1)
 
         if db.get('channel') is None:
             await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
             return
 
-        await self.clean_starboard(guild_id)
+        await self.clean_starboard(guild_id, stars)
         await self.bot.say('\N{PUT LITTER IN ITS PLACE SYMBOL}')
 
 def setup(bot):
