@@ -299,6 +299,7 @@ class Stars:
             await self.bot.say('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
 
     @star.command(name='janitor', pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(administrator=True)
     async def star_janitor(self, ctx, minutes: float = 0.0):
         """Set the starboard's janitor clean rate.
 
@@ -307,6 +308,9 @@ class Stars:
         routinely cleanup single starred messages from the starboard.
 
         Setting the janitor's clean rate to 0 (or below) disables it.
+
+        This command requires the Administrator permission or the Bot
+        Admin role.
         """
 
         guild_id = ctx.message.server.id
@@ -333,6 +337,29 @@ class Stars:
             await self.bot.say('Remember to \N{PUT LITTER IN ITS PLACE SYMBOL}')
 
         await self.stars.put(guild_id, db)
+
+    @star.command(name='clean', pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_messages=True)
+    async def clean(self, ctx):
+        """Cleans the starboard from 1 star messages.
+
+        This removes messages in the starboard that only have a
+        single star. To continuously do this over a period of time,
+        see the `janitor` subcommand.
+
+        This command requires the Manage Messages permission or the
+        Bot Admin role.
+        """
+
+        guild_id = ctx.message.server.id
+        db = self.stars.get(guild_id, {})
+
+        if db.get('channel') is None:
+            await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
+            return
+
+        await self.clean_starboard(guild_id)
+        await self.bot.say('\N{PUT LITTER IN ITS PLACE SYMBOL}')
 
 def setup(bot):
     bot.add_cog(Stars(bot))
