@@ -205,6 +205,10 @@ class Stars:
             await self.bot.say('\N{BLACK QUESTION MARK ORNAMENT} This message could not be found.')
             return
 
+        if starrer.id == msg.author.id:
+            await self.bot.say('\N{NO ENTRY SIGN} You cannot star your own message.')
+            return
+
         if msg.channel.id == starboard.id:
             await self.bot.say('\N{NO ENTRY SIGN} You cannot star messages in the starboard.')
             return
