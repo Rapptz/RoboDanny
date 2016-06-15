@@ -55,7 +55,7 @@ class Stars:
         return fmt.format(emoji, starrers, content, msg)
 
     @commands.command(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_channel=True)
+    @checks.admin_or_permissions(administrator=True)
     async def starboard(self, ctx, *, name: str = 'starboard'):
         """Sets up the starboard for this server.
 
