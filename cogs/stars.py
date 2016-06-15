@@ -3,6 +3,7 @@ import discord
 import datetime
 from .utils import checks, config
 import json
+import asyncio
 
 class Stars:
     """A starboard to upvote posts obviously.
@@ -23,6 +24,40 @@ class Stars:
 
         # cache message objects to save Discord some HTTP requests.
         self._message_cache = {}
+
+        self.janitor_tasks = {
+            guild_id: self.bot.loop.create_task(self.janitor(guild_id))
+            for guild_id in self.stars.all()
+            if self.stars.get(guild_id).get('janitor') is not None
+        }
+
+    def __unload(self):
+        for task in self.janitor_tasks.values():
+            try:
+                task.cancel()
+            except:
+                pass
+
+    async def clean_starboard(self, guild_id):
+        db = self.stars.get(guild_id, {}).copy()
+        starboard = self.bot.get_channel(db['channel'])
+        dead_messages = {
+            data[0]
+            for _, data in db.items()
+            if type(data) is list and len(data[1]) < 2 and data[0] is not None
+        }
+
+        await self.bot.purge_from(starboard, limit=1000, check=lambda m: m.id in dead_messages)
+
+    async def janitor(self, guild_id):
+        try:
+            await self.bot.wait_until_ready()
+            while not self.bot.is_closed:
+                await self.clean_starboard(guild_id)
+                await asyncio.sleep(self.stars.get(guild_id)['janitor'])
+        except asyncio.CancelledError:
+            pass
+
 
     def star_emoji(self, stars):
         if 5 >= stars >= 0:
@@ -150,7 +185,7 @@ class Stars:
                 return # not a delete we're interested in
 
             # see if the message being deleted is in the starboard
-            exists = discord.utils.find(lambda k: db[k][0] == msg_id, db)
+            exists = discord.utils.find(lambda k: type(db[k]) is list and db[k][0] == msg_id, db)
             if exists:
                 db.pop(exists)
                 await self.stars.put(server.id, db)
@@ -174,7 +209,7 @@ class Stars:
         except:
             pass # the content was probably too big so just ignore this edit.
 
-    @commands.command(pass_context=True, no_pm=True)
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     async def star(self, ctx, message: int):
         """Stars a message via message ID.
 
@@ -263,6 +298,41 @@ class Stars:
         if type(error) is commands.BadArgument:
             await self.bot.say('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
 
+    @star.command(name='janitor', pass_context=True, no_pm=True)
+    async def star_janitor(self, ctx, minutes: float = 0.0):
+        """Set the starboard's janitor clean rate.
+
+        The clean rate allows the starboard to cleared from single star
+        messages. By setting a clean rate, every N minutes the bot will
+        routinely cleanup single starred messages from the starboard.
+
+        Setting the janitor's clean rate to 0 (or below) disables it.
+        """
+
+        guild_id = ctx.message.server.id
+        db = self.stars.get(guild_id, {})
+
+        if db.get('channel') is None:
+            await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
+            return
+
+        def cleanup_task():
+            task = self.janitor_tasks.pop(guild_id)
+            task.cancel()
+            db.pop('janitor', None)
+
+        if minutes <= 0.0:
+            cleanup_task()
+            await self.bot.say('\N{SQUARED OK} No more cleaning up.')
+        else:
+            if 'janitor' in db:
+                cleanup_task()
+
+            db['janitor'] = minutes * 60.0
+            self.janitor_tasks[guild_id] = self.bot.loop.create_task(self.janitor(guild_id))
+            await self.bot.say('Remember to \N{PUT LITTER IN ITS PLACE SYMBOL}')
+
+        await self.stars.put(guild_id, db)
 
 def setup(bot):
     bot.add_cog(Stars(bot))
