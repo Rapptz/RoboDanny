@@ -51,7 +51,7 @@ class Stars:
         else:
             base = '{0}'
 
-        fmt = base + ' {2} - {3.timestamp:%Y-%m-%d %H:%M UTC} by {3.author} in {3.channel.mention}'
+        fmt = base + ' {2} - {3.timestamp:%Y-%m-%d %H:%M UTC} by {3.author} in {3.channel.mention} (ID: {3.id})'
         return fmt.format(emoji, starrers, content, msg)
 
     @commands.command(pass_context=True, no_pm=True)
