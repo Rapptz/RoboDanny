@@ -178,6 +178,10 @@ class Stars:
             return
 
         starboard = self.bot.get_channel(db.get('channel'))
+        if starboard is None:
+            # the starboard might have gotten deleted?
+            return
+
         msg_id = payload['id']
 
         if is_message_delete:
