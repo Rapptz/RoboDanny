@@ -364,5 +364,31 @@ class Stars:
         await self.clean_starboard(guild_id, stars)
         await self.bot.say('\N{PUT LITTER IN ITS PLACE SYMBOL}')
 
+    @star.command(pass_context=True, no_pm=True, name='who')
+    async def star_who(self, ctx, message: int):
+        """Show who starred a message.
+
+        The ID can either be the starred message ID
+        or the message ID in the starboard channel.
+        """
+
+        server = ctx.message.server
+        db = self.stars.get(server.id, {})
+        message = str(message)
+
+        if message in db:
+            # starred message ID so this one's rather easy.
+            starrers = db[message][1]
+        else:
+            # this one requires extra look ups...
+            found = discord.utils.find(lambda v: type(v) is list and v[0] == message, db.values())
+            if found is None:
+                await self.bot.say('No one did.')
+                return
+            starrers = found[1]
+
+        members = filter(None, map(server.get_member, starrers))
+        await self.bot.say(', '.join(map(str, members)))
+
 def setup(bot):
     bot.add_cog(Stars(bot))
