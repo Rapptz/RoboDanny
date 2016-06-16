@@ -5,6 +5,7 @@ import datetime, re
 import json, asyncio
 import copy
 import logging
+import traceback
 import sys
 from collections import Counter
 
@@ -45,7 +46,9 @@ async def on_command_error(error, ctx):
     elif isinstance(error, commands.DisabledCommand):
         await bot.send_message(ctx.message.author, 'Sorry. This command is disabled and cannot be used.')
     elif isinstance(error, commands.CommandInvokeError):
-        print('In {0.command.qualified_name}: {1}'.format(ctx, error), file=sys.stderr)
+        print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
+        traceback.print_tb(error.original.__traceback__)
+        print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
 
 @bot.event
 async def on_ready():
