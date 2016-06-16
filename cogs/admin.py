@@ -65,12 +65,11 @@ class Admin:
 
         try:
             result = eval(code, env)
+            if inspect.isawaitable(result):
+                result = await result
         except Exception as e:
             await self.bot.say(python.format(type(e).__name__ + ': ' + str(e)))
             return
-
-        if inspect.isawaitable(result):
-            result = await result
 
         await self.bot.say(python.format(result))
 
