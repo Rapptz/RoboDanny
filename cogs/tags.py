@@ -111,7 +111,7 @@ class Tags:
         server = ctx.message.server
         tag = self.get_tag(server, lookup)
         if tag is None:
-            await self.bot.say('Tag "{}" not found.'.format(name))
+            await self.bot.say('Tag not found.')
             return
 
         tag.uses += 1
