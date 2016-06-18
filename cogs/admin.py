@@ -3,6 +3,10 @@ from .utils import checks
 import discord
 import inspect
 
+# to expose to the eval command
+import datetime
+from collections import Counter
+
 class Admin:
     """Admin-only commands that make the bot dynamic."""
 
@@ -62,6 +66,8 @@ class Admin:
             'channel': ctx.message.channel,
             'author': ctx.message.author
         }
+
+        env.update(globals())
 
         try:
             result = eval(code, env)
