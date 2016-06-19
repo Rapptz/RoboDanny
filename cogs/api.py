@@ -77,6 +77,8 @@ class API:
             'perms': discord.Permissions,
             'channel': discord.Channel,
             'chan': discord.Channel,
+            'object': discord.Object,
+            'obj': discord.Object,
         }
 
         base_url = 'http://discordpy.rtfd.io/en/latest/api.html'
