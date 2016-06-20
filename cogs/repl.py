@@ -33,7 +33,7 @@ class REPL:
             'message': msg,
             'server': msg.server,
             'channel': msg.channel,
-            'author': msg.channel,
+            'author': msg.author,
             'last': None,
         }
 
