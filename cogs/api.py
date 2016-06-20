@@ -42,7 +42,7 @@ class API:
         """Gives you a documentation link for a discord.py entity.
 
         Events, objects, and functions are all supported through a
-        a cruddy fuzzy algorithm.
+        cruddy fuzzy algorithm.
         """
 
         # update the stats
@@ -77,6 +77,23 @@ class API:
             'perms': discord.Permissions,
             'channel': discord.Channel,
             'chan': discord.Channel,
+            'object': discord.Object,
+            'obj': discord.Object,
+            'privatechannel': discord.PrivateChannel,
+            'channeltype': discord.ChannelType,
+            'serverregion': discord.ServerRegion,
+            'status': discord.Status,
+            'discordexception': discord.DiscordException,
+            'clientexception': discord.ClientException,
+            'loginfailure': discord.LoginFailure,
+            'httpexception': discord.HTTPException,
+            'forbidden': discord.Forbidden,
+            'notfound': discord.NotFound,
+            'invalidargument': discord.InvalidArgument,
+            'gatewaynotfound': discord.GatewayNotFound,
+            'connectionclosed': discord.ConnectionClosed,
+            'opuserror': discord.opus.OpusError,
+            'opusnotloaded': discord.opus.OpusNotLoaded,
         }
 
         base_url = 'http://discordpy.rtfd.io/en/latest/api.html'
