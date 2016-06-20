@@ -15,6 +15,28 @@ class Mod:
     def bot_user(self, message):
         return message.server.me if message.channel.is_private else self.bot.user
 
+    def __check(self, ctx):
+        msg = ctx.message
+        if checks.is_owner_check(msg):
+            return True
+
+        # user is bot banned
+        if msg.author.id in self.config.get('plonks', []):
+            return False
+
+        # check if the channel is ignored
+        # but first, resolve their permissions
+
+        perms = msg.channel.permissions_for(msg.author)
+        bypass_ignore = perms.administrator
+
+        # now we can finally realise if we can actually bypass the ignore.
+
+        if not bypass_ignore and msg.channel.id in self.config.get('ignored', []):
+            return False
+
+        return True
+
     @commands.group(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_channels=True)
     async def ignore(self, ctx):

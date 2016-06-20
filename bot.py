@@ -77,37 +77,8 @@ async def on_command(command, ctx):
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:
-        return
-
     if message.author.bot:
         return
-
-    mod = bot.get_cog('Mod')
-
-    if mod is not None and not checks.is_owner_check(message):
-        # check if the user is bot banned
-        if message.author.id in mod.config.get('plonks', []):
-            return
-
-        # check if the channel is ignored
-        # but first, resolve their permissions
-
-        perms = message.channel.permissions_for(message.author)
-        bypass_ignore = perms.manage_roles
-
-        # if we don't have manage roles then we should
-        # check if it's the owner of the bot or they have Bot Admin role.
-
-        if not bypass_ignore:
-            if not message.channel.is_private:
-                bypass_ignore = discord.utils.get(message.author.roles, name='Bot Admin') is not None
-
-        # now we can finally realise if we can actually bypass the ignore.
-
-        if not bypass_ignore:
-            if message.channel.id in mod.config.get('ignored', []):
-                return
 
     await bot.process_commands(message)
 
