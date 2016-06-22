@@ -25,12 +25,12 @@ class Buttons:
     @commands.command(hidden=True)
     async def feelgood(self):
         """press"""
-        await self.bot.say('**pressed**')
+        await self.bot.say('*pressed*')
 
     @commands.command(hidden=True)
     async def feelbad(self):
         """depress"""
-        await self.bot.say('**depressed**')
+        await self.bot.say('*depressed*')
 
     @commands.command(pass_context=True)
     async def nostalgia(self, ctx, date: date, *, channel: discord.Channel = None):
