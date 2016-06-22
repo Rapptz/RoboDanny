@@ -27,6 +27,7 @@ initial_extensions = [
     'cogs.api',
     'cogs.stars',
     'cogs.admin',
+    'cogs.buttons',
 ]
 
 discord_logger = logging.getLogger('discord')
@@ -98,7 +99,6 @@ async def changelog():
 def load_credentials():
     with open('credentials.json') as f:
         return json.load(f)
-
 
 if __name__ == '__main__':
     if any('debug' in arg.lower() for arg in sys.argv):
