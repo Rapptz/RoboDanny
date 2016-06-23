@@ -10,7 +10,7 @@ def date(argument):
 
     for fmt in formats:
         try:
-            return datetime.strptime(fmt, argument)
+            return datetime.strptime(argument, fmt)
         except ValueError:
             continue
 
@@ -38,7 +38,10 @@ class Buttons:
 
         If a channel is not given, then pins from the channel the
         command was ran on.
+
+        The format of the date must be either YYYY-MM-DD or YYYY/MM/DD.
         """
+
         if channel is None:
             channel = ctx.message.channel
 
@@ -49,6 +52,11 @@ class Buttons:
                 await self.bot.say('\N{THUMBS DOWN SIGN} Could not pin message.')
             else:
                 await self.bot.say('\N{THUMBS UP SIGN} Successfully pinned message.')
+
+    @nostalgia.error
+    async def nostalgia_error(self, error, ctx):
+        if type(error) is commands.BadArgument:
+            await self.bot.say(error)
 
 def setup(bot):
     bot.add_cog(Buttons(bot))
