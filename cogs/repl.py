@@ -4,6 +4,8 @@ import asyncio
 import traceback
 import discord
 import inspect
+from contextlib import redirect_stdout
+import io
 
 class REPL:
     def __init__(self, bot):
@@ -74,17 +76,23 @@ class REPL:
             variables['message'] = response
 
             fmt = None
+            stdout = io.StringIO()
 
             try:
-                result = executor(code, variables)
-                if inspect.isawaitable(result):
-                    result = await result
+                with redirect_stdout(stdout):
+                    result = executor(code, variables)
+                    if inspect.isawaitable(result):
+                        result = await result
             except Exception as e:
-                fmt = '```py\n{}\n```'.format(traceback.format_exc())
+                value = stdout.getvalue()
+                fmt = '```py\n{}{}\n```'.format(value, traceback.format_exc())
             else:
+                value = stdout.getvalue()
                 if result is not None:
-                    fmt = '```py\n{}\n```'.format(result)
+                    fmt = '```py\n{}{}\n```'.format(value, result)
                     variables['last'] = result
+                elif value:
+                    fmt = '```py\n{}\n```'.format(value)
 
             try:
                 if fmt is not None:
