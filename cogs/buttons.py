@@ -1,6 +1,7 @@
 from discord.ext import commands
 from datetime import datetime
 import discord
+from .utils import checks
 
 def date(argument):
     formats = (
@@ -33,6 +34,7 @@ class Buttons:
         await self.bot.say('*depressed*')
 
     @commands.command(pass_context=True)
+    @checks.mod_or_permissions(manage_messages=True)
     async def nostalgia(self, ctx, date: date, *, channel: discord.Channel = None):
         """Pins an old message from a specific date.
 
