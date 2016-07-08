@@ -381,5 +381,16 @@ class Mod:
 
         await self.do_removal(ctx.message, 100, lambda e: substr in e.content)
 
+    @remove.command(pass_context=True)
+    async def bot(self, ctx, prefix, *, member: discord.Member):
+        """Removes a bot user's messages and messages with their prefix.
+
+        The member doesn't have to have the [Bot] tag to qualify for removal.
+        """
+
+        def predicate(m):
+            return m.author == member or m.content.startswith(prefix)
+        await self.do_removal(ctx.message, 100, predicate)
+
 def setup(bot):
     bot.add_cog(Mod(bot))
