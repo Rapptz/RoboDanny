@@ -38,6 +38,11 @@ class Buttons:
         """What is love?"""
         await self.bot.say('http://i.imgur.com/JthwtGA.png')
 
+    @commands.command(hidden=True)
+    async def bored(self):
+        """boredom looms"""
+        await self.bot.say('http://i.imgur.com/BuTKSzf.png')
+
     @commands.command(pass_context=True)
     @checks.mod_or_permissions(manage_messages=True)
     async def nostalgia(self, ctx, date: date, *, channel: discord.Channel = None):
