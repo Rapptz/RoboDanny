@@ -47,11 +47,11 @@ class Meta:
     async def charinfo(self, *, characters: str):
         """Shows you information about a number of characters.
 
-        Only up to 10 characters at a time.
+        Only up to 12 characters at a time.
         """
 
-        if len(characters) > 10:
-            await self.bot.say('Too many characters ({}/10)'.format(len(characters)))
+        if len(characters) > 12:
+            await self.bot.say('Too many characters ({}/12)'.format(len(characters)))
             return
 
         def to_string(c):
