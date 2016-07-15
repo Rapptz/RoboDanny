@@ -5,6 +5,7 @@ from collections import OrderedDict, deque, Counter
 import os, datetime
 import re, asyncio
 import copy
+import unicodedata
 
 class TimeParser:
     def __init__(self, argument):
@@ -41,6 +42,24 @@ class Meta:
     async def hello(self):
         """Displays my intro message."""
         await self.bot.say('Hello! I\'m a robot! Danny#0007 made me.')
+
+    @commands.command()
+    async def charinfo(self, *, characters: str):
+        """Shows you information about a number of characters.
+
+        Only up to 10 characters at a time.
+        """
+
+        if len(characters) > 10:
+            await self.bot.say('Too many characters ({}/10)'.format(len(characters)))
+            return
+
+        def to_string(c):
+            digit = format(ord(c), 'x')
+            name = unicodedata.name(c, 'Name not found.')
+            return '0x{0}: {1} - {2} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{0}>'.format(digit, name, c)
+
+        await self.bot.say('\n'.join(map(to_string, characters)))
 
     @commands.command()
     async def source(self, command : str = None):
