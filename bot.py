@@ -84,6 +84,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.command(pass_context=True, hidden=True)
+@checks.is_owner()
 async def do(ctx, times : int, *, command):
     """Repeats a command a specified number of times."""
     msg = copy.copy(ctx.message)
