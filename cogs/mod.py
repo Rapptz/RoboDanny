@@ -318,7 +318,7 @@ class Mod:
         else:
             await self.bot.say('\U0001f44c')
 
-    @commands.group(pass_context=True, no_pm=True)
+    @commands.group(pass_context=True, no_pm=True, aliases=['prune'])
     @checks.admin_or_permissions(manage_messages=True)
     async def remove(self, ctx):
         """Removes messages that meet a criteria.
@@ -381,8 +381,8 @@ class Mod:
 
         await self.do_removal(ctx.message, 100, lambda e: substr in e.content)
 
-    @remove.command(pass_context=True)
-    async def bot(self, ctx, prefix, *, member: discord.Member):
+    @remove.command(name='bot', pass_context=True)
+    async def _bot(self, ctx, prefix, *, member: discord.Member):
         """Removes a bot user's messages and messages with their prefix.
 
         The member doesn't have to have the [Bot] tag to qualify for removal.
