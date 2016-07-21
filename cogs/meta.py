@@ -32,6 +32,9 @@ class TimeParser:
         if self.seconds < 0:
             raise commands.BadArgument('I don\'t do negative time.')
 
+        if self.seconds > 604800: # 7 days
+            raise commands.BadArgument('That\'s a bit too far in the future for me.')
+
 class Meta:
     """Commands for utilities related to Discord or the Bot itself."""
 
