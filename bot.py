@@ -109,6 +109,7 @@ if __name__ == '__main__':
     bot.client_id = credentials['client_id']
     bot.commands_used = Counter()
     bot.carbon_key = credentials['carbon_key']
+    bot.bots_key = credentials['bots_key']
     for extension in initial_extensions:
         try:
             bot.load_extension(extension)
