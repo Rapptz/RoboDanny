@@ -4,6 +4,11 @@ from collections import Counter
 import re
 import discord
 import asyncio
+import argparse, shlex
+
+class Arguments(argparse.ArgumentParser):
+    def error(self, message):
+        raise RuntimeError(message)
 
 class Mod:
     """Moderation related commands."""
@@ -391,6 +396,81 @@ class Mod:
         def predicate(m):
             return m.author == member or m.content.startswith(prefix)
         await self.do_removal(ctx.message, 100, predicate)
+
+    @remove.command(pass_context=True)
+    async def custom(self, ctx, *, args: str):
+        """A more advanced prune command.
+
+        Allows you to specify more complex prune commands with multiple
+        conditions and search criteria. The criteria are passed in the
+        syntax of `--criteria=value` or `--criteria value`. Many criteria
+        support multiple values to indicate 'any' match. A flag does
+        not have a value. If the value has spaces it must be quoted.
+
+        The messages are only deleted if all criteria are met.
+
+        Criteria:
+          user      A mention or name of the user to remove.
+          contains  A substring to search for in the message.
+          starts    A substring to search if the message starts with.
+          ends      A substring to search if the message ends with.
+          bot       A flag indicating if it's a bot user.
+          embeds    A flag indicating if the message has embeds.
+          files     A flag indicating if the message has attachments.
+          search    Specifies how many messages to search. Default 100. Max 2000.
+        """
+        parser = Arguments(add_help=False, allow_abbrev=False)
+        parser.add_argument('--user', nargs='+')
+        parser.add_argument('--contains', nargs='+')
+        parser.add_argument('--starts', nargs='+')
+        parser.add_argument('--ends', nargs='+')
+        parser.add_argument('--bot', action='store_const', const=lambda m: m.author.bot)
+        parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
+        parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
+        parser.add_argument('--search', type=int, default=100)
+
+        try:
+            args = parser.parse_args(shlex.split(args))
+        except Exception as e:
+            await self.bot.say(str(e))
+            return
+
+        predicates = []
+        if args.bot:
+            predicates.append(args.bot)
+
+        if args.embeds:
+            predicates.append(args.embeds)
+
+        if args.files:
+            predicates.append(args.files)
+
+        if args.user:
+            users = []
+            for u in args.user:
+                try:
+                    converter = commands.MemberConverter(ctx, u)
+                    users.append(converter.convert())
+                except Exception as e:
+                    await self.bot.say(str(e))
+                    return
+
+            predicates.append(lambda m: m.author in users)
+
+        if args.contains:
+            predicates.append(lambda m: any(sub in m.content for sub in arg.contains))
+
+        if args.starts:
+            predicates.append(lambda m: any(m.content.startswith(s) for s in args.starts))
+
+        if args.ends:
+            predicates.append(lambda m: any(m.content.endswith(s) for s in args.ends))
+
+        def predicate(m):
+            return all(p(m) for p in predicates)
+
+        args.search = max(0, min(2000, args.search)) # clamp from 0-2000
+        await self.do_removal(ctx.message, args.search, predicate)
 
 def setup(bot):
     bot.add_cog(Mod(bot))
