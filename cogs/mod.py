@@ -458,7 +458,7 @@ class Mod:
             predicates.append(lambda m: m.author in users)
 
         if args.contains:
-            predicates.append(lambda m: any(sub in m.content for sub in arg.contains))
+            predicates.append(lambda m: any(sub in m.content for sub in args.contains))
 
         if args.starts:
             predicates.append(lambda m: any(m.content.startswith(s) for s in args.starts))
