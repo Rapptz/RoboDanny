@@ -407,7 +407,8 @@ class Mod:
         support multiple values to indicate 'any' match. A flag does
         not have a value. If the value has spaces it must be quoted.
 
-        The messages are only deleted if all criteria are met.
+        The messages are only deleted if all criteria are met unless
+        the `--or` flag is passed.
 
         Criteria:
           user      A mention or name of the user to remove.
@@ -418,12 +419,14 @@ class Mod:
           embeds    A flag indicating if the message has embeds.
           files     A flag indicating if the message has attachments.
           search    Specifies how many messages to search. Default 100. Max 2000.
+          or        A flag indicating to use logical OR for all criteria.
         """
         parser = Arguments(add_help=False, allow_abbrev=False)
         parser.add_argument('--user', nargs='+')
         parser.add_argument('--contains', nargs='+')
         parser.add_argument('--starts', nargs='+')
         parser.add_argument('--ends', nargs='+')
+        parser.add_argument('--or', action='store_true', dest='_or')
         parser.add_argument('--bot', action='store_const', const=lambda m: m.author.bot)
         parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
         parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
@@ -466,8 +469,9 @@ class Mod:
         if args.ends:
             predicates.append(lambda m: any(m.content.endswith(s) for s in args.ends))
 
+        op = all if not args._or else any
         def predicate(m):
-            return all(p(m) for p in predicates)
+            return op(p(m) for p in predicates)
 
         args.search = max(0, min(2000, args.search)) # clamp from 0-2000
         await self.do_removal(ctx.message, args.search, predicate)
