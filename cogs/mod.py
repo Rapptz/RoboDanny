@@ -157,6 +157,8 @@ class Mod:
         spammers = Counter()
         channel = ctx.message.channel
         prefixes = self.bot.command_prefix
+        if callable(prefixes):
+            prefixes = prefixes(self.bot, ctx.message)
 
         def is_possible_command_invoke(entry):
             valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
