@@ -38,7 +38,15 @@ handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
 log.addHandler(handler)
 
 help_attrs = dict(hidden=True)
-bot = commands.Bot(command_prefix=['?', '!', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
+
+def prefix(bot, msg):
+    if msg.server is None or msg.server.id != '110373943822540800':
+        return ['?', '!', '\N{HEAVY EXCLAMATION MARK SYMBOL}']
+    else:
+        # Discord Bots specific prefix
+        return '>'
+
+bot = commands.Bot(command_prefix=prefix, description=description, pm_help=None, help_attrs=help_attrs)
 
 @bot.event
 async def on_command_error(error, ctx):
