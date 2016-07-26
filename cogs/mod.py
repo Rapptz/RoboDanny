@@ -325,7 +325,7 @@ class Mod:
         else:
             await self.bot.say('\U0001f44c')
 
-    @commands.group(pass_context=True, no_pm=True, aliases=['prune'])
+    @commands.group(pass_context=True, no_pm=True, aliases=['purge'])
     @checks.admin_or_permissions(manage_messages=True)
     async def remove(self, ctx):
         """Removes messages that meet a criteria.
