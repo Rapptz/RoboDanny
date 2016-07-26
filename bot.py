@@ -39,13 +39,7 @@ log.addHandler(handler)
 
 help_attrs = dict(hidden=True)
 
-def prefix(bot, msg):
-    if msg.server is None or msg.server.id != '110373943822540800':
-        return ['?', '!', '\N{HEAVY EXCLAMATION MARK SYMBOL}']
-    else:
-        # Discord Bots specific prefix
-        return '>'
-
+prefix = ['?', '!', '\N{HEAVY EXCLAMATION MARK SYMBOL}']
 bot = commands.Bot(command_prefix=prefix, description=description, pm_help=None, help_attrs=help_attrs)
 
 @bot.event
