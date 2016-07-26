@@ -3,6 +3,7 @@ from .utils import checks, config
 import asyncio
 import discord
 import datetime
+import re
 from collections import Counter
 
 DISCORD_API_ID = '81384788765712384'
@@ -23,6 +24,12 @@ class API:
 
         # channel_id to dict with <name> to <role id> mapping
         self.feeds = config.Config('feeds.json')
+
+        # regex for Pollr format
+        self.pollr = re.compile(r'\*\*(?P<type>.+?)\*\*\s\|\sCase\s(?P<case>\d+)\n' \
+                                r'\*\*User\*\*:\s(?P<user>.+?)\n' \
+                                r'\*\*Reason\*\*:\s(?P<reason>.+?)\n' \
+                                r'\*\*Responsible Moderator\*\*:(?P<mod>.+)')
 
     async def on_member_join(self, member):
         if member.server.id != DISCORD_API_ID:
@@ -312,6 +319,27 @@ class API:
 
         # then make the role unmentionable
         await self.bot.edit_role(server, role, mentionable=False)
+
+    @commands.command(pass_context=True)
+    @is_discord_api()
+    async def log(self, ctx, *, user: str):
+        """Shows mod log entries for a user.
+
+        Only searches the past 300 cases.
+        """
+
+        mod_log = ctx.message.server.get_channel('173201159761297408')
+        entries = []
+        async for m in self.bot.logs_from(mod_log, limit=300):
+            entry = self.pollr.match(m.content)
+            if entry is None:
+                continue
+
+            if user in entry.group('user'):
+                entries.append(m.content)
+
+        fmt = 'Found {} entries:\n{}'
+        await self.bot.say(fmt.format(len(entries), '\n\n'.join(entries)))
 
 def setup(bot):
     bot.add_cog(API(bot))
