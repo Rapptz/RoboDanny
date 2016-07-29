@@ -113,29 +113,42 @@ class Mod:
         await self.config.put('ignored', list(set(ignored))) # make unique
         await self.bot.say('\U0001f44c')
 
-    @commands.command(pass_context=True, no_pm=True)
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     @checks.admin_or_permissions(manage_channels=True)
-    async def unignore(self, ctx, *, channel : discord.Channel = None):
-        """Unignores a specific channel from being processed.
+    async def unignore(self, ctx, *channels: discord.Channel):
+        """Unignores channels from being processed.
 
-        If no channel is specified, it unignores the current channel.
+        If no channels are specified, it unignores the current channel.
 
         To use this command you must have the Manage Channels permission or have the
         Bot Admin role.
         """
 
-        if channel is None:
-            channel = ctx.message.channel
+        if len(channels) == 0:
+            channels = (ctx.message.channel,)
 
         # a set is the proper data type for the ignore list
         # however, JSON only supports arrays and objects not sets.
         ignored = self.config.get('ignored', [])
-        try:
-            ignored.remove(channel.id)
-        except ValueError:
-            await self.bot.say('Channel was not ignored in the first place.')
-        else:
-            await self.bot.say('\U0001f44c')
+        for channel in channels:
+            try:
+                ignored.remove(channel.id)
+            except ValueError:
+                pass
+
+        await self.config.put('ignored', ignored)
+        await self.bot.say('\N{OK HAND SIGN}')
+
+    @unignore.command(name='all', pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_channels=True)
+    async def unignore_all(self, ctx):
+        """Unignores all channels in this server from being processed.
+
+        To use this command you must have the Manage Channels permission or have the
+        Bot Admin role.
+        """
+        channels = [c for c in ctx.message.server.channels if c.type is discord.ChannelType.text]
+        await ctx.invoke(self.unignore, *channels)
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.mod_or_permissions(manage_messages=True)
