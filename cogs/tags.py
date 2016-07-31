@@ -186,7 +186,7 @@ class Tags:
         await self.config.put('generic', db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
 
-    @tag.command(pass_context=True)
+    @tag.command(pass_context=True, ignore_extra=False)
     async def make(self, ctx):
         """Interactive makes a tag for you.
 
@@ -233,6 +233,11 @@ class Tags:
         db[lookup] = TagInfo(name.content, content, name.author.id, location=location)
         await self.config.put(location, db)
         await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
+
+    @make.error
+    async def tag_make_error(self, error, ctx):
+        if type(error) is commands.TooManyArguments:
+            await self.bot.say('Please call just {0.prefix}tag make'.format(ctx))
 
     def generate_stats(self, db, label):
         yield '- Total {} tags: {}'.format(label, len(db))
