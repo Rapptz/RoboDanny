@@ -420,9 +420,9 @@ class Mod:
 
         Allows you to specify more complex prune commands with multiple
         conditions and search criteria. The criteria are passed in the
-        syntax of `--criteria=value` or `--criteria value`. Many criteria
-        support multiple values to indicate 'any' match. A flag does
-        not have a value. If the value has spaces it must be quoted.
+        syntax of `--criteria value`. Most criteria support multiple
+        values to indicate 'any' match. A flag does not have a value.
+        If the value has spaces it must be quoted.
 
         The messages are only deleted if all criteria are met unless
         the `--or` flag is passed.
@@ -435,8 +435,10 @@ class Mod:
           bot       A flag indicating if it's a bot user.
           embeds    A flag indicating if the message has embeds.
           files     A flag indicating if the message has attachments.
-          search    Specifies how many messages to search. Default 100. Max 2000.
+          emoji     A flag indicating if the message has custom emoji.
+          search    How many messages to search. Default 100. Max 2000.
           or        A flag indicating to use logical OR for all criteria.
+          not       A flag indicating to use logical NOT for all criteria.
         """
         parser = Arguments(add_help=False, allow_abbrev=False)
         parser.add_argument('--user', nargs='+')
@@ -444,6 +446,8 @@ class Mod:
         parser.add_argument('--starts', nargs='+')
         parser.add_argument('--ends', nargs='+')
         parser.add_argument('--or', action='store_true', dest='_or')
+        parser.add_argument('--not', action='store_true', dest='_not')
+        parser.add_argument('--emoji', action='store_true')
         parser.add_argument('--bot', action='store_const', const=lambda m: m.author.bot)
         parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
         parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
@@ -464,6 +468,10 @@ class Mod:
 
         if args.files:
             predicates.append(args.files)
+
+        if args.emoji:
+            custom_emoji = re.compile(r'<:(\w+):(\d+)>')
+            predicates.append(lambda m: custom_emoji.search(m.content))
 
         if args.user:
             users = []
@@ -488,7 +496,10 @@ class Mod:
 
         op = all if not args._or else any
         def predicate(m):
-            return op(p(m) for p in predicates)
+            r = op(p(m) for p in predicates)
+            if args._not:
+                return not r
+            return r
 
         args.search = max(0, min(2000, args.search)) # clamp from 0-2000
         await self.do_removal(ctx.message, args.search, predicate)
