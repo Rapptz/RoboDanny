@@ -360,9 +360,11 @@ class Mod:
         reply = await self.bot.say('{} messages(s) were removed.'.format(len(deleted)))
         spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
         stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
-        await self.bot.whisper(stats)
-        await asyncio.sleep(3)
-        await self.bot.delete_message(reply)
+
+        if stats:
+            await self.bot.whisper(stats)
+            await asyncio.sleep(3)
+            await self.bot.delete_message(reply)
 
     @remove.command(pass_context=True)
     async def embeds(self, ctx, search=100):
