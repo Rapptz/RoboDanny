@@ -196,19 +196,21 @@ class Mod:
                     except discord.Forbidden:
                         continue
                     else:
-                        spammers[entry.author.name] += 1
+                        spammers[entry.author.display_name] += 1
                         api_calls += 1
         else:
             predicate = lambda m: m.author == self.bot.user or is_possible_command_invoke(m)
             deleted = await self.bot.purge_from(channel, limit=search, before=ctx.message, check=predicate)
-            spammers = Counter(m.author.name for m in deleted)
+            spammers = Counter(m.author.display_name for m in deleted)
 
-        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
-        spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
-        stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
-        await self.bot.whisper(stats)
-        await asyncio.sleep(3)
-        await self.bot.delete_message(reply)
+        deleted = sum(spammers.values())
+        messages = ['{} message(s) were deleted.'.format(deleted)]
+        if deleted:
+            messages.append('')
+            spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
+            messages.extend(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
+
+        await self.bot.say('\n'.join(messages), delete_after=10)
 
     @commands.command(no_pm=True)
     @checks.admin_or_permissions(kick_members=True)
@@ -357,14 +359,13 @@ class Mod:
     async def do_removal(self, message, limit, predicate):
         deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
         spammers = Counter(m.author.display_name for m in deleted)
-        reply = await self.bot.say('{} messages(s) were removed.'.format(len(deleted)))
-        spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
-        stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
+        messages = ['{} messages(s) were removed.'.format(len(deleted))]
+        if len(deleted):
+            messages.append('')
+            spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
+            messages.extend(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
 
-        if stats:
-            await self.bot.whisper(stats)
-            await asyncio.sleep(3)
-            await self.bot.delete_message(reply)
+        await self.bot.say('\n'.join(messages), delete_after=10)
 
     @remove.command(pass_context=True)
     async def embeds(self, ctx, search=100):
