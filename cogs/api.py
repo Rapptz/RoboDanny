@@ -153,13 +153,16 @@ class API:
 
 
         # first we get the most used users
-        top_five = counter.most_common(5)
-        if top_five:
-            output.append('**Top {} users**:'.format(len(top_five)))
+        top_ten = counter.most_common(10)
+        if top_ten:
+            output.append('**Top {} users**:'.format(len(top_ten)))
 
-            for rank, (user, uses) in enumerate(top_five, 1):
+            for rank, (user, uses) in enumerate(top_ten, 1):
                 member = server.get_member(user)
-                output.append('{}\u20e3 {}: {}'.format(rank, member, uses))
+                if rank != 10:
+                    output.append('{}\u20e3 {}: {}'.format(rank, member, uses))
+                else:
+                    output.append('\N{KEYCAP TEN} {}: {}'.format(member, uses))
 
         await self.bot.say('\n'.join(output))
 
