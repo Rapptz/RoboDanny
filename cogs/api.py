@@ -88,7 +88,7 @@ class API:
             'object': discord.Object,
         }
 
-        base_url = 'http://discordpy.rtfd.io/en/latest/api.html'
+        base_url = 'http://rtfm.discord-py.party/en/latest/api.html'
 
         if obj is None:
             await self.bot.say(base_url)
