@@ -8,9 +8,23 @@ from collections import Counter
 
 DISCORD_API_ID = '81384788765712384'
 USER_BOTS_ROLE = '178558252869484544'
+CONTRIBUTORS_ROLE = '111173097888993280'
 
 def is_discord_api():
     return checks.is_in_servers(DISCORD_API_ID)
+
+def contributor_or_higher():
+    def predicate(ctx):
+        server = ctx.message.server
+        if server is None:
+            return False
+
+        role = discord.utils.find(lambda r: r.id == CONTRIBUTORS_ROLE, server.roles)
+        if role is None:
+            return False
+
+        return ctx.message.author.top_role.position >= role.position
+    return commands.check(predicate)
 
 class API:
     """Discord API exclusive things."""
@@ -325,6 +339,7 @@ class API:
 
     @commands.command(pass_context=True)
     @is_discord_api()
+    @contributor_or_higher()
     async def log(self, ctx, *, user: str):
         """Shows mod log entries for a user.
 
