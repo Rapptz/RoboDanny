@@ -26,7 +26,7 @@ class Config:
 
     def _dump(self):
         with open(self.name, 'w') as f:
-            json.dump(self._db, f, ensure_ascii=True, cls=self.encoder)
+            json.dump(self._db.copy(), f, ensure_ascii=True, cls=self.encoder)
 
     async def save(self):
         await self.loop.run_in_executor(None, self._dump)
