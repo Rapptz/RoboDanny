@@ -104,10 +104,14 @@ def load_credentials():
         return json.load(f)
 
 if __name__ == '__main__':
-    if any('debug' in arg.lower() for arg in sys.argv):
-        bot.command_prefix = '$'
-
     credentials = load_credentials()
+    debug = any('debug' in arg.lower() for arg in sys.argv)
+    if debug:
+        bot.command_prefix = '$'
+        token = credentials.get('debug_token', credentials['token'])
+    else:
+        token = credentials['token']
+
     bot.client_id = credentials['client_id']
     bot.commands_used = Counter()
     bot.carbon_key = credentials['carbon_key']
@@ -118,7 +122,7 @@ if __name__ == '__main__':
         except Exception as e:
             print('Failed to load extension {}\n{}: {}'.format(extension, type(e).__name__, e))
 
-    bot.run(credentials['token'])
+    bot.run(token)
     handlers = log.handlers[:]
     for hdlr in handlers:
         hdlr.close()
