@@ -5,6 +5,9 @@ import re
 import discord
 import asyncio
 import argparse, shlex
+import logging
+
+log = logging.getLogger(__name__)
 
 class Arguments(argparse.ArgumentParser):
     def error(self, message):
@@ -41,6 +44,32 @@ class Mod:
             return False
 
         return True
+
+    async def on_message(self, message):
+        if message.author == self.bot.user or checks.is_owner_check(message):
+            return
+
+        if message.server is None or len(message.mentions) <= 3:
+            return
+
+        counts = self.config.get('mentions', {})
+        settings = counts.get(message.server.id)
+        if settings is None:
+            return
+
+        # check if it meets the thresholds required
+        if len(message.mentions) < settings['count']:
+            return
+
+        if message.channel.id in settings.get('ignored', []):
+            return
+
+        try:
+            await self.bot.ban(message.author)
+        except Exception as e:
+            log.info('Failed to autoban member {0.author} (ID: {0.author.id}) in server {0.server}'.format(message))
+        else:
+            log.info('Member {0.author} (ID: {0.author.id} has been autobanned from server {0.server}'.format(message))
 
     @commands.group(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_channels=True)
@@ -319,6 +348,99 @@ class Mod:
         else:
             await self.config.put('plonks', plonks)
             await self.bot.say('{0.name} has been unbanned from using the bot.'.format(member))
+
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
+    @checks.admin_or_permissions(ban_members=True)
+    async def mentionspam(self, ctx, count: int=None):
+        """Enables auto-banning accounts that spam mentions.
+
+        If a message contains `count` or more mentions then the
+        bot will automatically attempt to auto-ban the member.
+        The `count` must be greater than 3. If the `count` is 0
+        then this is disabled.
+
+        This only applies for user mentions. Everyone or Role
+        mentions are not included.
+
+        To use this command you must have the Ban Members permission
+        or have a Bot Admin role.
+        """
+
+        counts = self.config.get('mentions', {})
+        settings = counts.get(ctx.message.server.id)
+        if count is None:
+            if settings is None:
+                return await self.bot.say('This server has not set up mention spam banning.')
+
+            ignores = ', '.join('<#%s>' % e for e in settings.get('ignore', []))
+            ignores = ignores if ignores else 'None'
+            count = settings['count']
+            return await self.bot.say('- Threshold: %s mentions\n- Ignored Channels: %s' % (count, ignores))
+
+        if count == 0:
+            counts.pop(ctx.message.server.id, None)
+            await self.config.put('mentions', counts)
+            await self.bot.say('Auto-banning members has been disabled.')
+            return
+
+        if count <= 3:
+            await self.bot.say('\N{NO ENTRY SIGN} Auto-ban threshold must be greater than three.')
+            return
+
+        if settings is None:
+            # new entry
+            settings = {
+                'ignore': []
+            }
+
+        settings.update(count=count)
+        counts[ctx.message.server.id] = settings
+        await self.config.put('mentions', counts)
+        await self.bot.say('Now auto-banning members that mention more than %s users.' % count)
+
+    @mentionspam.command(name='ignore', pass_context=True, no_pm=True, aliases=['bypass'])
+    async def mentionspam_ignore(self, ctx, *channels: discord.Channel):
+        """Specifies what channels ignore mentionspam auto-bans.
+
+        If a channel is given then that channel will no longer be protected
+        by auto-banning from spammers.
+        """
+        counts = self.config.get('mentions', {})
+        settings = counts.get(ctx.message.server.id)
+        if settings is None:
+            return await self.bot.say('\N{WARNING SIGN} This server has not configured mentionspam.')
+
+        if len(channels) == 0:
+            return await self.bot.say('Missing channels to ignore.')
+
+        ignores = settings.get('ignore', [])
+        ignores.extend(c.id for c in channels)
+        settings['ignore'] = list(set(ignores)) # make it unique
+        await self.config.put('mentions', counts)
+        await self.bot.say('Mentions are now ignored on %s' % ', '.join('<#%s>' % c.id for c in channels))
+
+    @mentionspam.command(name='protect', pass_context=True, no_pm=True, aliases=['unignore'])
+    async def mentionspam_protect(self, ctx, *channels: discord.Channel):
+        """Specifies what channels to take off the ignore list."""
+
+        counts = self.config.get('mentions', {})
+        settings = counts.get(ctx.message.server.id)
+        if settings is None:
+            return await self.bot.say('\N{WARNING SIGN} This server has not configured mentionspam.')
+
+        if len(channels) == 0:
+            return await self.bot.say('Missing channels to protect.')
+
+        ignores = settings.get('ignore', [])
+        unique = set(channels)
+        for c in unique:
+            try:
+                ignores.remove(c.id)
+            except ValueError:
+                pass
+
+        await self.config.put('mentions', counts)
+        await self.bot.say('Updated mentionspam ignore list.')
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_roles=True)
