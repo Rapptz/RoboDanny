@@ -69,7 +69,9 @@ class Mod:
         except Exception as e:
             log.info('Failed to autoban member {0.author} (ID: {0.author.id}) in server {0.server}'.format(message))
         else:
-            log.info('Member {0.author} (ID: {0.author.id} has been autobanned from server {0.server}'.format(message))
+            fmt = '{0} (ID: {0.id}) has been banned for spamming mentions ({1} mentions).'
+            await self.bot.send_message(message.channel, fmt.format(message.author, len(message.mentions)))
+            log.info('Member {0.author} (ID: {0.author.id}) has been autobanned from server {0.server}'.format(message))
 
     @commands.group(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_channels=True)
