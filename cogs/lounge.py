@@ -73,26 +73,12 @@ class Lounge:
                 return
 
             # output is too big so post it in gist
-            gist = {
-                'description': 'The response for {0.author}\'s compilation.'.format(ctx.message),
-                'public': True,
-                'files': {
-                    'output': {
-                        'content': output
-                    },
-                    'original': {
-                        'content': code.source
-                    }
-                }
-            }
-
-            async with aiohttp.post('https://api.github.com/gists', data=json.dumps(gist)) as gh:
-                if gh.status != 201:
-                    await self.bot.say('Could not create gist.')
+            async with aiohttp.post('http://coliru.stacked-crooked.com/share', data=data) as resp:
+                if resp.status != 200:
+                    await self.bot.say('Could not create coliru shared link')
                 else:
-                    js = await gh.json()
-                    await self.bot.say('Output too big. The content is in: {0[html_url]}'.format(js))
-
+                    shared_id = await resp.text()
+                    await self.bot.say('Output too big. Coliru link: http://coliru.stacked-crooked.com/a/' + shared_id)
 
     @coliru.error
     async def coliru_error(self, error, ctx):
