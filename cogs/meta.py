@@ -57,10 +57,12 @@ class Meta:
             await self.bot.say('Too many characters ({}/15)'.format(len(characters)))
             return
 
+        fmt = '`\\U{0:>08}`: {1} - {2} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{0}>'
+
         def to_string(c):
             digit = format(ord(c), 'x')
             name = unicodedata.name(c, 'Name not found.')
-            return '`0x{0}`: {1} - {2} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{0}>'.format(digit, name, c)
+            return fmt.format(digit, name, c)
 
         await self.bot.say('\n'.join(map(to_string, characters)))
 
