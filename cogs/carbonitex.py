@@ -42,7 +42,7 @@ class Carbonitex:
     async def on_server_join(self, server):
         await self.update()
 
-    async def on_server_leave(self, server):
+    async def on_server_remove(self, server):
         await self.update()
 
     async def on_ready(self):
