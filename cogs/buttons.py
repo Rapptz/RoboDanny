@@ -139,7 +139,14 @@ class Buttons:
         except RuntimeError as e:
             await self.bot.say(str(e))
         else:
-            await self.bot.say(entries[0])
+            next_two = entries[1:3]
+            if next_two:
+                formatted = '\n'.join(map(lambda x: '<%s>' % x, next_two))
+                msg = '{}\n\n**See also:**\n{}'.format(entries[0], formatted)
+            else:
+                msg = entries[0]
+
+            await self.bot.say(msg)
 
 def setup(bot):
     bot.add_cog(Buttons(bot))
