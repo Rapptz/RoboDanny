@@ -7,11 +7,32 @@ import re
 from collections import Counter
 
 DISCORD_API_ID = '81384788765712384'
+DISCORD_BOTS_ID = '110373943822540800'
 USER_BOTS_ROLE = '178558252869484544'
 CONTRIBUTORS_ROLE = '111173097888993280'
 
 def is_discord_api():
     return checks.is_in_servers(DISCORD_API_ID)
+
+def can_run_log():
+    def predicate(ctx):
+        server = ctx.message.server
+        if server is None:
+            return False
+
+        if server.id == DISCORD_BOTS_ID:
+            return ctx.message.author.server_permissions.kick_members
+
+        if server.id != DISCORD_API_ID:
+            return False
+
+        role = discord.utils.find(lambda r: r.id == CONTRIBUTORS_ROLE, server.roles)
+        if role is None:
+            return False
+
+        return ctx.message.author.top_role >= role
+
+    return commands.check(predicate)
 
 def contributor_or_higher():
     def predicate(ctx):
@@ -23,7 +44,7 @@ def contributor_or_higher():
         if role is None:
             return False
 
-        return ctx.message.author.top_role.position >= role.position
+        return ctx.message.author.top_role >= role
     return commands.check(predicate)
 
 class API:
@@ -43,7 +64,7 @@ class API:
         self.pollr = re.compile(r'\*\*(?P<type>.+?)\*\*\s\|\sCase\s(?P<case>\d+)\n' \
                                 r'\*\*User\*\*:\s(?P<user>.+?)\n' \
                                 r'\*\*Reason\*\*:\s(?P<reason>.+?)\n' \
-                                r'\*\*Responsible Moderator\*\*:(?P<mod>.+)')
+                                r'\*\*Responsible Moderator\*\*:\s(?P<mod>.+)')
 
     async def on_member_join(self, member):
         if member.server.id != DISCORD_API_ID:
@@ -338,23 +359,28 @@ class API:
         await self.bot.edit_role(server, role, mentionable=False)
 
     @commands.command(pass_context=True)
-    @is_discord_api()
-    @contributor_or_higher()
+    @can_run_log()
     async def log(self, ctx, *, user: str):
         """Shows mod log entries for a user.
 
-        Only searches the past 300 cases.
+        Only searches the past 1000 cases.
         """
 
-        mod_log = ctx.message.server.get_channel('173201159761297408')
+        server = ctx.message.server
+        if server.id == DISCORD_API_ID:
+            mod_log = server.get_channel('173201159761297408')
+        else:
+            mod_log = server.get_channel('124622509881425920')
+
         entries = []
-        async for m in self.bot.logs_from(mod_log, limit=300):
+        entry_fmt = '**{type} #{case}** {user}\n{mod}: {reason}'
+        async for m in self.bot.logs_from(mod_log, limit=1000):
             entry = self.pollr.match(m.content)
             if entry is None:
                 continue
 
             if user in entry.group('user'):
-                entries.append(m.content)
+                entries.append(entry_fmt.format(**entry.groupdict()))
 
         fmt = 'Found {} entries:\n{}'
         await self.bot.say(fmt.format(len(entries), '\n\n'.join(entries)))
