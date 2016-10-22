@@ -283,8 +283,12 @@ class API:
         feeds = self.feeds.get(channel.id, {})
         feed = feed.lower()
 
+        if len(feeds) == 0:
+            await self.bot.say('This channel has no feeds set up.')
+            return
+
         if feed not in feeds:
-            await self.bot.say('This feed does not exist.')
+            await self.bot.say('This feed does not exist.\nValid feeds: ' + ', '.join(feeds))
             return
 
         role = feeds[feed]
