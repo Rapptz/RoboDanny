@@ -28,6 +28,7 @@ initial_extensions = [
     'cogs.stars',
     'cogs.admin',
     'cogs.buttons',
+    'cogs.pokemon',
 ]
 
 discord_logger = logging.getLogger('discord')
