@@ -162,6 +162,11 @@ class Tags:
         await self.config.put(location, db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
 
+    @create.error
+    async def create_error(self, error, ctx):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self.bot.say('Tag ' + str(error))
+
     @tag.command(pass_context=True)
     async def generic(self, ctx, name : str, *, content : str):
         """Creates a new generic tag owned by you.
@@ -185,6 +190,11 @@ class Tags:
         db[lookup] = TagInfo(name, content, ctx.message.author.id, location='generic')
         await self.config.put('generic', db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
+
+    @generic.error
+    async def generic_error(self, error, ctx):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self.bot.say('Tag ' + str(error))
 
     @tag.command(pass_context=True, ignore_extra=False)
     async def make(self, ctx):
