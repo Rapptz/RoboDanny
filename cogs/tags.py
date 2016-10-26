@@ -1,6 +1,7 @@
 from .utils import config, checks, formats
 from discord.ext import commands
 import json
+import datetime
 import discord.utils
 
 class TagInfo:
@@ -10,6 +11,7 @@ class TagInfo:
         self.owner_id = owner_id
         self.uses = kwargs.pop('uses', 0)
         self.location = kwargs.pop('location')
+        self.created_at = kwargs.pop('created_at', 0.0)
 
     @property
     def is_generic(self):
@@ -25,10 +27,16 @@ class TagInfo:
         except:
             rank = '<Not found>'
 
+        if self.created_at:
+            created_at = format(datetime.datetime.fromtimestamp(self.created_at), '%Y-%m-%d %H:%M UTC')
+        else:
+            created_at = 'Unknown'
+
         data = [
             ('Name', self.name),
             ('Uses', self.uses),
             ('Rank', rank),
+            ('Created At', created_at),
             ('Type', 'Generic' if self.is_generic else 'Server-specific'),
         ]
 
@@ -158,7 +166,9 @@ class Tags:
             await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
             return
 
-        db[lookup] = TagInfo(name, content, ctx.message.author.id, location=location)
+        db[lookup] = TagInfo(name, content, ctx.message.author.id,
+                             location=location,
+                             created_at=datetime.datetime.utcnow().timestamp())
         await self.config.put(location, db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
 
@@ -187,7 +197,9 @@ class Tags:
             await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
             return
 
-        db[lookup] = TagInfo(name, content, ctx.message.author.id, location='generic')
+        db[lookup] = TagInfo(name, content, ctx.message.author.id,
+                             location='generic',
+                             created_at=datetime.datetime.utcnow().timestamp())
         await self.config.put('generic', db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
 
@@ -240,7 +252,9 @@ class Tags:
         else:
             content = self.clean_tag_content(content.content)
 
-        db[lookup] = TagInfo(name.content, content, name.author.id, location=location)
+        db[lookup] = TagInfo(name.content, content, name.author.id,
+                             location=location,
+                             created_at=datetime.datetime.utcnow().timestamp())
         await self.config.put(location, db)
         await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
 
