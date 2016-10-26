@@ -1,4 +1,6 @@
 import json
+import os
+import uuid
 import asyncio
 
 class Config:
@@ -9,6 +11,7 @@ class Config:
         self.object_hook = options.pop('object_hook', None)
         self.encoder = options.pop('encoder', None)
         self.loop = options.pop('loop', asyncio.get_event_loop())
+        self.lock = asyncio.Lock()
         if options.pop('load_later', False):
             self.loop.create_task(self.load())
         else:
@@ -22,14 +25,20 @@ class Config:
             self._db = {}
 
     async def load(self):
-        await self.loop.run_in_executor(None, self.load_from_file)
+        with await self.lock:
+            await self.loop.run_in_executor(None, self.load_from_file)
 
     def _dump(self):
-        with open(self.name, 'w') as f:
-            json.dump(self._db.copy(), f, ensure_ascii=True, cls=self.encoder)
+        temp = '%s-%s.tmp' % (uuid.uuid4(), self.name)
+        with open(temp, 'w', encoding='utf-8') as tmp:
+            json.dump(self._db.copy(), tmp, ensure_ascii=True, cls=self.encoder, separators=(',', ':'))
+
+        # atomically move the file
+        os.replace(temp, self.name)
 
     async def save(self):
-        await self.loop.run_in_executor(None, self._dump)
+        with await self.lock:
+            await self.loop.run_in_executor(None, self._dump)
 
     def get(self, key, *args):
         """Retrieves a config entry."""
@@ -46,10 +55,13 @@ class Config:
         await self.save()
 
     def __contains__(self, item):
-        return self._db.__contains__(item)
+        return item in self._db
+
+    def __getitem__(self, item):
+        return self._db[item]
 
     def __len__(self):
-        return self._db.__len__()
+        return len(self._db)
 
     def all(self):
         return self._db
