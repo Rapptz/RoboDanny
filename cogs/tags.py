@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import datetime
 import discord.utils
+import difflib
 
 class TagInfo:
     def __init__(self, name, content, owner_id, **kwargs):
@@ -70,25 +71,6 @@ class Tags:
         self.config = config.Config('tags.json', encoder=TagEncoder, object_hook=tag_decoder,
                                                  loop=bot.loop, load_later=True)
 
-    def get_tag(self, server, name):
-        # Basically, if we're in a PM then we will use the generic tag database
-        # if we aren't, we will check the server specific tag database.
-        # If we don't have a server specific database, fallback to generic.
-        # If it isn't found, fallback to generic.
-
-        generic = self.config.get('generic', {})
-        if server is None:
-            return generic.get(name)
-
-        db = self.config.get(server.id)
-        if db is None:
-            return generic.get(name)
-
-        entry = db.get(name)
-        if entry is None:
-            return generic.get(name)
-        return entry
-
     def get_database_location(self, message):
         return 'generic' if message.channel.is_private else message.server.id
 
@@ -108,6 +90,20 @@ class Tags:
         generic.update(self.config.get(server.id, {}))
         return generic
 
+    def get_tag(self, server, name):
+        # Basically, if we're in a PM then we will use the generic tag database
+        # if we aren't, we will check the server specific tag database.
+        # If we don't have a server specific database, fallback to generic.
+        # If it isn't found, fallback to generic.
+        all_tags = self.get_possible_tags(server)
+        try:
+            return all_tags[name]
+        except KeyError:
+            possible_matches = difflib.get_close_matches(name, tuple(all_tags.keys()))
+            if not possible_matches:
+                raise RuntimeError('Tag not found.')
+            raise RuntimeError('Tag not found. Did you mean...\n' + '\n'.join(possible_matches))
+
     @commands.group(pass_context=True, invoke_without_command=True)
     async def tag(self, ctx, *, name : str):
         """Allows you to tag text for later retrieval.
@@ -117,10 +113,10 @@ class Tags:
         """
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-        if tag is None:
-            await self.bot.say('Tag not found.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         tag.uses += 1
         await self.bot.say(tag)
@@ -157,8 +153,7 @@ class Tags:
         try:
             self.verify_lookup(lookup)
         except RuntimeError as e:
-            await self.bot.say(e)
-            return
+            return await self.bot.say(e)
 
         location = self.get_database_location(ctx.message)
         db = self.config.get(location, {})
@@ -297,11 +292,10 @@ class Tags:
         content = self.clean_tag_content(content)
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-
-        if tag is None:
-            await self.bot.say('The tag does not exist.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         if tag.owner_id != ctx.message.author.id:
             await self.bot.say('Only the tag owner can edit this tag.')
@@ -323,11 +317,10 @@ class Tags:
         """
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-
-        if tag is None:
-            await self.bot.say('Tag not found.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         if not tag.is_generic:
             can_delete = checks.role_or_permissions(ctx, lambda r: r.name == 'Bot Admin', manage_messages=True)
@@ -354,11 +347,10 @@ class Tags:
 
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-
-        if tag is None:
-            await self.bot.say('Tag not found.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         entries = tag.info_entries(ctx, self.get_possible_tags(server))
         await formats.entry_to_code(self.bot, entries)
