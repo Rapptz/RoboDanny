@@ -36,7 +36,7 @@ class REPL:
             'server': msg.server,
             'channel': msg.channel,
             'author': msg.author,
-            'last': None,
+            '_': None,
         }
 
         if msg.channel.id in self.sessions:
@@ -90,7 +90,7 @@ class REPL:
                 value = stdout.getvalue()
                 if result is not None:
                     fmt = '```py\n{}{}\n```'.format(value, result)
-                    variables['last'] = result
+                    variables['_'] = result
                 elif value:
                     fmt = '```py\n{}\n```'.format(value)
 
