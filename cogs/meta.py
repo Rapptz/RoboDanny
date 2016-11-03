@@ -105,7 +105,7 @@ class Meta:
 
         await self.bot.say(final_url)
 
-    @commands.command(pass_context=True, aliases=['reminder'])
+    @commands.command(pass_context=True, aliases=['reminder', 'remind'])
     async def timer(self, ctx, time : TimeParser, *, message=''):
         """Reminds you of something after a certain amount of time.
 
