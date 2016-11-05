@@ -11,9 +11,13 @@ class StarError(Exception):
 class Stars:
     """A starboard to upvote posts obviously.
 
-    To make use of this feature it is required that Developer Mode
-    is enabled in the setting so you can copy message IDs. To do so,
-    enable it under Settings > Appearance > Developer Mode
+    There are two ways to make use of this feature, the first is
+    via reactions, react to a message with \N{WHITE MEDIUM STAR} and
+    the bot will automatically add (or remove) it to the starboard.
+
+    The second way is via Developer Mode. Enable it under Settings >
+    Appearance > Developer Mode and then you get access to Copy ID
+    and using the star/unstar commands.
     """
 
     def __init__(self, bot):
@@ -158,8 +162,46 @@ class Stars:
             await self.stars.put(guild_id, db)
             return
 
-        await self.bot.edit_message(bot_msg, to_send)
         await self.stars.put(guild_id, db)
+        await self.bot.edit_message(bot_msg, to_send)
+
+    async def unstar_message(self, message, starrer_id, message_id):
+        guild_id = message.server.id
+        db = self.stars.get(guild_id, {})
+        starboard = self.bot.get_channel(db.get('channel'))
+        if starboard is None:
+            raise StarError('\N{WARNING SIGN} Starboard channel not found.')
+
+        stars = db.get(message_id)
+        if stars is None:
+            raise StarError('\N{NO ENTRY SIGN} This message has no stars.')
+
+        starrers = stars[1]
+        try:
+            starrers.remove(starrer_id)
+        except ValueError:
+            raise StarError('\N{NO ENTRY SIGN} You have not starred this message.')
+
+        db[message_id] = stars
+        bot_msg = await self.get_message(starboard, stars[0])
+        if bot_msg is not None:
+            if len(starrers) == 0:
+                # no more stars, so it's gone from the board
+                db.pop(message_id, None)
+                await self.stars.put(guild_id, db)
+                await self.bot.delete_message(bot_msg)
+            else:
+                # if the IDs are the same, then they were probably starred using the reaction interface
+                if message.id != message_id:
+                    msg = await self.get_message(message.channel, message_id)
+                    if msg is None:
+                        raise StarError('\N{BLACK QUESTION MARK ORNAMENT} This message could not be found.')
+                else:
+                    msg = message
+
+                to_send = self.emoji_message(msg, len(starrers))
+                await self.stars.put(guild_id, db)
+                await self.bot.edit_message(bot_msg, to_send)
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
@@ -225,15 +267,16 @@ class Stars:
         event = data.get('t')
         payload = data.get('d')
         if event not in ('MESSAGE_UPDATE', 'MESSAGE_DELETE',
-                         'MESSAGE_REACTION_ADD'):
+                         'MESSAGE_REACTION_ADD', 'MESSAGE_REACTION_REMOVE'):
             return
 
         is_message_delete = event[8] == 'D'
         is_message_update = event[8] == 'U'
         is_reaction = event.endswith('_ADD')
+        is_reaction_remove = event.endswith('_REMOVE')
 
         # make sure the reaction is proper
-        if is_reaction:
+        if is_reaction or is_reaction_remove:
             emoji = payload['emoji']
             if emoji['name'] != '\N{WHITE MEDIUM STAR}':
                 return # not a star reaction
@@ -251,6 +294,16 @@ class Stars:
             message = await self.get_message(channel, payload['message_id'])
             try:
                 await self.star_message(message, payload['user_id'], message.id)
+            except StarError:
+                pass
+            finally:
+                return
+
+        # the same can be said for reaction removal
+        if is_reaction_remove:
+            message = await self.get_message(channel, payload['message_id'])
+            try:
+                await self.unstar_message(message, payload['user_id'], message.id)
             except StarError:
                 pass
             finally:
@@ -317,6 +370,23 @@ class Stars:
     async def star_error(self, error, ctx):
         if type(error) is commands.BadArgument:
             await self.bot.say('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
+
+    @commands.command(pass_context=True, no_pm=True)
+    async def unstar(self, ctx, message: int):
+        """Unstars a message via message ID.
+
+        To unstar a message you should click on the cog
+        on a message and then click "Copy ID". You must have
+        Developer Mode enabled to get that functionality.
+
+        You cannot unstar messages older than 7 days.
+        """
+        try:
+            await self.unstar_message(ctx.message, ctx.message.author.id, str(message))
+        except StarError as e:
+            return await self.bot.say(e)
+        else:
+            await self.bot.delete_message(ctx.message)
 
     @star.command(name='janitor', pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
