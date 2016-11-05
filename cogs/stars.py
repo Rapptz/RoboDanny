@@ -4,6 +4,9 @@ import datetime
 from .utils import checks, config
 import json
 import asyncio
+import logging
+
+log = logging.getLogger(__name__)
 
 class StarError(Exception):
     pass
@@ -290,20 +293,13 @@ class Stars:
 
         # everything past this point is pointless if we're adding a reaction,
         # so let's just see if we can star the message and get it over with.
-        if is_reaction:
+        if is_reaction or is_reaction_remove:
             message = await self.get_message(channel, payload['message_id'])
+            verb = 'star' if is_reaction else 'unstar'
+            coro = getattr(self, '%s_message' % verb)
             try:
-                await self.star_message(message, payload['user_id'], message.id)
-            except StarError:
-                pass
-            finally:
-                return
-
-        # the same can be said for reaction removal
-        if is_reaction_remove:
-            message = await self.get_message(channel, payload['message_id'])
-            try:
-                await self.unstar_message(message, payload['user_id'], message.id)
+                await coro(message, payload['user_id'], message.id)
+                log.info('User ID %s has %sred Message ID %s' % (payload['user_id'], verb, message.id))
             except StarError:
                 pass
             finally:
