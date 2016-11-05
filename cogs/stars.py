@@ -3,6 +3,7 @@ import discord
 import datetime
 from .utils import checks, config
 import json
+import copy
 import asyncio
 import logging
 
@@ -336,9 +337,9 @@ class Stars:
             return
 
 
-        # V O I D W A R R A N T Y
-        new_msg = discord.Message(channel=channel, **payload)
         star_msg = await self.get_message(starboard, stars[0])
+        new_msg = copy.copy(star_msg)
+        new_msg.content = payload['content']
 
         # edit the message with the new info
         try:
