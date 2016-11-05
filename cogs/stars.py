@@ -261,8 +261,12 @@ class Stars:
         try:
             return self._message_cache[mid]
         except KeyError:
-            msg = self._message_cache[mid] = await self.bot.get_message(channel, mid)
-            return msg
+            try:
+                msg = self._message_cache[mid] = await self.bot.get_message(channel, mid)
+            except discord.HTTPException:
+                return None
+            else:
+                return msg
 
     # a custom message events
     async def on_socket_raw_receive(self, data):
