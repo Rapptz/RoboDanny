@@ -5,6 +5,9 @@ from .utils import checks, config
 import json
 import asyncio
 
+class StarError(Exception):
+    pass
+
 class Stars:
     """A starboard to upvote posts obviously.
 
@@ -89,6 +92,75 @@ class Stars:
         fmt = base + ' {2} - {3.timestamp:%Y-%m-%d %H:%M UTC} by {3.author} in {3.channel.mention} (ID: {3.id})'
         return fmt.format(emoji, starrers, content, msg)
 
+    async def star_message(self, message, starrer_id, message_id, *, delete=False):
+        guild_id = message.server.id
+        db = self.stars.get(guild_id, {})
+        starboard = self.bot.get_channel(db.get('channel'))
+        if starboard is None:
+            raise StarError('\N{WARNING SIGN} Starboard channel not found.')
+
+        stars = db.get(message_id, [None, []]) # ew, I know.
+        starrers = stars[1]
+
+        if starrer_id in starrers:
+            raise StarError('\N{NO ENTRY SIGN} You already starred this message.')
+
+        # if the IDs are the same, then they were probably starred using the reaction interface
+        if message.id != message_id:
+            msg = await self.get_message(message.channel, message_id)
+            if msg is None:
+                raise StarError('\N{BLACK QUESTION MARK ORNAMENT} This message could not be found.')
+        else:
+            msg = message
+
+        if starrer_id == msg.author.id:
+            raise StarError('\N{NO ENTRY SIGN} You cannot star your own message.')
+
+        if msg.channel.id == starboard.id:
+            raise StarError('\N{NO ENTRY SIGN} You cannot star messages in the starboard.')
+
+        # check if the message is older than 7 days
+        seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        if msg.timestamp < seven_days_ago:
+            raise StarError('\N{NO ENTRY SIGN} This message is older than 7 days.')
+
+        # at this point we can assume that the user did not star the message
+        # and that it is relatively safe to star
+        to_send = self.emoji_message(msg, len(starrers) + 1)
+        if len(to_send) > 2000:
+            raise StarError('\N{NO ENTRY SIGN} This message is too big to be starred.')
+
+        # try to remove the star message since it's 'spammy'
+        if delete:
+            try:
+                await self.bot.delete_message(message)
+            except:
+                pass
+
+        starrers.append(starrer_id)
+        db[message_id] = stars
+
+        # freshly starred
+        if stars[0] is None:
+            sent = await self.bot.send_message(starboard, to_send)
+            stars[0] = sent.id
+            await self.stars.put(guild_id, db)
+            return
+
+        bot_msg = await self.get_message(starboard, stars[0])
+        if bot_msg is None:
+            await self.bot.say('\N{BLACK QUESTION MARK ORNAMENT} Expected to be {0.mention} but is not.'.format(starboard))
+
+            # remove the entry from the starboard cache since someone deleted it.
+            # i.e. they did a 'clear' on the stars.
+            # they can go through this process again if they *truly* want to star it.
+            db.pop(message_id, None)
+            await self.stars.put(guild_id, db)
+            return
+
+        await self.bot.edit_message(bot_msg, to_send)
+        await self.stars.put(guild_id, db)
+
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
     async def starboard(self, ctx, *, name: str = 'starboard'):
@@ -137,19 +209,13 @@ class Stars:
             await self.bot.say('\N{GLOWING STAR} Starboard created at ' + channel.mention)
 
     async def get_message(self, channel, mid):
-        cached = self._message_cache.get(mid)
-        if cached is not None:
-            return cached
+        try:
+            return self._message_cache[mid]
+        except KeyError:
+            msg = self._message_cache[mid] = await self.bot.get_message(channel, mid)
+            return msg
 
-        before = discord.Object(id=str(int(mid) + 1))
-        async for m in self.bot.logs_from(channel, limit=1, before=before):
-            if m.id != mid:
-                return None
-            self._message_cache[mid] = m
-            return m
-        return None
-
-    # a custom on_message_edit
+    # a custom message events
     async def on_socket_raw_receive(self, data):
         # no binary frames
         if isinstance(data, bytes):
@@ -158,19 +224,37 @@ class Stars:
         data = json.loads(data)
         event = data.get('t')
         payload = data.get('d')
-        if event not in ('MESSAGE_UPDATE', 'MESSAGE_DELETE'):
+        if event not in ('MESSAGE_UPDATE', 'MESSAGE_DELETE',
+                         'MESSAGE_REACTION_ADD'):
             return
 
-        # check if it's _D and not _U
         is_message_delete = event[8] == 'D'
+        is_message_update = event[8] == 'U'
+        is_reaction = event.endswith('_ADD')
 
-        if not is_message_delete and 'payload' not in payload:
+        # make sure the reaction is proper
+        if is_reaction:
+            emoji = payload['emoji']
+            if emoji['name'] != '\N{WHITE MEDIUM STAR}':
+                return # not a star reaction
+        elif is_message_update and 'content' not in payload:
             # embed only edit..
             return
 
         channel = self.bot.get_channel(payload.get('channel_id'))
         if channel is None or channel.is_private:
             return
+
+        # everything past this point is pointless if we're adding a reaction,
+        # so let's just see if we can star the message and get it over with.
+        if is_reaction:
+            message = await self.get_message(channel, payload['message_id'])
+            try:
+                await self.star_message(message, payload['user_id'], message.id)
+            except StarError:
+                pass
+            finally:
+                return
 
         server = channel.server
         db = self.stars.get(server.id)
@@ -224,78 +308,10 @@ class Stars:
         You can only star a message once. You cannot star
         messages older than 7 days.
         """
-
-        starrer = ctx.message.author
-        guild_id = ctx.message.server.id
-        db = self.stars.get(guild_id, {})
-        message = str(message)
-        starboard = self.bot.get_channel(db.get('channel'))
-        if starboard is None:
-            await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
-            return
-
-        stars = db.get(message, [None, []]) # ew, I know.
-        starrers = stars[1]
-
-        if starrer.id in starrers:
-            await self.bot.say('\N{NO ENTRY SIGN} You already starred this message.')
-            return
-
-        msg = await self.get_message(ctx.message.channel, message)
-        if msg is None:
-            await self.bot.say('\N{BLACK QUESTION MARK ORNAMENT} This message could not be found.')
-            return
-
-        if starrer.id == msg.author.id:
-            await self.bot.say('\N{NO ENTRY SIGN} You cannot star your own message.')
-            return
-
-        if msg.channel.id == starboard.id:
-            await self.bot.say('\N{NO ENTRY SIGN} You cannot star messages in the starboard.')
-            return
-
-        # check if the message is older than 7 days
-        seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
-        if msg.timestamp < seven_days_ago:
-            await self.bot.say('\N{NO ENTRY SIGN} This message is older than 7 days.')
-            return
-
-        # at this point we can assume that the user did not star the message
-        # and that it is relatively safe to star
-        to_send = self.emoji_message(msg, len(starrers) + 1)
-        if len(to_send) > 2000:
-            await self.bot.say('\N{NO ENTRY SIGN} This message is too big to be starred.')
-            return
-
-        # try to remove the star message since it's 'spammy'
         try:
-            await self.bot.delete_message(ctx.message)
-        except:
-            pass
-
-        starrers.append(starrer.id)
-        db[message] = stars
-
-        # freshly starred
-        if stars[0] is None:
-            sent = await self.bot.send_message(starboard, to_send)
-            stars[0] = sent.id
-            await self.stars.put(guild_id, db)
-            return
-
-        bot_msg = await self.get_message(starboard, stars[0])
-        if bot_msg is None:
-            await self.bot.say('\N{BLACK QUESTION MARK ORNAMENT} Expected to be {0.mention} but is not.'.format(starboard))
-
-            # remove the entry from the starboard cache since someone deleted it.
-            # i.e. they did a 'clear' on the stars.
-            # they can go through this process again if they *truly* want to star it.
-            db.pop(message, None)
-            await self.stars.put(guild_id, db)
-            return
-
-        await self.bot.edit_message(bot_msg, to_send)
-        await self.stars.put(guild_id, db)
+            await self.star_message(ctx.message, ctx.message.author.id, str(message), delete=True)
+        except StarError as e:
+            await self.bot.say(e)
 
     @star.error
     async def star_error(self, error, ctx):
