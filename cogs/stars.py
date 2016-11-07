@@ -121,7 +121,7 @@ class Stars:
         else:
             msg = message
 
-        if len(msg.content) == 0 or msg.type is not discord.MessageType.default:
+        if (len(msg.content) == 0 and len(msg.attachments) == 0) or msg.type is not discord.MessageType.default:
             raise StarError('\N{NO ENTRY SIGN} This message cannot be starred.')
 
         if starrer_id == msg.author.id:
