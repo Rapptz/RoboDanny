@@ -277,23 +277,17 @@ class Stars:
         data = json.loads(data)
         event = data.get('t')
         payload = data.get('d')
-        if event not in ('MESSAGE_UPDATE', 'MESSAGE_DELETE',
-                         'MESSAGE_REACTION_ADD', 'MESSAGE_REACTION_REMOVE'):
+        if event not in ('MESSAGE_DELETE', 'MESSAGE_REACTION_ADD', 'MESSAGE_REACTION_REMOVE'):
             return
 
         is_message_delete = event[8] == 'D'
-        is_message_update = event[8] == 'U'
         is_reaction = event.endswith('_ADD')
-        is_reaction_remove = event.endswith('_REMOVE')
 
         # make sure the reaction is proper
-        if is_reaction or is_reaction_remove:
+        if not is_message_delete:
             emoji = payload['emoji']
             if emoji['name'] != '\N{WHITE MEDIUM STAR}':
                 return # not a star reaction
-        elif is_message_update and 'content' not in payload:
-            # embed only edit..
-            return
 
         channel = self.bot.get_channel(payload.get('channel_id'))
         if channel is None or channel.is_private:
@@ -301,7 +295,7 @@ class Stars:
 
         # everything past this point is pointless if we're adding a reaction,
         # so let's just see if we can star the message and get it over with.
-        if is_reaction or is_reaction_remove:
+        if not is_message_delete:
             message = await self.get_message(channel, payload['message_id'])
             verb = 'star' if is_reaction else 'unstar'
             coro = getattr(self, '%s_message' % verb)
@@ -319,40 +313,17 @@ class Stars:
             return
 
         starboard = self.bot.get_channel(db.get('channel'))
-        if starboard is None:
+        if starboard is None or channel.id != starboard.id:
             # the starboard might have gotten deleted?
+            # or it might not be a delete worth dealing with
             return
 
+        # see if the message being deleted is in the starboard
         msg_id = payload['id']
-
-        if is_message_delete:
-            if channel.id != starboard.id:
-                return # not a delete we're interested in
-
-            # see if the message being deleted is in the starboard
-            exists = discord.utils.find(lambda k: type(db[k]) is list and db[k][0] == msg_id, db)
-            if exists:
-                db.pop(exists)
-                await self.stars.put(server.id, db)
-
-            return
-
-        # at this point we're in MESSAGE_UPDATE
-        # check if the edited message is even being tracked
-        stars = db.get(msg_id)
-        if stars is None:
-            return
-
-
-        star_msg = await self.get_message(starboard, stars[0])
-        new_msg = copy.copy(star_msg)
-        new_msg.content = payload['content']
-
-        # edit the message with the new info
-        try:
-            await self.bot.edit_message(star_msg, self.emoji_message(new_msg, len(stars[1])))
-        except:
-            pass # the content was probably too big so just ignore this edit.
+        exists = discord.utils.find(lambda k: isinstance(db[k], list) and db[k][0] == msg_id, db)
+        if exists:
+            db.pop(exists)
+            await self.stars.put(server.id, db)
 
     @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     async def star(self, ctx, message: int):
