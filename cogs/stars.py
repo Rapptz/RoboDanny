@@ -213,9 +213,9 @@ class Stars:
                 else:
                     msg = message
 
-                to_send = self.emoji_message(msg, len(starrers))
+                content, _ = self.emoji_message(msg, len(starrers))
                 await self.stars.put(guild_id, db)
-                await self.bot.edit_message(bot_msg, to_send)
+                await self.bot.edit_message(bot_msg, content)
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
