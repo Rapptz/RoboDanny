@@ -81,24 +81,33 @@ class Stars:
             return '\N{SPARKLES}'
 
     def emoji_message(self, msg, starrers):
-        # we should hope that the message length is not too big for this to work.
         emoji = self.star_emoji(starrers)
+        if starrers > 1:
+            base = '%s **%s** Channel: %s, Message ID: %s' % (emoji, starrers, msg.channel.mention, msg.id)
+            return base, None # we do not need to compute the embed here because it's unneeded
+        else:
+            base = '%s Channel: %s, Message ID: %s' % (emoji, msg.channel.mention, msg.id)
+
         content = msg.clean_content
         if msg.attachments:
-            attachments = '(attachment: {[url]})'.format(msg.attachments[0])
+            attachments = '[Attachment]({[url]})'.format(msg.attachments[0])
             if content:
-                content = content + ' ' + attachments
+                content = content + '\n' + attachments
             else:
                 content = attachments
 
-        # <emoji> <star> <content> - <time> by <user> in <channel>
-        if starrers > 1:
-            base = '{0} **{1}**'
-        else:
-            base = '{0}'
+        # build the embed
+        e = discord.Embed()
+        e.description = content
 
-        fmt = base + ' {2} - {3.timestamp:%Y-%m-%d %H:%M UTC} by {3.author} in {3.channel.mention} (ID: {3.id})'
-        return fmt.format(emoji, starrers, content, msg)
+        author = msg.author
+        avatar = author.default_avatar_url if not author.avatar else author.avatar_url
+        e.set_footer(text=author.display_name, icon_url=avatar)
+        e.timestamp = msg.timestamp
+        c = author.colour
+        if c.value:
+            e.colour = c
+        return base, e
 
     async def star_message(self, message, starrer_id, message_id, *, delete=False):
         guild_id = message.server.id
@@ -137,9 +146,7 @@ class Stars:
 
         # at this point we can assume that the user did not star the message
         # and that it is relatively safe to star
-        to_send = self.emoji_message(msg, len(starrers) + 1)
-        if len(to_send) > 2000:
-            raise StarError('\N{NO ENTRY SIGN} This message is too big to be starred.')
+        content, embed = self.emoji_message(msg, len(starrers) + 1)
 
         # try to remove the star message since it's 'spammy'
         if delete:
@@ -153,14 +160,14 @@ class Stars:
 
         # freshly starred
         if stars[0] is None:
-            sent = await self.bot.send_message(starboard, to_send)
+            sent = await self.bot.send_message(starboard, content, embed=embed)
             stars[0] = sent.id
             await self.stars.put(guild_id, db)
             return
 
         bot_msg = await self.get_message(starboard, stars[0])
         if bot_msg is None:
-            await self.bot.say('\N{BLACK QUESTION MARK ORNAMENT} Expected to be {0.mention} but is not.'.format(starboard))
+            await self.bot.say('\N{BLACK QUESTION MARK ORNAMENT} Expected to be in {0.mention} but is not.'.format(starboard))
 
             # remove the entry from the starboard cache since someone deleted it.
             # i.e. they did a 'clear' on the stars.
@@ -170,7 +177,7 @@ class Stars:
             return
 
         await self.stars.put(guild_id, db)
-        await self.bot.edit_message(bot_msg, to_send)
+        await self.bot.edit_message(bot_msg, content)
 
     async def unstar_message(self, message, starrer_id, message_id):
         guild_id = message.server.id
@@ -241,8 +248,8 @@ class Stars:
         args = [server, name]
 
         if my_permissions.manage_roles:
-            mine = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            everyone = discord.PermissionOverwrite(send_messages=False, embed_links=False)
+            mine = discord.PermissionOverwrite(send_messages=True, manage_messages=True, embed_links=True)
+            everyone = discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True)
             args.append((server.me, mine))
             args.append((server.default_role, everyone))
 
@@ -332,6 +339,10 @@ class Stars:
         To star a message you should click on the cog
         on a message and then click "Copy ID". You must have
         Developer Mode enabled to get that functionality.
+
+        It is recommended that you react to a message with
+        '\N{WHITE MEDIUM STAR}' instead since this will
+        make it easier.
 
         You can only star a message once. You cannot star
         messages older than 7 days.
