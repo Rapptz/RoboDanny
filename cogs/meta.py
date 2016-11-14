@@ -275,7 +275,6 @@ class Meta:
     @commands.command()
     async def join(self):
         """Joins a server."""
-        msg = 'It is no longer possible to ask me to join via invite. So use this URL instead.\n\n'
         perms = discord.Permissions.none()
         perms.read_messages = True
         perms.send_messages = True
@@ -286,22 +285,8 @@ class Meta:
         perms.embed_links = True
         perms.read_message_history = True
         perms.attach_files = True
-        await self.bot.say(msg + discord.utils.oauth_url(self.bot.client_id, perms))
-
-    @commands.command(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def leave(self, ctx):
-        """Leaves the server.
-
-        To use this command you must have Manage Server permissions or have
-        the Bot Admin role.
-        """
-        server = ctx.message.server
-        try:
-            await self.bot.leave_server(server)
-        except:
-            await self.bot.say('Could not leave..')
-
+        perms.add_reactions = True
+        await self.bot.say(discord.utils.oauth_url(self.bot.client_id, perms))
 
     @commands.command()
     async def uptime(self):
