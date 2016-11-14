@@ -1,5 +1,5 @@
+import discord
 from discord.ext import commands
-import discord.utils
 from .utils import config, formats
 import json, re
 from collections import Counter
@@ -96,17 +96,19 @@ class ProfileInfo:
         else:
             self.weapon = None
 
-    def __str__(self):
-        output = []
-        output.append('NNID: {0.nnid}'.format(self))
-        output.append('Rank: {0.rank}'.format(self))
-        output.append('Squad: {0.squad}'.format(self))
-        if self.weapon is not None:
-            output.append('Weapon: {0.name} ({0.sub} with {0.special})'.format(self.weapon))
-        else:
-            output.append('Weapon: None')
-        return '\n'.join(output)
+    def embed(self):
+        ret = discord.Embed(title='Profile')
+        ret.add_field(name='NNID', value=str(self.nnid))
+        ret.add_field(name='Rank', value=str(self.rank))
+        ret.add_field(name='Squad', value=str(self.squad))
 
+        if self.weapon is not None:
+            wep = self.weapon
+            ret.add_field(name='Main Weapon', value=wep.name)
+            ret.add_field(name='Sub Weapon', value=wep.sub)
+            ret.add_field(name='Special', value=wep.special)
+
+        return ret
 
 class ProfileEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -154,8 +156,10 @@ class Profile:
                 await self.config.put(member.id, ProfileInfo())
                 await ctx.invoke(self.make)
         else:
-            fmt = 'Profile for **{0.name}#{0.discriminator}**:\n{1}'
-            await self.bot.say(fmt.format(member, profile))
+            e = profile.embed()
+            avatar = member.avatar_url if member.avatar else member.default_avatar_url
+            e.set_author(name=str(member), icon_url=avatar)
+            await self.bot.say(embed=e)
 
     @commands.group(pass_context=True, invoke_without_command=True)
     async def profile(self, ctx, *, member : MemberParser = MyOwnProfile):
