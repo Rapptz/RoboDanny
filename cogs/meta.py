@@ -6,6 +6,7 @@ import os, datetime
 import re, asyncio
 import copy
 import unicodedata
+import psutil
 
 class TimeParser:
     def __init__(self, argument):
@@ -252,16 +253,22 @@ class Meta:
         member = ctx.message.server.me
         await self.say_permissions(member, channel)
 
-    def get_bot_uptime(self):
+    def get_bot_uptime(self, *, brief=False):
         now = datetime.datetime.utcnow()
         delta = now - self.bot.uptime
         hours, remainder = divmod(int(delta.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         days, hours = divmod(hours, 24)
-        if days:
-            fmt = '{d} days, {h} hours, {m} minutes, and {s} seconds'
+
+        if not brief:
+            if days:
+                fmt = '{d} days, {h} hours, {m} minutes, and {s} seconds'
+            else:
+                fmt = '{h} hours, {m} minutes, and {s} seconds'
         else:
-            fmt = '{h} hours, {m} minutes, and {s} seconds'
+            fmt = '{h}h {m}m {s}s'
+            if days:
+                fmt = '{d}d ' + fmt
 
         return fmt.format(d=days, h=hours, m=minutes, s=seconds)
 
@@ -301,17 +308,20 @@ class Meta:
         """Tells you how long the bot has been up for."""
         await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
 
-    @commands.command()
+    @commands.command(aliases=['stats'])
     async def about(self):
         """Tells you information about the bot itself."""
-        revision = os.popen(r'git show -s HEAD --format="%s (%cr)"').read().strip()
-        result = ['**About Me:**']
-        result.append('- Author: Danny#0007 (Discord ID: 80088516616269824)')
-        result.append('- Library: discord.py (Python)')
-        result.append('- Latest Change: {}'.format(revision))
-        result.append('- Uptime: {}'.format(self.get_bot_uptime()))
-        result.append('- Servers: {}'.format(len(self.bot.servers)))
-        result.append('- Commands Run: {}'.format(sum(self.bot.commands_used.values())))
+        revision = os.popen(r'git show -s HEAD~3..HEAD --format="[%h](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"').read().strip()
+        embed = discord.Embed(description='Latest Changes:\n' + revision)
+        embed.title = 'Official Bot Server Invite'
+        embed.url = 'https://discord.gg/0118rJdtd1rVJJfuI'
+
+        try:
+            owner = self._owner
+        except AttributeError:
+            owner = self._owner = await self.bot.get_user_info('80088516616269824')
+
+        embed.set_author(name=str(owner), icon_url=owner.avatar_url)
 
         # statistics
         total_members = sum(len(s.members) for s in self.bot.servers)
@@ -321,12 +331,21 @@ class Meta:
         channel_types = Counter(c.type for c in self.bot.get_all_channels())
         voice = channel_types[discord.ChannelType.voice]
         text = channel_types[discord.ChannelType.text]
-        result.append('- Total Members: {} ({} online)'.format(total_members, total_online))
-        result.append('- Unique Members: {} ({} online)'.format(len(unique_members), unique_online))
-        result.append('- {} text channels, {} voice channels'.format(text, voice))
-        result.append('')
-        result.append('"Official" R. Danny server: https://discord.gg/0118rJdtd1rVJJfuI')
-        await self.bot.say('\n'.join(result))
+
+        members = '%s total\n%s online\n%s unique\n%s unique online' % (total_members, total_online, len(unique_members), unique_online)
+        embed.add_field(name='Members', value=members)
+        embed.add_field(name='Channels', value='{} total\n{} text\n{} voice'.format(text + voice, text, voice))
+        embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
+        embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
+        embed.timestamp = self.bot.uptime
+
+        embed.add_field(name='Servers', value=str(len(self.bot.servers)))
+        embed.add_field(name='Commands Run', value=str(sum(self.bot.commands_used.values())))
+
+        memory_usage = psutil.Process().memory_full_info().uss / 1024**2
+        embed.add_field(name='Memory Usage', value='{:.2f} MiB'.format(memory_usage))
+
+        await self.bot.say(embed=embed)
 
     @commands.command(rest_is_raw=True, hidden=True)
     @checks.is_owner()
