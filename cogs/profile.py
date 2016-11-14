@@ -98,9 +98,13 @@ class ProfileInfo:
 
     def embed(self):
         ret = discord.Embed(title='Profile')
-        ret.add_field(name='NNID', value=str(self.nnid))
-        ret.add_field(name='Rank', value=str(self.rank))
-        ret.add_field(name='Squad', value=str(self.squad))
+        squad = self.squad if self.squad else 'None'
+        nnid = self.nnid if self.nnid else 'None'
+        rank = self.rank if self.rank else 'None'
+
+        ret.add_field(name='NNID', value=nnid)
+        ret.add_field(name='Rank', value=rank)
+        ret.add_field(name='Squad', value=squad)
 
         if self.weapon is not None:
             wep = self.weapon
