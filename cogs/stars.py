@@ -82,11 +82,7 @@ class Stars:
 
     def emoji_message(self, msg, starrers):
         emoji = self.star_emoji(starrers)
-        if starrers > 1:
-            base = '%s **%s** Channel: %s, Message ID: %s' % (emoji, starrers, msg.channel.mention, msg.id)
-            return base, None # we do not need to compute the embed here because it's unneeded
-        else:
-            base = '%s Channel: %s, Message ID: %s' % (emoji, msg.channel.mention, msg.id)
+        base = '%s ID: %s' % (msg.channel.mention, msg.id)
 
         content = msg.clean_content
         if msg.attachments:
@@ -98,7 +94,10 @@ class Stars:
 
         # build the embed
         e = discord.Embed()
-        e.description = content
+        if starrers > 1:
+            e.description = '%s **%s** %s' % (emoji, starrers, content)
+        else:
+            e.description = '%s %s' % (emoji, content)
 
         author = msg.author
         avatar = author.default_avatar_url if not author.avatar else author.avatar_url
@@ -177,7 +176,7 @@ class Stars:
             return
 
         await self.stars.put(guild_id, db)
-        await self.bot.edit_message(bot_msg, content)
+        await self.bot.edit_message(bot_msg, content, embed=embed)
 
     async def unstar_message(self, message, starrer_id, message_id):
         guild_id = message.server.id
@@ -213,9 +212,9 @@ class Stars:
                 else:
                     msg = message
 
-                content, _ = self.emoji_message(msg, len(starrers))
+                content, e = self.emoji_message(msg, len(starrers))
                 await self.stars.put(guild_id, db)
-                await self.bot.edit_message(bot_msg, content)
+                await self.bot.edit_message(bot_msg, content, embed=e)
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
