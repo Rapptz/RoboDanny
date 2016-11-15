@@ -439,6 +439,56 @@ class Stars:
         await self.clean_starboard(guild_id, stars)
         await self.bot.say('\N{PUT LITTER IN ITS PLACE SYMBOL}')
 
+    @star.command(name='update', no_pm=True, pass_context=True, hidden=True)
+    @checks.admin_or_permissions(administrator=True)
+    @commands.cooldown(rate=1, per=5.0*60, type=commands.BucketType.server)
+    async def star_update(self, ctx):
+        """Updates the starboard's content to the latest format.
+
+        If a message referred in the starboard was deleted then
+        the message will be untouched.
+
+        To prevent abuse, only the last 100 messages are updated.
+
+        Warning: This operation takes a long time. As a consequence,
+        only those with Administrator permission can use this command
+        and it has a cooldown of one use per 5 minutes.
+        """
+        guild_id = ctx.message.server.id
+        db = self.stars.get(guild_id, {})
+
+        starboard = self.bot.get_channel(db.get('channel'))
+        if starboard is None:
+            return await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
+
+        reconfigured_cache = {
+            v[0]: (k, v[1]) for k, v in db.items()
+        }
+
+        async for msg in self.bot.logs_from(starboard, limit=100):
+            try:
+                original_id, starrers = reconfigured_cache[msg.id]
+                original_channel = msg.channel_mentions[0]
+            except Exception:
+                continue
+
+            original_message = await self.get_message(original_channel, original_id)
+            if original_message is None:
+                continue
+
+            content, embed = self.emoji_message(original_message, len(starrers))
+            await self.bot.edit_message(msg, content, embed=embed)
+
+        await self.bot.say('\N{BLACK UNIVERSAL RECYCLING SYMBOL}')
+
+    @star_update.error
+    async def star_update_error(self, error, ctx):
+        if isinstance(error, commands.CommandOnCooldown):
+            if checks.is_owner_check(ctx.message):
+                await ctx.invoke(self.star_update)
+            else:
+                await self.bot.say(error)
+
     @star.command(pass_context=True, no_pm=True, name='who')
     async def star_who(self, ctx, message: int):
         """Show who starred a message.
