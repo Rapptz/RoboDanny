@@ -492,7 +492,10 @@ class Stars:
                 continue
 
             content, embed = self.emoji_message(original_message, len(starrers))
-            await self.bot.edit_message(msg, content, embed=embed)
+            try:
+                await self.bot.edit_message(msg, content, embed=embed)
+            except:
+                pass # somehow this failed, so ignore it
 
         await self.bot.say('\N{BLACK UNIVERSAL RECYCLING SYMBOL}')
 
