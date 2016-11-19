@@ -7,6 +7,7 @@ import re, asyncio
 import copy
 import unicodedata
 import psutil
+import inspect
 
 class TimeParser:
     def __init__(self, argument):
@@ -94,16 +95,15 @@ class Meta:
         # since we found the command we're looking for, presumably anyway, let's
         # try to access the code itself
         src = obj.callback.__code__
-
+        lines, firstlineno = inspect.getsourcelines(src)
         if not obj.callback.__module__.startswith('discord'):
             # not a built-in command
             location = os.path.relpath(src.co_filename).replace('\\', '/')
-            final_url = '<{}/blob/master/{}#L{}>'.format(source_url, location, src.co_firstlineno)
         else:
             location = obj.callback.__module__.replace('.', '/') + '.py'
-            base = 'https://github.com/Rapptz/discord.py'
-            final_url = '<{}/blob/master/{}#L{}>'.format(base, location, src.co_firstlineno)
+            source_url = 'https://github.com/Rapptz/discord.py'
 
+        final_url = '<{}/blob/master/{}#L{}-L{}>'.format(source_url, location, firstlineno, firstlineno + len(lines) - 1)
         await self.bot.say(final_url)
 
     @commands.command(pass_context=True, aliases=['reminder', 'remind'])
