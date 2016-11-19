@@ -89,7 +89,7 @@ class Stars:
         else:
             base = '%s %s ID: %s' % (emoji, msg.channel.mention, msg.id)
 
-        content = msg.clean_content
+        content = msg.content
         if msg.attachments:
             attachments = '[Attachment]({[url]})'.format(msg.attachments[0])
             if content:
