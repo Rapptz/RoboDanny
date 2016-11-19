@@ -80,6 +80,23 @@ class Stars:
         else:
             return '\N{SPARKLES}'
 
+    def star_gradient_colour(self, stars):
+        # We define as 13 stars to be 100% of the star gradient (half of the 26 emoji threshold)
+        # So X / 13 will clamp to our percentage,
+        # We start out with 0xfffdf7 for the beginning colour
+        # Gradually evolving into 0xffc20c
+        # rgb values are (255, 253, 247) -> (255, 194, 12)
+        # To create the gradient, we use a linear interpolation formula
+        # Which for reference is X = X_1 * p + X_2 * (1 - p)
+        p = stars / 13
+        if p > 1.0:
+            p = 1.0
+
+        red = 255
+        green = int((194 * p) + (253 * (1 - p)))
+        blue = int((12 * p) + (247 * (1 - p)))
+        return (red << 16) + (green << 8) + blue
+
     def emoji_message(self, msg, starrers):
         emoji = self.star_emoji(starrers)
         # base = '%s ID: %s' % (msg.channel.mention, msg.id)
@@ -103,9 +120,7 @@ class Stars:
         avatar = author.default_avatar_url if not author.avatar else author.avatar_url
         e.set_author(name=author.display_name, icon_url=avatar)
         e.timestamp = msg.timestamp
-        c = author.colour
-        if c.value:
-            e.colour = c
+        e.colour = self.star_gradient_colour(starrers)
         return base, e
 
     async def star_message(self, message, starrer_id, message_id, *, delete=False):
