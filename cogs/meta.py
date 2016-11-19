@@ -296,7 +296,13 @@ class Meta:
     @commands.command(aliases=['stats'])
     async def about(self):
         """Tells you information about the bot itself."""
-        revision = os.popen(r'git show -s HEAD~3..HEAD --format="[%h](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"').read().strip()
+        cmd = r'git show -s HEAD~3..HEAD --format="[{}](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"'
+        if os.name == 'posix':
+            cmd = cmd.format(r'\`%h\`')
+        else:
+            cmd = cmd.format(r'`%h`')
+
+        revision = os.popen(cmd).read().strip()
         embed = discord.Embed(description='Latest Changes:\n' + revision)
         embed.title = 'Official Bot Server Invite'
         embed.url = 'https://discord.gg/0118rJdtd1rVJJfuI'
