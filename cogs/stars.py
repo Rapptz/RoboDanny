@@ -82,7 +82,12 @@ class Stars:
 
     def emoji_message(self, msg, starrers):
         emoji = self.star_emoji(starrers)
-        base = '%s ID: %s' % (msg.channel.mention, msg.id)
+        # base = '%s ID: %s' % (msg.channel.mention, msg.id)
+
+        if starrers > 1:
+            base = '%s **%s** %s ID: %s' % (emoji, starrers, msg.channel.mention, msg.id)
+        else:
+            base = '%s %s ID: %s' % (emoji, msg.channel.mention, msg.id)
 
         content = msg.clean_content
         if msg.attachments:
@@ -93,15 +98,10 @@ class Stars:
                 content = attachments
 
         # build the embed
-        e = discord.Embed()
-        if starrers > 1:
-            e.description = '%s **%s** %s' % (emoji, starrers, content)
-        else:
-            e.description = '%s %s' % (emoji, content)
-
+        e = discord.Embed(description=content)
         author = msg.author
         avatar = author.default_avatar_url if not author.avatar else author.avatar_url
-        e.set_footer(text=author.display_name, icon_url=avatar)
+        e.set_author(name=author.display_name, icon_url=avatar)
         e.timestamp = msg.timestamp
         c = author.colour
         if c.value:
