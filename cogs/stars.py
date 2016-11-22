@@ -350,7 +350,7 @@ class Stars:
     async def star(self, ctx, message: int):
         """Stars a message via message ID.
 
-        To star a message you should click on the cog
+        To star a message you should right click on the
         on a message and then click "Copy ID". You must have
         Developer Mode enabled to get that functionality.
 
@@ -375,7 +375,7 @@ class Stars:
     async def unstar(self, ctx, message: int):
         """Unstars a message via message ID.
 
-        To unstar a message you should click on the cog
+        To unstar a message you should right click on the
         on a message and then click "Copy ID". You must have
         Developer Mode enabled to get that functionality.
 
@@ -507,6 +507,57 @@ class Stars:
             else:
                 await self.bot.say(error)
 
+    @star.command(name='show', no_pm=True, pass_context=True)
+    @commands.cooldown(rate=1, per=10.0, type=commands.BucketType.user)
+    async def star_show(self, ctx, message: int):
+        """Shows a starred via message ID.
+
+        To get the ID of a message you should right click on the
+        message and then click "Copy ID". You must have
+        Developer Mode enabled to get that functionality.
+
+        You can only use this command once per 10 seconds.
+        """
+
+        guild_id = ctx.message.server.id
+        db = self.stars.get(guild_id, {})
+        message = str(message)
+        starboard = self.bot.get_channel(db.get('channel'))
+
+        if starboard is None:
+            return await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
+
+        try:
+            entry = db[message]
+        except KeyError:
+            return await self.bot.say('This message has not been starred.')
+
+        # Unfortunately, we don't store the channel_id internally, so this
+        # requires an extra lookup to parse the channel mentions to get the
+        # original channel. A consequence of mediocre design I suppose.
+        bot_message = await self.get_message(starboard, entry[0])
+        if bot_message is None:
+            return await self.bot.say('Somehow referring to a deleted message in the starboard?')
+
+        try:
+            original_channel = bot_message.channel_mentions[0]
+            msg = await self.get_message(original_channel, message)
+        except Exception as e:
+            return await self.bot.say('An error occurred while fetching message.')
+
+        content, embed = self.emoji_message(msg, len(entry[1]))
+        await self.bot.say(content, embed=embed)
+
+    @star_show.error
+    async def star_show_error(self, error, ctx):
+        if isinstance(error, commands.CommandOnCooldown):
+            if checks.is_owner_check(ctx.message):
+                await ctx.invoke(self.star_show)
+            else:
+                await self.bot.say(error)
+        elif isinstance(error, commands.BadArgument):
+            await self.bot.say('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
+
     @star.command(pass_context=True, no_pm=True, name='who')
     async def star_who(self, ctx, message: int):
         """Show who starred a message.
@@ -524,7 +575,7 @@ class Stars:
             starrers = db[message][1]
         else:
             # this one requires extra look ups...
-            found = discord.utils.find(lambda v: type(v) is list and v[0] == message, db.values())
+            found = discord.utils.find(lambda v: isinstance(v, list) and v[0] == message, db.values())
             if found is None:
                 await self.bot.say('No one did.')
                 return
