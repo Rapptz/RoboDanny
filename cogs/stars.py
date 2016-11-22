@@ -6,6 +6,7 @@ import json
 import copy
 import asyncio
 import logging
+from collections import Counter
 
 log = logging.getLogger(__name__)
 
@@ -583,6 +584,35 @@ class Stars:
 
         members = filter(None, map(server.get_member, starrers))
         await self.bot.say(', '.join(map(str, members)))
+
+    @star.command(pass_context=True, no_pm=True, name='stats')
+    async def star_stats(self, ctx):
+        """Shows statistics on the starboard usage."""
+
+        guild_id = ctx.message.server.id
+        db = self.stars.get(guild_id, {})
+        starboard = self.bot.get_channel(db.get('channel'))
+
+        if starboard is None:
+            return await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
+
+        e = discord.Embed()
+        e.timestamp = starboard.created_at
+        e.set_footer(text='Adding stars since')
+
+        all_starrers = [(v[1], k) for k, v in db.items() if isinstance(v, list)]
+        e.add_field(name='Messages Starred', value=str(len(all_starrers)))
+        e.add_field(name='Stars Given', value=str(sum(len(x) for x, _ in all_starrers)))
+
+        most_stars = max(all_starrers, key=lambda t: len(t[0]))
+        e.add_field(name='Most Stars Given', value='{} stars\nID: {}'.format(len(most_stars[0]), most_stars[1]))
+
+        c = Counter(author for x, _ in all_starrers for author in x)
+        common = c.most_common(3)
+        e.add_field(name='\U0001f947 Starrer', value='<@!%s> with %s stars' % common[0])
+        e.add_field(name='\U0001f948 Starrer', value='<@!%s> with %s stars' % common[1])
+        e.add_field(name='\U0001f949 Starrer', value='<@!%s> with %s stars' % common[2])
+        await self.bot.say(embed=e)
 
 def setup(bot):
     bot.add_cog(Stars(bot))
