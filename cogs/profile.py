@@ -75,13 +75,33 @@ class MemberParser:
 
 
 class Weapon:
+    __slots__ = ('sub', 'name', 'special')
+
+    cache = {}
+
     def __init__(self, **kwargs):
-        self.__dict__ = kwargs
+        for attr in self.__slots__:
+            try:
+                value = kwargs[attr]
+            except KeyError:
+                value = None
+            finally:
+                setattr(self, attr, value)
+
+    @classmethod
+    def from_cache(cls, *, name, **kwargs):
+        try:
+            return cls.cache[name]
+        except KeyError:
+            cls.cache[name] = weapon = cls(name=name, **kwargs)
+            return weapon
 
     def __str__(self):
         return self.name
 
 class ProfileInfo:
+    __slots__ = ('nnid', 'squad', 'weapon', 'rank')
+
     def __init__(self, **kwargs):
         self.nnid = kwargs.get('nnid')
         self.rank = kwargs.get('rank')
@@ -90,7 +110,7 @@ class ProfileInfo:
         if 'weapon' in kwargs:
             weapon = kwargs['weapon']
             if weapon is not None:
-                self.weapon = Weapon(**weapon)
+                self.weapon = Weapon.from_cache(**weapon)
             else:
                 self.weapon = None
         else:
@@ -117,11 +137,14 @@ class ProfileInfo:
 class ProfileEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ProfileInfo):
-            payload = obj.__dict__.copy()
+            payload = {
+                attr: getattr(obj, attr)
+                for attr in ProfileInfo.__slots__
+            }
             payload['__profile__'] = True
             return payload
         if isinstance(obj, Weapon):
-            return obj.__dict__
+            return { attr: getattr(obj, attr) for attr in Weapon.__slots__ }
         return json.JSONEncoder.default(self, obj)
 
 def profile_decoder(obj):
@@ -261,7 +284,7 @@ class Profile:
             await self.bot.say('No weapon found that matches "{}"'.format(weapon))
             return
         elif len(result) == 1:
-            await self.edit_field('weapon', ctx, Weapon(**result[0]))
+            await self.edit_field('weapon', ctx, Weapon.from_cache(**result[0]))
             return True
 
         def weapon_entry(tup):
@@ -274,7 +297,7 @@ class Profile:
         except commands.CommandError as e:
             await self.bot.say(e)
         else:
-            await self.edit_field('weapon', ctx, Weapon(**match))
+            await self.edit_field('weapon', ctx, Weapon.from_cache(**match))
             return True
 
     @profile.command()
@@ -295,7 +318,7 @@ class Profile:
             entries.append((rank, format(value, '.2%')))
 
         weapons = Counter(profile.weapon.name for profile in profiles if profile.weapon is not None)
-        entries.append(('Players with Weapons', sum(weapons.values())))
+        entries.append(('Players with Weapon.from_caches', sum(weapons.values())))
         top_cut = weapons.most_common(3)
         for weapon, count in top_cut:
             entries.append((weapon, count))

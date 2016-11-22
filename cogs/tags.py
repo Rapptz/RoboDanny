@@ -6,6 +6,8 @@ import discord.utils
 import difflib
 
 class TagInfo:
+    __slots__ = ('name', 'content', 'owner_id', 'uses', 'location', 'created_at')
+
     def __init__(self, name, content, owner_id, **kwargs):
         self.name = name
         self.content = content
@@ -53,7 +55,10 @@ class TagInfo:
 class TagEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, TagInfo):
-            payload = obj.__dict__.copy()
+            payload = {
+                attr: getattr(obj, attr)
+                for attr in TagInfo.__slots__
+            }
             payload['__tag__'] = True
             return payload
         return json.JSONEncoder.default(self, obj)
