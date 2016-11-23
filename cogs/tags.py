@@ -2,7 +2,7 @@ from .utils import config, checks, formats
 from discord.ext import commands
 import json
 import datetime
-import discord.utils
+import discord
 import difflib
 
 class TagInfo:
@@ -23,33 +23,23 @@ class TagInfo:
     def __str__(self):
         return self.content
 
-    def info_entries(self, ctx, db):
+    def embed(self, ctx, db):
+        e = discord.Embed(title=self.name)
+
+        e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
+        e.add_field(name='Uses', value=self.uses)
+
         popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
         try:
-            rank = popular.index(self) + 1
+            e.add_field(name='Rank', value=popular.index(self) + 1)
         except:
-            rank = '<Not found>'
+            e.add_field(name='Rank', value='Unknown')
 
         if self.created_at:
-            created_at = format(datetime.datetime.fromtimestamp(self.created_at), '%Y-%m-%d %H:%M UTC')
-        else:
-            created_at = 'Unknown'
+            e.timestamp = datetime.datetime.fromtimestamp(self.created_at)
 
-        data = [
-            ('Name', self.name),
-            ('Uses', self.uses),
-            ('Rank', rank),
-            ('Created At', created_at),
-            ('Type', 'Generic' if self.is_generic else 'Server-specific'),
-        ]
-
-        # we can make the assumption that if the tag requested is a server specific tag
-        # then the server the message belongs to will be the server of the server specific tag.
-        members = ctx.bot.get_all_members() if self.is_generic else ctx.message.server.members
-        owner = discord.utils.get(members, id=self.owner_id)
-        data.append(('Owner', owner.name if owner is not None else '<Not Found>'))
-        data.append(('Owner ID', self.owner_id))
-        return data
+        e.set_footer(text='Generic' if self.is_generic else 'Server-specific')
+        return e
 
 
 class TagEncoder(json.JSONEncoder):
@@ -343,7 +333,7 @@ class Tags:
         await self.config.put(tag.location, db)
         await self.bot.say('Tag successfully removed.')
 
-    @tag.command(pass_context=True)
+    @tag.command(pass_context=True, aliases=['owner'])
     async def info(self, ctx, *, name : str):
         """Retrieves info about a tag.
 
@@ -357,8 +347,8 @@ class Tags:
         except RuntimeError as e:
             return await self.bot.say(e)
 
-        entries = tag.info_entries(ctx, self.get_possible_tags(server))
-        await formats.entry_to_code(self.bot, entries)
+        embed = tag.embed(ctx, self.get_possible_tags(server))
+        await self.bot.say(embed=embed)
 
     @info.error
     async def info_error(self, error, ctx):
