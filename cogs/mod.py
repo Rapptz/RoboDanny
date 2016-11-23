@@ -235,7 +235,7 @@ class Mod:
             spammers = Counter(m.author.display_name for m in deleted)
 
         deleted = sum(spammers.values())
-        messages = ['{} message(s) were deleted.'.format(deleted)]
+        messages = ['%s %s removed.' % (deleted, 'message was' if deleted == 1 else 'messages were')]
         if deleted:
             messages.append('')
             spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
@@ -483,7 +483,7 @@ class Mod:
     async def do_removal(self, message, limit, predicate):
         deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
         spammers = Counter(m.author.display_name for m in deleted)
-        messages = ['{} messages(s) were removed.'.format(len(deleted))]
+        messages = ['%s %s removed.' % (len(deleted), 'message was' if len(deleted) == 1 else 'messages were')]
         if len(deleted):
             messages.append('')
             spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
