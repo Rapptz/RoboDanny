@@ -10,8 +10,18 @@ from collections import Counter
 
 log = logging.getLogger(__name__)
 
-class StarError(Exception):
+class StarError(commands.CommandError):
     pass
+
+def requires_starboard():
+    def predicate(ctx):
+        ctx.guild_id = ctx.message.server.id
+        ctx.db = ctx.cog.stars.get(ctx.guild_id, {})
+        ctx.starboard = ctx.bot.get_channel(ctx.db.get('channel'))
+        if ctx.starboard is None:
+            raise StarError('\N{WARNING SIGN} Starboard channel not found.')
+        return True
+    return commands.check(predicate)
 
 class Stars:
     """A starboard to upvote posts obviously.
@@ -50,16 +60,14 @@ class Stars:
             except:
                 pass
 
-    async def clean_starboard(self, guild_id, stars):
-        db = self.stars.get(guild_id, {}).copy()
-        starboard = self.bot.get_channel(db['channel'])
+    async def clean_starboard(self, ctx, stars):
         dead_messages = {
             data[0]
-            for _, data in db.items()
-            if type(data) is list and len(data[1]) <= stars and data[0] is not None
+            for _, data in ctx.db.items()
+            if isinstance(data, list) and len(data[1]) <= stars and data[0] is not None
         }
 
-        await self.bot.purge_from(starboard, limit=1000, check=lambda m: m.id in dead_messages)
+        await self.bot.purge_from(ctx.starboard, limit=1000, check=lambda m: m.id in dead_messages)
 
     async def janitor(self, guild_id):
         try:
@@ -290,6 +298,10 @@ class Stars:
             else:
                 return msg
 
+    async def on_command_error(self, error, ctx):
+        if isinstance(error, StarError):
+            await self.bot.send_message(ctx.message.channel, error)
+
     # a custom message events
     async def on_socket_raw_receive(self, data):
         # no binary frames
@@ -391,6 +403,7 @@ class Stars:
 
     @star.command(name='janitor', pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
+    @requires_starboard()
     async def star_janitor(self, ctx, minutes: float = 0.0):
         """Set the starboard's janitor clean rate.
 
@@ -403,34 +416,27 @@ class Stars:
         This command requires the Administrator permission or the Bot
         Admin role.
         """
-
-        guild_id = ctx.message.server.id
-        db = self.stars.get(guild_id, {})
-
-        if db.get('channel') is None:
-            await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
-            return
-
         def cleanup_task():
-            task = self.janitor_tasks.pop(guild_id)
+            task = self.janitor_tasks.pop(ctx.guild_id)
             task.cancel()
-            db.pop('janitor', None)
+            ctx.db.pop('janitor', None)
 
         if minutes <= 0.0:
             cleanup_task()
             await self.bot.say('\N{SQUARED OK} No more cleaning up.')
         else:
-            if 'janitor' in db:
+            if 'janitor' in ctx.db:
                 cleanup_task()
 
-            db['janitor'] = minutes * 60.0
-            self.janitor_tasks[guild_id] = self.bot.loop.create_task(self.janitor(guild_id))
+            ctx.db['janitor'] = minutes * 60.0
+            self.janitor_tasks[ctx.guild_id] = self.bot.loop.create_task(self.janitor(ctx.guild_id))
             await self.bot.say('Remember to \N{PUT LITTER IN ITS PLACE SYMBOL}')
 
-        await self.stars.put(guild_id, db)
+        await self.stars.put(ctx.guild_id, ctx.db)
 
     @star.command(name='clean', pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_messages=True)
+    @requires_starboard()
     async def star_clean(self, ctx, stars:int = 1):
         """Cleans the starboard
 
@@ -444,19 +450,13 @@ class Stars:
         Bot Admin role.
         """
 
-        guild_id = ctx.message.server.id
-        db = self.stars.get(guild_id, {})
         stars = 1 if stars < 0 else stars
-
-        if db.get('channel') is None:
-            await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
-            return
-
-        await self.clean_starboard(guild_id, stars)
+        await self.clean_starboard(ctx, stars)
         await self.bot.say('\N{PUT LITTER IN ITS PLACE SYMBOL}')
 
     @star.command(name='update', no_pm=True, pass_context=True, hidden=True)
     @checks.admin_or_permissions(administrator=True)
+    @requires_starboard()
     @commands.cooldown(rate=1, per=5.0*60, type=commands.BucketType.server)
     async def star_update(self, ctx):
         """Updates the starboard's content to the latest format.
@@ -470,18 +470,11 @@ class Stars:
         only those with Administrator permission can use this command
         and it has a cooldown of one use per 5 minutes.
         """
-        guild_id = ctx.message.server.id
-        db = self.stars.get(guild_id, {})
-
-        starboard = self.bot.get_channel(db.get('channel'))
-        if starboard is None:
-            return await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
-
         reconfigured_cache = {
-            v[0]: (k, v[1]) for k, v in db.items()
+            v[0]: (k, v[1]) for k, v in ctx.db.items()
         }
 
-        async for msg in self.bot.logs_from(starboard, limit=100):
+        async for msg in self.bot.logs_from(ctx.starboard, limit=100):
             try:
                 original_id, starrers = reconfigured_cache[msg.id]
                 original_channel = msg.channel_mentions[0]
@@ -510,6 +503,7 @@ class Stars:
 
     @star.command(name='show', no_pm=True, pass_context=True)
     @commands.cooldown(rate=1, per=10.0, type=commands.BucketType.user)
+    @requires_starboard()
     async def star_show(self, ctx, message: int):
         """Shows a starred via message ID.
 
@@ -519,24 +513,17 @@ class Stars:
 
         You can only use this command once per 10 seconds.
         """
-
-        guild_id = ctx.message.server.id
-        db = self.stars.get(guild_id, {})
         message = str(message)
-        starboard = self.bot.get_channel(db.get('channel'))
-
-        if starboard is None:
-            return await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
 
         try:
-            entry = db[message]
+            entry = ctx.db[message]
         except KeyError:
             return await self.bot.say('This message has not been starred.')
 
         # Unfortunately, we don't store the channel_id internally, so this
         # requires an extra lookup to parse the channel mentions to get the
         # original channel. A consequence of mediocre design I suppose.
-        bot_message = await self.get_message(starboard, entry[0])
+        bot_message = await self.get_message(ctx.starboard, entry[0])
         if bot_message is None:
             return await self.bot.say('Somehow referring to a deleted message in the starboard?')
 
@@ -586,21 +573,14 @@ class Stars:
         await self.bot.say(', '.join(map(str, members)))
 
     @star.command(pass_context=True, no_pm=True, name='stats')
+    @requires_starboard()
     async def star_stats(self, ctx):
         """Shows statistics on the starboard usage."""
-
-        guild_id = ctx.message.server.id
-        db = self.stars.get(guild_id, {})
-        starboard = self.bot.get_channel(db.get('channel'))
-
-        if starboard is None:
-            return await self.bot.say('\N{WARNING SIGN} Starboard channel not found.')
-
         e = discord.Embed()
-        e.timestamp = starboard.created_at
+        e.timestamp = ctx.starboard.created_at
         e.set_footer(text='Adding stars since')
 
-        all_starrers = [(v[1], k) for k, v in db.items() if isinstance(v, list)]
+        all_starrers = [(v[1], k) for k, v in ctx.db.items() if isinstance(v, list)]
         e.add_field(name='Messages Starred', value=str(len(all_starrers)))
         e.add_field(name='Stars Given', value=str(sum(len(x) for x, _ in all_starrers)))
 
