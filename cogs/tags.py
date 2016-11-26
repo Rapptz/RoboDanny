@@ -253,27 +253,40 @@ class Tags:
         if type(error) is commands.TooManyArguments:
             await self.bot.say('Please call just {0.prefix}tag make'.format(ctx))
 
-    def generate_stats(self, db, label):
-        yield '- Total {} tags: {}'.format(label, len(db))
-        if db:
-            popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
-            total_uses = sum(t.uses for t in popular)
-            yield '- Total {} tag uses: {}'.format(label, total_uses)
-            for i, tag in enumerate(popular[:3], 1):
-                yield '- Rank {0} tag: {1.name} with {1.uses} uses'.format(i, tag)
+    def top_three_tags(self, db):
+        emoji = 129351 # ord(':first_place:')
+        popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
+        for tag in popular[:3]:
+            yield (chr(emoji), tag)
+            emoji += 1
 
     @tag.command(pass_context=True)
     async def stats(self, ctx):
         """Gives stats about the tag database."""
-        result = []
         server = ctx.message.server
         generic = self.config.get('generic', {})
-        result.extend(self.generate_stats(generic, 'Generic'))
+        e = discord.Embed()
+        e.add_field(name='Generic', value='%s tags\n%s uses' % (len(generic), sum(t.uses for t in generic.values())))
+
+        total_tags = sum(len(c) for c in self.config.all().values())
+        total_uses = sum(sum(t.uses for t in c.values()) for c in self.config.all().values())
+        e.add_field(name='Global', value='%s tags\n%s uses' % (total_tags, total_uses))
 
         if server is not None:
-            result.extend(self.generate_stats(self.config.get(server.id, {}), 'Server Specific'))
+            db = self.config.get(server.id, {})
+            e.add_field(name='Server-Specific', value='%s tags\n%s uses' % (len(db), sum(t.uses for t in db.values())))
+        else:
+            db = {}
+            e.add_field(name='Server-Specific', value='No Info')
 
-        await self.bot.say('\n'.join(result))
+        fmt = '{0.name} ({0.uses} uses)'
+        for emoji, tag in self.top_three_tags(generic):
+            e.add_field(name=emoji + ' Generic Tag', value=fmt.format(tag))
+
+        for emoji, tag in self.top_three_tags(db):
+            e.add_field(name=emoji + ' Server Tag', value=fmt.format(tag))
+
+        await self.bot.say(embed=e)
 
     @tag.command(pass_context=True)
     async def edit(self, ctx, name : str, *, content : str):
