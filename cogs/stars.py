@@ -132,7 +132,7 @@ class Stars:
         e.colour = self.star_gradient_colour(starrers)
         return base, e
 
-    async def star_message(self, message, starrer_id, message_id, *, delete=False):
+    async def star_message(self, message, starrer_id, message_id, *, reaction=True):
         guild_id = message.server.id
         db = self.stars.get(guild_id, {})
         starboard = self.bot.get_channel(db.get('channel'))
@@ -153,14 +153,36 @@ class Stars:
         else:
             msg = message
 
+        if msg.channel.id == starboard.id:
+            if not reaction:
+                raise StarError('\N{NO ENTRY SIGN} Cannot star messages in the starboard without reacting.')
+
+            # If we star a message in the starboard then we can do a reverse lookup to check
+            # what message to star in reality.
+
+            # first remove the reaction if applicable:
+            try:
+                await self.bot.http.remove_reaction(msg.id, msg.channel.id, '\N{WHITE MEDIUM STAR}', starrer_id)
+            except:
+                pass # oh well
+
+            # do the reverse lookup and update the references
+            tup = discord.utils.find(lambda t: isinstance(t[1], list) and t[1][0] == message_id, db.items())
+            if tup is None:
+                raise StarError('\N{NO ENTRY SIGN} Could not find this message ID in the starboard.')
+
+            stars = tup[1]
+            msg = await self.get_message(msg.channel_mentions[0], tup[0])
+
+            # god bless recursion
+            return await self.star_message(msg, starrer_id, msg.id, reaction=True)
+
         if (len(msg.content) == 0 and len(msg.attachments) == 0) or msg.type is not discord.MessageType.default:
             raise StarError('\N{NO ENTRY SIGN} This message cannot be starred.')
 
         if starrer_id == msg.author.id:
             raise StarError('\N{NO ENTRY SIGN} You cannot star your own message.')
 
-        if msg.channel.id == starboard.id:
-            raise StarError('\N{NO ENTRY SIGN} You cannot star messages in the starboard.')
 
         # check if the message is older than 7 days
         seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
@@ -172,7 +194,7 @@ class Stars:
         content, embed = self.emoji_message(msg, len(starrers) + 1)
 
         # try to remove the star message since it's 'spammy'
-        if delete:
+        if not reaction:
             try:
                 await self.bot.delete_message(message)
             except:
@@ -375,7 +397,7 @@ class Stars:
         messages older than 7 days.
         """
         try:
-            await self.star_message(ctx.message, ctx.message.author.id, str(message), delete=True)
+            await self.star_message(ctx.message, ctx.message.author.id, str(message), reaction=False)
         except StarError as e:
             await self.bot.say(e)
 
