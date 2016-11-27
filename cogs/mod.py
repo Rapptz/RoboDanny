@@ -338,6 +338,19 @@ class Mod:
 
     @commands.command(no_pm=True, pass_context=True)
     @checks.admin_or_permissions(manage_server=True)
+    async def plonks(self, ctx):
+        """Shows members banned from the bot."""
+        plonks = self.config.get('plonks', {})
+        guild = ctx.message.server
+        db = plonks.get(guild.id, [])
+        members = ', '.join(map(str, filter(None, map(guild.get_member, db))))
+        if members:
+            await self.bot.say(members)
+        else:
+            await self.bot.say('No members are banned in this server.')
+
+    @commands.command(no_pm=True, pass_context=True)
+    @checks.admin_or_permissions(manage_server=True)
     async def unplonk(self, ctx, *, member: discord.Member):
         """Unbans a user from using the bot.
 
