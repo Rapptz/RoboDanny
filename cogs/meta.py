@@ -306,6 +306,7 @@ class Meta:
         embed = discord.Embed(description='Latest Changes:\n' + revision)
         embed.title = 'Official Bot Server Invite'
         embed.url = 'https://discord.gg/0118rJdtd1rVJJfuI'
+        embed.colour = 0x738bd7 # blurple
 
         try:
             owner = self._owner
