@@ -171,8 +171,9 @@ class Stars:
             if tup is None:
                 raise StarError('\N{NO ENTRY SIGN} Could not find this message ID in the starboard.')
 
-            stars = tup[1]
             msg = await self.get_message(msg.channel_mentions[0], tup[0])
+            if msg is None:
+                raise StarError('\N{BLACK QUESTION MARK ORNAMENT} This message could not be found.')
 
             # god bless recursion
             return await self.star_message(msg, starrer_id, msg.id, reaction=True)
