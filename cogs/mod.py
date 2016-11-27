@@ -29,8 +29,12 @@ class Mod:
             return True
 
         # user is bot banned
-        if msg.author.id in self.config.get('plonks', []):
-            return False
+        if msg.server:
+            guild_id = msg.server.id
+            db = self.config.get('plonks', {}).get(guild_id, [])
+            bypass_ignore = msg.author.server_permissions.manage_server
+            if not bypass_ignore and msg.author.id in db:
+                return False
 
         # check if the channel is ignored
         # but first, resolve their permissions
@@ -306,50 +310,53 @@ class Mod:
         else:
             await self.bot.say('\U0001f44c')
 
-    @commands.command(no_pm=True)
+    @commands.command(no_pm=True, pass_context=True)
     @checks.admin_or_permissions(manage_server=True)
-    async def plonk(self, *, member : discord.Member):
+    async def plonk(self, ctx, *, member: discord.Member):
         """Bans a user from using the bot.
 
-        Note that this ban is **global**. So they are banned from
-        all servers that they access the bot with. So use this with
-        caution.
-
-        There is no way to bypass a plonk regardless of role or permissions.
-        The only person who cannot be plonked is the bot creator. So this
-        must be used with caution.
+        This bans a person from using the bot in the current server.
+        There is no concept of a global ban. This ban can be bypassed
+        by having the Manage Server permission.
 
         To use this command you must have the Manage Server permission
         or have a Bot Admin role.
         """
 
-        plonks = self.config.get('plonks', [])
-        if member.id in plonks:
-            await self.bot.say('That user is already bot banned.')
+        plonks = self.config.get('plonks', {})
+        guild_id = ctx.message.server.id
+        db = plonks.get(guild_id, [])
+
+        if member.id in db:
+            await self.bot.say('That user is already bot banned in this server.')
             return
 
-        plonks.append(member.id)
+        db.append(member.id)
+        plonks[guild_id] = db
         await self.config.put('plonks', plonks)
-        await self.bot.say('{0.name} has been banned from using the bot.'.format(member))
+        await self.bot.say('%s has been banned from using the bot in this server.' % member)
 
-    @commands.command(no_pm=True)
+    @commands.command(no_pm=True, pass_context=True)
     @checks.admin_or_permissions(manage_server=True)
-    async def unplonk(self, *, member : discord.Member):
+    async def unplonk(self, ctx, *, member: discord.Member):
         """Unbans a user from using the bot.
 
         To use this command you must have the Manage Server permission
         or have a Bot Admin role.
         """
 
-        plonks = self.config.get('plonks', [])
+        plonks = self.config.get('plonks', {})
+        guild_id = ctx.message.server.id
+        db = plonks.get(guild_id, [])
 
         try:
-            plonks.remove(member.id)
+            db.remove(member.id)
         except ValueError:
-            pass
+            await self.bot.say('%s is not banned from using the bot in this server.' % member)
         else:
+            plonks[guild_id] = db
             await self.config.put('plonks', plonks)
-            await self.bot.say('{0.name} has been unbanned from using the bot.'.format(member))
+            await self.bot.say('%s has been unbanned from using the bot in this server.' % member)
 
     @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     @checks.admin_or_permissions(ban_members=True)
