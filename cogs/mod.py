@@ -1,8 +1,13 @@
 from discord.ext import commands
 from .utils import config, checks
 from collections import Counter
+from inspect import cleandoc
+
 import re
+import json
 import discord
+import enum
+import datetime
 import asyncio
 import argparse, shlex
 import logging
@@ -13,12 +18,35 @@ class Arguments(argparse.ArgumentParser):
     def error(self, message):
         raise RuntimeError(message)
 
+class RaidMode(enum.Enum):
+    off = 0
+    on = 1
+    strict = 2
+
+    def __str__(self):
+        return self.name
+
+def object_hook(obj):
+    if '__raids__' in obj:
+        raids = obj['__raids__']
+        obj['__raids__'] = { k: (RaidMode(mode), v) for k, (mode, v) in raids.items() }
+        return obj
+    else:
+        return obj
+
+class RaidModeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if type(o) is RaidMode:
+            return o.value
+
+        super().default(o)
+
 class Mod:
     """Moderation related commands."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = config.Config('mod.json', loop=bot.loop)
+        self.config = config.Config('mod.json', loop=bot.loop, object_hook=object_hook, encoder=RaidModeEncoder)
 
     def bot_user(self, message):
         return message.server.me if message.channel.is_private else self.bot.user
@@ -49,11 +77,81 @@ class Mod:
 
         return True
 
+    async def create_temporary_invite(self, channel_id):
+        # discord.py currently doesn't support this so just patch this in.
+        http = self.bot.http
+        url = '{0.CHANNELS}/{1}/invites'.format(http, channel_id)
+        payload = {
+            'max_age': 0,
+            'max_uses': 1,
+            'temporary': False,
+            'unique': True
+        }
+
+        data = await http.post(url, json=payload, bucket='create_invite')
+        return 'https://discord.gg/' + data['code']
+
+    async def check_raid(self, message):
+        guild = message.server
+        member = message.author
+
+        raids = self.config.get('__raids__', {}).get(guild.id, (RaidMode.off, None))
+        if raids[0] is not RaidMode.strict:
+            return
+
+        delta  = (member.created_at - member.joined_at).total_seconds() // 60
+
+        # they must have created their account at most 30 minutes before they joined.
+        if delta > 30:
+            return
+
+        delta = (message.timestamp - member.joined_at).total_seconds() // 60
+
+        # check if this is their first message in the 30 minutes they joined
+        if delta > 30:
+            return
+
+        fmt = """Howdy. The server {0.name} is currently in a raid mode lockdown.
+
+              A raid is when a server is being bombarded with trolls or low effort posts.
+              Unfortunately, what this means is that you have been automatically kicked for
+              meeting the suspicious thresholds currently set.
+
+              **Do not worry though, as you will be able to join again in the future!**
+
+              Please use this invite in an hour or so when things have cooled down! {1}
+              """
+
+        try:
+            invite = await self.create_temporary_invite(guild.id)
+            fmt = cleandoc(fmt).format(guild, invite)
+            await self.bot.send_message(member, fmt)
+        except discord.HTTPException:
+            pass
+
+        # kick anyway
+        try:
+            await self.bot.kick(member)
+        except discord.HTTPException:
+            pass
+        else:
+            log.info('[Raid Mode] Kicked {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
+            channel = self.bot.get_channel(raids[1])
+            await self.bot.send_message(channel, 'Kicked {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
+
     async def on_message(self, message):
         if message.author == self.bot.user or checks.is_owner_check(message):
             return
 
-        if message.server is None or len(message.mentions) <= 3:
+        if message.server is None:
+            return
+
+        # check for raid mode stuff
+        await self.check_raid(message)
+
+        # auto-ban tracking for mention spams begin here
+
+        if len(message.mentions) <= 3:
             return
 
         counts = self.config.get('mentions', {})
@@ -76,6 +174,150 @@ class Mod:
             fmt = '{0} (ID: {0.id}) has been banned for spamming mentions ({1} mentions).'
             await self.bot.send_message(message.channel, fmt.format(message.author, len(message.mentions)))
             log.info('Member {0.author} (ID: {0.author.id}) has been autobanned from server {0.server}'.format(message))
+
+    async def on_member_join(self, member):
+        raids = self.config.get('__raids__', {})
+        data = raids.get(member.server.id, (RaidMode.off, None))
+        if data[0] is RaidMode.off:
+            return
+
+        now = datetime.datetime.utcnow()
+
+        # these are the dates in minutes
+        created = (now - member.created_at).total_seconds() // 60
+
+        # Do the broadcasted message to the channel
+        e = discord.Embed(title='Member Joined')
+        e.timestamp = member.created_at
+        e.colour = discord.Colour.green()
+        e.set_footer(text='Created')
+        e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
+
+        if created > 30:
+            e.add_field(name='Created', value='More than 30 minutes ago')
+        else:
+            e.add_field(name='Created', value='%d minutes ago' % created)
+
+        e.add_field(name='ID', value=member.id)
+        e.add_field(name='Joined', value=member.joined_at)
+        channel = self.bot.get_channel(data[1])
+        await self.bot.send_message(channel, embed=e)
+
+    @commands.group(aliases=['raids'], pass_context=True, invoke_without_command=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid(self, ctx):
+        """Controls raid mode on the server.
+
+        Calling this command with no arguments will show the current raid
+        mode information.
+
+        You must have Manage Server permissions or have the Bot Admin role
+        to use this command or its subcommands.
+        """
+
+        raids = self.config.get('__raids__', {})
+        # Raid data is [type, channel_id?], i.e. a tuple
+        data = raids.get(ctx.message.server.id, (RaidMode.off, None))
+
+        fmt = 'Raid Mode: {}\nBroadcast Channel: {}'
+        ch = '<#%s>' % data[1] if data[1] else None
+        await self.bot.say(fmt.format(data[0], ch))
+
+    @raid.command(name='on', aliases=['enable', 'enabled'], pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid_on(self, ctx, *, channel: discord.Channel = None):
+        """Enables basic raid mode on the server.
+
+        When enabled, server verification level is set to table flip
+        levels and allows the bot to broadcast new members joining
+        to a specified channel.
+
+        If no channel is given, then the bot will broadcast join
+        messages on the channel this command was used in.
+        """
+
+        if channel is None:
+            channel = ctx.message.channel
+
+        if channel.type is not discord.ChannelType.text:
+            return await self.bot.say('That is not a text channel.')
+
+        guild = ctx.message.server
+        try:
+            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.high)
+        except discord.HTTPException:
+            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+
+        raids = self.config.get('__raids__', {})
+        raids[guild.id] = (RaidMode.on, channel.id)
+        await self.config.put('__raids__', raids)
+        fmt = 'Raid mode enabled. Broadcasting join messages to %s.' % channel.mention
+        await self.bot.say(fmt)
+
+    @raid.command(name='off', aliases=['disable', 'disabled'], pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid_off(self, ctx):
+        """Disables raid mode on the server.
+
+        When disabled, the server verification levels are set
+        back to Low levels and the bot will stop broadcasting
+        join messages.
+        """
+
+        guild = ctx.message.server
+
+        try:
+            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.low)
+        except discord.HTTPException:
+            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+
+        raids = self.config.get('__raids__', {})
+        raids[guild.id] = (RaidMode.off, None)
+        await self.config.put('__raids__', raids)
+        await self.bot.say('Raid mode disabled. No longer broadcasting join messages.')
+
+    @raid.command(name='strict', pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid_strict(self, ctx, *, channel: discord.Channel = None):
+        """Enables strict raid mode on the server.
+
+        Strict mode is similar to regular enabled raid mode, with the added
+        benefit of auto-kicking members that meet all of the following requirements:
+
+        - Account creation date and join date are at most 30 minutes apart.
+        - First message recorded on the server is 30 minutes apart from join date.
+
+        Members who meet these requirements will get a private message saying that the
+        server is currently in lock down and if they are legitimate to join back at a
+        later time via a created one-time use invite.
+
+        If this is considered too strict, it is recommended to fall back to regular
+        raid mode.
+        """
+
+        if channel is None:
+            channel = ctx.message.channel
+
+        if channel.type is not discord.ChannelType.text:
+            return await self.bot.say('That is not a text channel.')
+
+        guild = ctx.message.server
+        my_permissions = guild.default_channel.permissions_for(guild.me)
+
+        if not (my_permissions.kick_members and my_permissions.create_instant_invite):
+            return await self.bot.say('\N{NO ENTRY SIGN} I do not have permissions to kick members or create invites.')
+
+        try:
+            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.high)
+        except discord.HTTPException:
+            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+
+        raids = self.config.get('__raids__', {})
+        raids[guild.id] = (RaidMode.strict, channel.id)
+        await self.config.put('__raids__', raids)
+
+        fmt = 'Raid mode enabled strictly. Broadcasting join messages to %s.' % channel.mention
+        await self.bot.say(fmt)
 
     @commands.group(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_channels=True)
