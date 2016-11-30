@@ -23,7 +23,7 @@ class TagInfo:
     def __str__(self):
         return self.content
 
-    def embed(self, ctx, db):
+    async def embed(self, ctx, db):
         e = discord.Embed(title=self.name)
 
         e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
@@ -37,6 +37,12 @@ class TagInfo:
 
         if self.created_at:
             e.timestamp = datetime.datetime.fromtimestamp(self.created_at)
+
+        owner = discord.utils.find(lambda m: m.id == self.owner_id, ctx.bot.get_all_members())
+        if owner is None:
+            owner = await ctx.bot.get_user_info(self.owner_id)
+
+        e.set_author(name=str(owner), icon_url=owner.avatar_url or owner.default_avatar_url)
 
         e.set_footer(text='Generic' if self.is_generic else 'Server-specific')
         return e
@@ -360,7 +366,7 @@ class Tags:
         except RuntimeError as e:
             return await self.bot.say(e)
 
-        embed = tag.embed(ctx, self.get_possible_tags(server))
+        embed = await tag.embed(ctx, self.get_possible_tags(server))
         await self.bot.say(embed=embed)
 
     @info.error
