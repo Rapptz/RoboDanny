@@ -145,6 +145,13 @@ class Stars:
         if starrer_id in starrers:
             raise StarError('\N{NO ENTRY SIGN} You already starred this message.')
 
+        if reaction:
+            mod = self.bot.get_cog('Mod')
+            if mod:
+                member = message.server.get_member(starrer_id)
+                if member and mod.is_plonked(message.server, member):
+                    raise StarError('\N{NO ENTRY SIGN} Plonked Member')
+
         # if the IDs are the same, then they were probably starred using the reaction interface
         if message.id != message_id:
             msg = await self.get_message(message.channel, message_id)

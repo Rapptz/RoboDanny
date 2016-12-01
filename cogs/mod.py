@@ -51,6 +51,13 @@ class Mod:
     def bot_user(self, message):
         return message.server.me if message.channel.is_private else self.bot.user
 
+    def is_plonked(self, server, member):
+        db = self.config.get('plonks', {}).get(server.id, [])
+        bypass_ignore = member.server_permissions.manage_server
+        if not bypass_ignore and member.id in db:
+            return True
+        return False
+
     def __check(self, ctx):
         msg = ctx.message
         if checks.is_owner_check(msg):
@@ -58,10 +65,7 @@ class Mod:
 
         # user is bot banned
         if msg.server:
-            guild_id = msg.server.id
-            db = self.config.get('plonks', {}).get(guild_id, [])
-            bypass_ignore = msg.author.server_permissions.manage_server
-            if not bypass_ignore and msg.author.id in db:
+            if self.is_plonked(msg.server, msg.author):
                 return False
 
         # check if the channel is ignored
