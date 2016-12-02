@@ -22,6 +22,10 @@ class CodeBlock:
             'haskell': 'runhaskell main.cpp'
         }
 
+        cpp = commands['cpp']
+        for alias in ('cc', 'h', 'c++', 'h++', 'hpp'):
+            commands[alias] = cpp
+
         try:
             return commands[language.lower()]
         except KeyError as e:
