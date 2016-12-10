@@ -115,16 +115,26 @@ class Stars:
         else:
             base = '%s %s ID: %s' % (emoji, msg.channel.mention, msg.id)
 
+
         content = msg.content
+        e = discord.Embed(description=content)
+        if msg.embeds:
+            data = discord.Embed.from_data(msg.embeds[0])
+            if data.type == 'image':
+                e.set_image(url=data.url)
+
         if msg.attachments:
-            attachments = '[Attachment]({[url]})'.format(msg.attachments[0])
-            if content:
-                content = content + '\n' + attachments
+            url = msg.attachments[0]['url']
+            if url.lower().endswith(('png', 'jpeg', 'jpg', 'gif')):
+                e.set_image(url=url)
             else:
-                content = attachments
+                attachments = '[Attachment](%s)' % url
+                if content:
+                    e.description = content + '\n' + attachments
+                else:
+                    e.description = attachments
 
         # build the embed
-        e = discord.Embed(description=content)
         author = msg.author
         avatar = author.default_avatar_url if not author.avatar else author.avatar_url
         e.set_author(name=author.display_name, icon_url=avatar)
