@@ -4,6 +4,7 @@ import datetime
 from .utils import checks, config
 import json
 import copy
+import random
 import asyncio
 import logging
 from collections import Counter
@@ -541,6 +542,23 @@ class Stars:
             else:
                 await self.bot.say(error)
 
+    async def show_message(self, ctx, key, value):
+        # Unfortunately, we don't store the channel_id internally, so this
+        # requires an extra lookup to parse the channel mentions to get the
+        # original channel. A consequence of mediocre design I suppose.
+        bot_message = await self.get_message(ctx.starboard, value[0])
+        if bot_message is None:
+            return await self.bot.say('Somehow referring to a deleted message in the starboard?')
+
+        try:
+            original_channel = bot_message.channel_mentions[0]
+            msg = await self.get_message(original_channel, key)
+        except Exception as e:
+            return await self.bot.say('An error occurred while fetching message.')
+
+        content, embed = self.emoji_message(msg, len(value[1]))
+        await self.bot.say(content, embed=embed)
+
     @star.command(name='show', no_pm=True, pass_context=True)
     @commands.cooldown(rate=1, per=10.0, type=commands.BucketType.user)
     @requires_starboard()
@@ -560,21 +578,7 @@ class Stars:
         except KeyError:
             return await self.bot.say('This message has not been starred.')
 
-        # Unfortunately, we don't store the channel_id internally, so this
-        # requires an extra lookup to parse the channel mentions to get the
-        # original channel. A consequence of mediocre design I suppose.
-        bot_message = await self.get_message(ctx.starboard, entry[0])
-        if bot_message is None:
-            return await self.bot.say('Somehow referring to a deleted message in the starboard?')
-
-        try:
-            original_channel = bot_message.channel_mentions[0]
-            msg = await self.get_message(original_channel, message)
-        except Exception as e:
-            return await self.bot.say('An error occurred while fetching message.')
-
-        content, embed = self.emoji_message(msg, len(entry[1]))
-        await self.bot.say(content, embed=embed)
+        await self.show_message(ctx, message, entry)
 
     @star_show.error
     async def star_show_error(self, error, ctx):
@@ -633,6 +637,22 @@ class Stars:
         e.add_field(name='\U0001f948 Starrer', value='<@!%s> with %s stars' % common[1])
         e.add_field(name='\U0001f949 Starrer', value='<@!%s> with %s stars' % common[2])
         await self.bot.say(embed=e)
+
+    @star.command(pass_context=True, no_pm=True, name='random')
+    @requires_starboard()
+    async def star_random(self, ctx):
+        entries = [(k, v) for k, v in ctx.db.items() if isinstance(v, list)]
+        # try at most 3 times to get a non-deleted starboard message
+        for i in range(3):
+            try:
+                (k, v) = random.choice(entries)
+                await self.show_message(ctx, k, v)
+            except Exception:
+                continue
+            else:
+                return
+
+        await self.bot.say('Sorry, all I could find are deleted messages. Try again?')
 
 def setup(bot):
     bot.add_cog(Stars(bot))
