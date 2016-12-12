@@ -548,13 +548,16 @@ class Stars:
         # original channel. A consequence of mediocre design I suppose.
         bot_message = await self.get_message(ctx.starboard, value[0])
         if bot_message is None:
-            return await self.bot.say('Somehow referring to a deleted message in the starboard?')
+            raise RuntimeError('Somehow referring to a deleted message in the starboard?')
 
         try:
             original_channel = bot_message.channel_mentions[0]
             msg = await self.get_message(original_channel, key)
         except Exception as e:
-            return await self.bot.say('An error occurred while fetching message.')
+            raise RuntimeError('An error occurred while fetching message.')
+
+        if msg is None:
+            raise RuntimeError('Could not find message. Possibly deleted.')
 
         content, embed = self.emoji_message(msg, len(value[1]))
         await self.bot.say(content, embed=embed)
@@ -578,7 +581,10 @@ class Stars:
         except KeyError:
             return await self.bot.say('This message has not been starred.')
 
-        await self.show_message(ctx, message, entry)
+        try:
+            await self.show_message(ctx, message, entry)
+        except Exception as e:
+            await self.bot.say(e)
 
     @star_show.error
     async def star_show_error(self, error, ctx):
@@ -642,8 +648,8 @@ class Stars:
     @requires_starboard()
     async def star_random(self, ctx):
         entries = [(k, v) for k, v in ctx.db.items() if isinstance(v, list)]
-        # try at most 3 times to get a non-deleted starboard message
-        for i in range(3):
+        # try at most 5 times to get a non-deleted starboard message
+        for i in range(5):
             try:
                 (k, v) = random.choice(entries)
                 await self.show_message(ctx, k, v)
