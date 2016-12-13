@@ -1,9 +1,11 @@
 from discord.ext import commands
 from .utils import checks, config
 import asyncio
+import aiohttp
 import discord
 import datetime
 import re
+import lxml.etree as etree
 from collections import Counter
 
 DISCORD_API_ID = '81384788765712384'
@@ -388,6 +390,34 @@ class API:
 
         fmt = 'Found {} entries:\n{}'
         await self.bot.say(fmt.format(len(entries), '\n\n'.join(entries)))
+
+    async def refresh_faq_cache(self):
+        self.faq_entries = {}
+        async with aiohttp.get('http://discordpy.readthedocs.io/en/latest/faq.html') as resp:
+            text = await resp.text()
+
+            root = etree.fromstring(text, etree.HTMLParser())
+            nodes = root.findall(".//div[@id='questions']/ul[@class='simple']//ul/li/a")
+            for node in nodes:
+                self.faq_entries[''.join(node.itertext()).strip()] = node.get('href').strip()
+
+    @commands.command()
+    @is_discord_api()
+    async def faq(self, *, query: str):
+        if not hasattr(self, 'faq_entries'):
+            await self.refresh_faq_cache()
+
+        # difflib is garbage apparently
+        query = query.lower()
+        def predicate(s):
+            return query in s.lower()
+
+        key = discord.utils.find(predicate, self.faq_entries)
+        if key is None:
+            return await self.bot.say('No matches found...')
+
+        value = self.faq_entries[key]
+        await self.bot.say('**%s**\nhttp://discordpy.readthedocs.io/en/latest/faq.html%s' % (key, value))
 
 def setup(bot):
     bot.add_cog(API(bot))
