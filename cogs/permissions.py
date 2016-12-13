@@ -22,7 +22,8 @@ class Permissions:
         except (KeyError, AttributeError):
             return True
         else:
-            return ctx.command.name not in entry
+            name = ctx.command.qualified_name.split(' ')[0]
+            return name not in entry
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_server=True)
