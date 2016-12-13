@@ -301,7 +301,7 @@ class Stars:
         stars = self.stars.get(server.id, {})
         old_starboard = self.bot.get_channel(stars.get('channel'))
         if old_starboard is not None:
-            fmt = 'This channel already has a starboard ({.mention})'
+            fmt = 'This server already has a starboard ({.mention})'
             await self.bot.say(fmt.format(old_starboard))
             return
 
