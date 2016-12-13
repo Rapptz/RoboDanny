@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 import discord
 import datetime
+import difflib
 import re
 import lxml.etree as etree
 from collections import Counter
@@ -403,16 +404,23 @@ class API:
 
     @commands.command()
     @is_discord_api()
-    async def faq(self, *, query: str):
+    async def faq(self, *, query: str = None):
+        """Shows an FAQ entry from the discord.py documentation"""
         if not hasattr(self, 'faq_entries'):
             await self.refresh_faq_cache()
 
-        # difflib is garbage apparently
-        query = query.lower()
-        def predicate(s):
-            return query in s.lower()
+        if query is None:
+            return await self.bot.say('http://discordpy.readthedocs.io/en/latest/faq.html')
 
-        key = discord.utils.find(predicate, self.faq_entries)
+        query = query.lower()
+        seq = difflib.SequenceMatcher(lambda x: x == ' ', None, query)
+        def key(s):
+            o = s.lower()
+            seq.set_seq1(o)
+            m = seq.find_longest_match(0, len(o), 0, len(query))
+            return m.size
+
+        key = max(self.faq_entries, key=key)
         if key is None:
             return await self.bot.say('No matches found...')
 
