@@ -4,17 +4,22 @@ import aiohttp
 import json
 
 class CodeBlock:
+    missing_error = 'Missing code block. Please use the following markdown\n\\`\\`\\`language\ncode here\n\\`\\`\\`'
     def __init__(self, argument):
-        block, code = argument.split('\n', 1)
+        try:
+            block, code = argument.split('\n', 1)
+        except ValueError:
+            raise commands.BadArgument(self.missing_error)
+
         if not block.startswith('```') and not code.endswith('```'):
-            raise commands.BadArgument('Could not find a code block.')
+            raise commands.BadArgument(self.missing_error)
 
         language = block[3:]
-        self.command = self.get_command_from_language(language)
+        self.command = self.get_command_from_language(language.lower())
         self.source = code.rstrip('`')
 
     def get_command_from_language(self, language):
-        commands = {
+        cmds = {
             'cpp': 'g++ -std=c++14 -O2 -Wall -Wextra -pedantic -pthread main.cpp && ./a.out',
             'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
             'py': 'python main.cpp', # coliru has no python3
@@ -22,17 +27,20 @@ class CodeBlock:
             'haskell': 'runhaskell main.cpp'
         }
 
-        cpp = commands['cpp']
+        cpp = cmds['cpp']
         for alias in ('cc', 'h', 'c++', 'h++', 'hpp'):
-            commands[alias] = cpp
-
+            cmds[alias] = cpp
         try:
-            return commands[language.lower()]
+            return cmds[language]
         except KeyError as e:
-            raise commands.BadArgument('Unknown language to compile for: {}'.format(e)) from e
+            if language:
+                fmt = 'Unknown language to compile for: {}'.format(language)
+            else:
+                fmt = 'Could not find a language to compile with.'
+            raise commands.BadArgument(fmt) from e
 
 class Lounge:
-    """Commands for Lounge<C++> only.
+    """Commands made for Lounge<C++>.
 
     Don't abuse these.
     """
@@ -40,21 +48,22 @@ class Lounge:
     def __init__(self, bot):
         self.bot = bot
 
-    # allow it in Lounge<C++> and Discord API and Coding Den
     @commands.command(pass_context=True)
-    @checks.is_in_servers('81384788765712384', '145079846832308224', '172018499005317120')
-    async def coliru(self, ctx, *, code : CodeBlock):
+    async def coliru(self, ctx, *, code: CodeBlock):
         """Compiles code via Coliru.
 
-        You have to pass in a codeblock with the language syntax
+        You have to pass in a code block with the language syntax
         either set to one of these:
 
         - cpp
+        - c
         - python
         - py
         - haskell
 
         Anything else isn't supported. The C++ compiler uses g++ -std=c++14.
+
+        The python support is only python2.7 (unfortunately).
 
         Please don't spam this for Stacked's sake.
         """
@@ -65,6 +74,7 @@ class Lounge:
 
         data = json.dumps(payload)
 
+        await self.bot.type()
         async with aiohttp.post('http://coliru.stacked-crooked.com/compile', data=data) as resp:
             if resp.status != 200:
                 await self.bot.say('Coliru did not respond in time.')
@@ -88,6 +98,8 @@ class Lounge:
     async def coliru_error(self, error, ctx):
         if isinstance(error, commands.BadArgument):
             await self.bot.say(error)
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self.bot.say(CodeBlock.missing_error)
 
 def setup(bot):
     bot.add_cog(Lounge(bot))
