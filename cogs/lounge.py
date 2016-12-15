@@ -40,9 +40,9 @@ class Lounge:
     def __init__(self, bot):
         self.bot = bot
 
-    # allow it in Lounge<C++> and Discord API
+    # allow it in Lounge<C++> and Discord API and Coding Den
     @commands.command(pass_context=True)
-    @checks.is_in_servers('81384788765712384', '145079846832308224')
+    @checks.is_in_servers('81384788765712384', '145079846832308224', '172018499005317120')
     async def coliru(self, ctx, *, code : CodeBlock):
         """Compiles code via Coliru.
 
