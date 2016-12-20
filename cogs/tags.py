@@ -412,6 +412,54 @@ class Tags:
         else:
             await self.bot.say('This server has no server-specific tags.')
 
+    @tag.command(pass_context=True, no_pm=True)
+    @checks.mod_or_permissions(manage_messages=True)
+    async def purge(self, ctx, member: discord.Member):
+        """Removes all server-specific tags by a user.
+
+        You must have Manage Messages permissions to use this.
+        """
+
+        db = self.config.get(ctx.message.server.id, {})
+        tags = [key for key, tag in db.items() if tag.owner_id == member.id]
+
+        if not ctx.message.channel.permissions_for(ctx.message.server.me).add_reactions:
+            return await self.bot.say('Bot cannot add reactions.')
+
+        if not tags:
+            return await self.bot.say('This user has no server-specific tags.')
+
+        msg = await self.bot.say('This will delete %s tags are you sure? **This action cannot be reversed**.\n\n' \
+                                 'React with either \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.' % len(tags))
+
+        cancel = False
+        author_id = ctx.message.author.id
+        def check(reaction, user):
+            nonlocal cancel
+            if user.id != author_id:
+                return False
+
+            if reaction.emoji == '\N{WHITE HEAVY CHECK MARK}':
+                return True
+            elif reaction.emoji == '\N{CROSS MARK}':
+                cancel = True
+                return True
+            return False
+
+        for emoji in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
+            await self.bot.add_reaction(msg, emoji)
+
+        react = await self.bot.wait_for_reaction(message=msg, check=check, timeout=60.0)
+        if react is None or cancel:
+            await self.bot.delete_message(msg)
+            return await self.bot.say('Cancelling.')
+
+        for key in tags:
+            db.pop(key)
+
+        await self.config.put(ctx.message.server.id, db)
+        await self.bot.say('Successfully removed all %s tags that belong to %s' % (len(tags), member.display_namew))
+
     @tag.command(pass_context=True)
     async def search(self, ctx, *, query : str):
         """Searches for a tag.
