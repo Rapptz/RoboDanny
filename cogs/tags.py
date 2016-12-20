@@ -483,21 +483,18 @@ class Tags:
         server = ctx.message.server
         query = query.lower()
         if len(query) < 2:
-            await self.bot.say('The query length must be at least two characters.')
-            return
+            return await self.bot.say('The query length must be at least two characters.')
 
-        generic = self.config.get('generic', {})
-        results = {value.name for name, value in generic.items() if query in name}
+        tags = self.get_possible_tags(server)
+        results = [tag.name for key, tag in tags.items() if query in key]
 
-        if server is not None:
-            db = self.config.get(server.id, {})
-            for name, value in db.items():
-                if query in name:
-                    results.add(value.name)
-
-        fmt = '{} tag(s) found.\n{}'
         if results:
-            await self.bot.say(fmt.format(len(results), ', '.join(results)))
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=results, per_page=15)
+                p.embed.colour = 0x738bd7 # blurple
+                await p.paginate()
+            except Exception as e:
+                await self.bot.say(e)
         else:
             await self.bot.say('No tags found.')
 
