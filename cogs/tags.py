@@ -394,8 +394,13 @@ class Tags:
         tags.sort()
 
         if tags:
-            p = Pages(self.bot, message=ctx.message, entries=tags)
-            await p.paginate()
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=tags)
+                p.embed.colour = 0x738bd7 # blurple
+                p.embed.set_author(name=owner.display_name, icon_url=owner.avatar_url or owner.default_avatar_url)
+                await p.paginate()
+            except Exception as e:
+                await self.bot.say(e)
         else:
             await self.bot.say('{0.name} has no tags.'.format(owner))
 
@@ -407,8 +412,12 @@ class Tags:
         tags.sort()
 
         if tags:
-            p = Pages(self.bot, message=ctx.message, entries=tags, per_page=15)
-            await p.paginate()
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=tags, per_page=15)
+                p.embed.colour =  0x738bd7 # blurple
+                await p.paginate()
+            except Exception as e:
+                await self.bot.say(e)
         else:
             await self.bot.say('This server has no server-specific tags.')
 

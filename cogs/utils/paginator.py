@@ -1,7 +1,5 @@
 import asyncio
-
-class StopPagination(Exception):
-    pass
+import discord
 
 class CannotPaginate(Exception):
     pass
@@ -12,7 +10,7 @@ class Pages:
 
     Pages are 1-index based, not 0-index based.
 
-    If the user does not reply within 1 minute then the pagination
+    If the user does not reply within 2 minutes then the pagination
     interface exits automatically.
 
     Parameters
@@ -25,6 +23,15 @@ class Pages:
         A list of entries to paginate.
     per_page
         How many entries show up per page.
+
+    Attributes
+    -----------
+    embed: discord.Embed
+        The embed object that is being used to send pagination info.
+        Feel free to modify this externally. Only the description,
+        footer fields, and colour are internally modified.
+    permissions: discord.Permissions
+        Our permissions for the channel.
     """
     def __init__(self, bot, *, message, entries, per_page=12):
         self.bot = bot
@@ -36,59 +43,80 @@ class Pages:
         if left_over:
             pages += 1
         self.maximum_pages = pages
+        self.embed = discord.Embed()
+        self.paginating = len(entries) > per_page
         self.reaction_emojis = [
-            ('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.first_page, ':track_previous:'),
-            ('\N{BLACK LEFT-POINTING TRIANGLE}', self.previous_page, ':arrow_backward:'),
-            ('\N{BLACK RIGHT-POINTING TRIANGLE}', self.next_page, ':arrow_forward:'),
-            ('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.last_page, ':track_next:'),
-            ('\N{INPUT SYMBOL FOR NUMBERS}', self.numbered_page , ':1234:'),
-            ('\N{BLACK SQUARE FOR STOP}', self.stop_pages, ':stop_button:'),
-            ('\N{INFORMATION SOURCE}', self.show_help, ':information_source:'),
+            ('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.first_page),
+            ('\N{BLACK LEFT-POINTING TRIANGLE}', self.previous_page),
+            ('\N{BLACK RIGHT-POINTING TRIANGLE}', self.next_page),
+            ('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.last_page),
+            ('\N{INPUT SYMBOL FOR NUMBERS}', self.numbered_page ),
+            ('\N{BLACK SQUARE FOR STOP}', self.stop_pages),
+            ('\N{INFORMATION SOURCE}', self.show_help),
         ]
+
+        server = self.message.server
+        if server is not None:
+            self.permissions = self.message.channel.permissions_for(server.me)
+        else:
+            self.permissions = self.message.channel.permissions_for(self.bot.user)
+
+        if not self.permissions.embed_links:
+            raise CannotPaginate('Bot does not have embed links permission.')
 
     def get_page(self, page):
         base = (page - 1) * self.per_page
         return self.entries[base:base + self.per_page]
 
-    async def show_page(self, page, *, first=False, use_reactions=True):
+    async def show_page(self, page, *, first=False):
         self.current_page = page
         entries = self.get_page(page)
-        p = ['```']
+        p = []
         for t in enumerate(entries, 1 + ((page - 1) * self.per_page)):
             p.append('%s. %s' % t)
-        p.append('')
-        p.append('Page %s/%s (%s entries)' % (page, self.maximum_pages, len(self.entries)))
 
-        if not use_reactions:
-            p.append('```')
-            self.message = await self.bot.send_message(self.message.channel, '\n'.join(p))
+        self.embed.set_footer(text='Page %s/%s (%s entries)' % (page, self.maximum_pages, len(self.entries)))
+
+        if not self.paginating:
+            self.embed.description = '\n'.join(p)
+            return await self.bot.send_message(self.message.channel, embed=self.embed)
+
+        if not first:
+            self.embed.description = '\n'.join(p)
+            await self.bot.edit_message(self.message, embed=self.embed)
             return
 
-        if first:
-            # verify we can actually use the pagination session
-            server = self.message.server
-            if server is not None:
-                permissions = self.message.channel.permissions_for(server.me)
-                if not permissions.add_reactions:
-                    raise CannotPaginate()
+        # verify we can actually use the pagination session
+        if not self.permissions.add_reactions:
+            raise CannotPaginate('Bot does not have add reactions permission.')
 
-            p.append('')
-            p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
-            p.append('```')
-            self.message = await self.bot.send_message(self.message.channel, '\n'.join(p))
-            for (reaction, _, __) in self.reaction_emojis:
-                await self.bot.add_reaction(self.message, reaction)
-        else:
-            p.append('```')
-            await self.bot.edit_message(self.message, '\n'.join(p))
+        p.append('')
+        p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
+        self.embed.description = '\n'.join(p)
+        self.message = await self.bot.send_message(self.message.channel, embed=self.embed)
+        for (reaction, _) in self.reaction_emojis:
+            await self.bot.add_reaction(self.message, reaction)
 
     async def checked_show_page(self, page):
+        if page != 0 and page <= self.maximum_pages:
+            return await self.show_page(page)
+
+        e = discord.Embed()
+
+        async def back_to_current():
+            await asyncio.sleep(10.0)
+            await self.show_current_page()
+
+        e.colour = 0xBC2C3D
+        e.set_footer(text='We were on page %s before this error.' % self.current_page)
+
         if page == 0:
-            return await self.bot.send_message(self.message.channel, 'Page 0 does not exist.')
+            e.description = 'Page 0 does not exist.'
         elif page > self.maximum_pages:
-            return await self.bot.send_message(self.message.channel, 'Too far ahead (%s/%s)' % (page, self.maximum_pages))
-        else:
-            await self.show_page(page)
+            e.description = 'Too far ahead (%s/%s)' % (page, self.maximum_pages)
+
+        await self.bot.edit_message(self.message, embed=e)
+        self.bot.loop.create_task(back_to_current())
 
     async def first_page(self):
         """goes to the first page"""
@@ -106,8 +134,9 @@ class Pages:
         """goes to the previous page"""
         await self.checked_show_page(self.current_page - 1)
 
-    async def page_c(self):
-        await self.checked_show_page(self.current_page)
+    async def show_current_page(self):
+        if self.paginating:
+            await self.show_page(self.current_page)
 
     async def numbered_page(self):
         """lets you type a page number to go to"""
@@ -132,34 +161,35 @@ class Pages:
 
     async def show_help(self):
         """shows this message"""
-        messages = ['```\nWelcome to the interactive paginator!\n']
-        messages.append('This interactively allows you to see pages of text by navigating with\n'
+        e = discord.Embed()
+        messages = ['Welcome to the interactive paginator!\n']
+        messages.append('This interactively allows you to see pages of text by navigating with ' \
                         'reactions. They are as follows:\n')
 
-        alignment = len(max(self.reaction_emojis, key=lambda t: len(t[2]))[2])
-        fmt = '{:<{width}} -- {}'
-        for (_, func, emoji) in self.reaction_emojis:
-            messages.append(fmt.format(emoji, func.__doc__, width=alignment))
+        for (emoji, func) in self.reaction_emojis:
+            messages.append('%s %s' % (emoji, func.__doc__))
 
-        messages.append('```')
-        msg = await self.bot.send_message(self.message.channel, '\n'.join(messages))
+        e.description = '\n'.join(messages)
+        e.colour =  0x738bd7 # blurple
+        e.set_footer(text='We were on page %s before this message.' % self.current_page)
+        await self.bot.edit_message(self.message, embed=e)
 
-        async def delete_later():
-            await asyncio.sleep(120)
-            await self.bot.delete_message(msg)
+        async def go_back_to_current_page():
+            await asyncio.sleep(60.0)
+            await self.show_current_page()
 
-        self.bot.loop.create_task(delete_later())
+        self.bot.loop.create_task(go_back_to_current_page())
 
     async def stop_pages(self):
         """stops the interactive pagination session"""
         await self.bot.delete_message(self.message)
-        raise StopPagination()
+        self.paginating = False
 
     def react_check(self, reaction, user):
         if user.id != self.author.id:
             return False
 
-        for (emoji, func, _) in self.reaction_emojis:
+        for (emoji, func) in self.reaction_emojis:
             if reaction.emoji == emoji:
                 self.match = func
                 return True
@@ -167,21 +197,22 @@ class Pages:
 
     async def paginate(self):
         """Actually paginate the entries and run the interactive loop if necessary."""
+        await self.show_page(1, first=True)
 
-        # Only do the interactive session if necessary (i.e. page count is more than 1)
-        use_reactions = len(self.entries) > self.per_page
-        await self.show_page(1, first=True, use_reactions=use_reactions)
-        while use_reactions:
-            react = await self.bot.wait_for_reaction(message=self.message, check=self.react_check, timeout=60.0)
+        while self.paginating:
+            react = await self.bot.wait_for_reaction(message=self.message, check=self.react_check, timeout=120.0)
             if react is None:
-                break
+                self.paginating = False
+                try:
+                    await self.bot.clear_reactions(self.message)
+                except:
+                    pass
+                finally:
+                    break
 
             try:
                 await self.bot.remove_reaction(self.message, react.reaction.emoji, react.user)
             except:
                 pass # can't remove it so don't bother doing so
 
-            try:
-                await self.match()
-            except StopPagination:
-                break
+            await self.match()
