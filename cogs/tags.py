@@ -467,7 +467,8 @@ class Tags:
             db.pop(key)
 
         await self.config.put(ctx.message.server.id, db)
-        await self.bot.say('Successfully removed all %s tags that belong to %s' % (len(tags), member.display_namew))
+        await self.bot.delete_message(msg)
+        await self.bot.say('Successfully removed all %s tags that belong to %s' % (len(tags), member.display_name))
 
     @tag.command(pass_context=True)
     async def search(self, ctx, *, query : str):
