@@ -99,24 +99,7 @@ class Pages:
 
     async def checked_show_page(self, page):
         if page != 0 and page <= self.maximum_pages:
-            return await self.show_page(page)
-
-        e = discord.Embed()
-
-        async def back_to_current():
-            await asyncio.sleep(10.0)
-            await self.show_current_page()
-
-        e.colour = 0xBC2C3D
-        e.set_footer(text='We were on page %s before this error.' % self.current_page)
-
-        if page == 0:
-            e.description = 'Page 0 does not exist.'
-        elif page > self.maximum_pages:
-            e.description = 'Too far ahead (%s/%s)' % (page, self.maximum_pages)
-
-        await self.bot.edit_message(self.message, embed=e)
-        self.bot.loop.create_task(back_to_current())
+            await self.show_page(page)
 
     async def first_page(self):
         """goes to the first page"""
@@ -147,9 +130,11 @@ class Pages:
         if msg is not None:
             page = int(msg.content)
             to_delete.append(msg)
-            ret = await self.checked_show_page(page)
-            if ret is not None:
-                to_delete.append(ret)
+            if page != 0 and page <= self.maximum_pages:
+                await self.show_page(page)
+            else:
+                to_delete.append(await self.bot.say('Invalid page given. (%s/%s)' % (page, self.maximum_pages)))
+                await asyncio.sleep(5)
         else:
             to_delete.append(await self.bot.send_message(self.message.channel, 'Took too long.'))
             await asyncio.sleep(5)
