@@ -399,6 +399,19 @@ class Tags:
         else:
             await self.bot.say('{0.name} has no tags.'.format(owner))
 
+    @tag.command(name='all', pass_context=True, no_pm=True)
+    async def _all(self, ctx):
+        """Lists all server-specific tags for this server."""
+
+        tags = [tag.name for tag in self.config.get(ctx.message.server.id, {}).values()]
+        tags.sort()
+
+        if tags:
+            p = Pages(self.bot, message=ctx.message, entries=tags, per_page=15)
+            await p.paginate()
+        else:
+            await self.bot.say('This server has no server-specific tags.')
+
     @tag.command(pass_context=True)
     async def search(self, ctx, *, query : str):
         """Searches for a tag.
