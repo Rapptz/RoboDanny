@@ -272,7 +272,7 @@ class Meta:
 
         return fmt.format(d=days, h=hours, m=minutes, s=seconds)
 
-    @commands.command()
+    @commands.command(aliases=['invite'])
     async def join(self):
         """Joins a server."""
         perms = discord.Permissions.none()
