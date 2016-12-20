@@ -1,4 +1,6 @@
 from .utils import config, checks, formats
+from .utils.paginator import Pages
+
 from discord.ext import commands
 import json
 import datetime
@@ -389,9 +391,11 @@ class Tags:
         if server is not None:
             tags.extend(tag.name for tag in self.config.get(server.id, {}).values() if tag.owner_id == owner.id)
 
+        tags.sort()
+
         if tags:
-            fmt = '{0.name} has the following {1} tags:\n{2}'
-            await self.bot.say(fmt.format(owner, len(tags), ', '.join(tags)))
+            p = Pages(self.bot, message=ctx.message, entries=tags)
+            await p.paginate()
         else:
             await self.bot.say('{0.name} has no tags.'.format(owner))
 
