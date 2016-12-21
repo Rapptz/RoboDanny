@@ -6,7 +6,6 @@ import os, datetime
 import re, asyncio
 import copy
 import unicodedata
-import psutil
 import inspect
 
 class TimeParser:
@@ -263,25 +262,6 @@ class Meta:
         member = ctx.message.server.me
         await self.say_permissions(member, channel)
 
-    def get_bot_uptime(self, *, brief=False):
-        now = datetime.datetime.utcnow()
-        delta = now - self.bot.uptime
-        hours, remainder = divmod(int(delta.total_seconds()), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        days, hours = divmod(hours, 24)
-
-        if not brief:
-            if days:
-                fmt = '{d} days, {h} hours, {m} minutes, and {s} seconds'
-            else:
-                fmt = '{h} hours, {m} minutes, and {s} seconds'
-        else:
-            fmt = '{h}h {m}m {s}s'
-            if days:
-                fmt = '{d}d ' + fmt
-
-        return fmt.format(d=days, h=hours, m=minutes, s=seconds)
-
     @commands.command(aliases=['invite'])
     async def join(self):
         """Joins a server."""
@@ -297,57 +277,6 @@ class Meta:
         perms.attach_files = True
         perms.add_reactions = True
         await self.bot.say(discord.utils.oauth_url(self.bot.client_id, perms))
-
-    @commands.command()
-    async def uptime(self):
-        """Tells you how long the bot has been up for."""
-        await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
-
-    @commands.command(aliases=['stats'])
-    async def about(self):
-        """Tells you information about the bot itself."""
-        cmd = r'git show -s HEAD~3..HEAD --format="[{}](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"'
-        if os.name == 'posix':
-            cmd = cmd.format(r'\`%h\`')
-        else:
-            cmd = cmd.format(r'`%h`')
-
-        revision = os.popen(cmd).read().strip()
-        embed = discord.Embed(description='Latest Changes:\n' + revision)
-        embed.title = 'Official Bot Server Invite'
-        embed.url = 'https://discord.gg/0118rJdtd1rVJJfuI'
-        embed.colour = 0x738bd7 # blurple
-
-        try:
-            owner = self._owner
-        except AttributeError:
-            owner = self._owner = await self.bot.get_user_info('80088516616269824')
-
-        embed.set_author(name=str(owner), icon_url=owner.avatar_url)
-
-        # statistics
-        total_members = sum(len(s.members) for s in self.bot.servers)
-        total_online  = sum(1 for m in self.bot.get_all_members() if m.status != discord.Status.offline)
-        unique_members = set(self.bot.get_all_members())
-        unique_online = sum(1 for m in unique_members if m.status != discord.Status.offline)
-        channel_types = Counter(c.type for c in self.bot.get_all_channels())
-        voice = channel_types[discord.ChannelType.voice]
-        text = channel_types[discord.ChannelType.text]
-
-        members = '%s total\n%s online\n%s unique\n%s unique online' % (total_members, total_online, len(unique_members), unique_online)
-        embed.add_field(name='Members', value=members)
-        embed.add_field(name='Channels', value='{} total\n{} text\n{} voice'.format(text + voice, text, voice))
-        embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
-        embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
-        embed.timestamp = self.bot.uptime
-
-        embed.add_field(name='Servers', value=str(len(self.bot.servers)))
-        embed.add_field(name='Commands Run', value=str(sum(self.bot.commands_used.values())))
-
-        memory_usage = psutil.Process().memory_full_info().uss / 1024**2
-        embed.add_field(name='Memory Usage', value='{:.2f} MiB'.format(memory_usage))
-
-        await self.bot.say(embed=embed)
 
     @commands.command(rest_is_raw=True, hidden=True)
     @checks.is_owner()
