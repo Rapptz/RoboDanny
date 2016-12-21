@@ -30,6 +30,7 @@ initial_extensions = [
     'cogs.buttons',
     'cogs.pokemon',
     'cogs.permissions',
+    'cogs.stats',
 ]
 
 discord_logger = logging.getLogger('discord')
@@ -67,18 +68,6 @@ async def on_ready():
 @bot.event
 async def on_resumed():
     print('resumed...')
-
-@bot.event
-async def on_command(command, ctx):
-    bot.commands_used[command.name] += 1
-    message = ctx.message
-    destination = None
-    if message.channel.is_private:
-        destination = 'Private Message'
-    else:
-        destination = '#{0.channel.name} ({0.server.name})'.format(message)
-
-    log.info('{0.timestamp}: {0.author.name} in {1}: {0.content}'.format(message, destination))
 
 @bot.event
 async def on_message(message):

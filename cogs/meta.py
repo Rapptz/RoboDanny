@@ -355,13 +355,6 @@ class Meta:
         await self.bot.say(content)
 
     @commands.command(hidden=True)
-    @checks.is_owner()
-    async def commandstats(self):
-        msg = 'Since startup, {} commands have been used.\n{}'
-        counter = self.bot.commands_used
-        await self.bot.say(msg.format(sum(counter.values()), counter))
-
-    @commands.command(hidden=True)
     async def cud(self):
         """pls no spam"""
 
