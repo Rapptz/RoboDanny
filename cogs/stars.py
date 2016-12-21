@@ -372,10 +372,14 @@ class Stars:
         # so let's just see if we can star the message and get it over with.
         if not is_message_delete:
             message = await self.get_message(channel, payload['message_id'])
+            member = channel.server.get_member(payload['user_id'])
+            if member is None or member.bot:
+                return # denied
+
             verb = 'star' if is_reaction else 'unstar'
             coro = getattr(self, '%s_message' % verb)
             try:
-                await coro(message, payload['user_id'], message.id)
+                await coro(message, member.id, message.id)
                 log.info('User ID %s has %sred Message ID %s' % (payload['user_id'], verb, message.id))
             except StarError:
                 pass
