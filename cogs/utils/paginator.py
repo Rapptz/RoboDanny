@@ -95,6 +95,12 @@ class Pages:
         self.embed.description = '\n'.join(p)
         self.message = await self.bot.send_message(self.message.channel, embed=self.embed)
         for (reaction, _) in self.reaction_emojis:
+            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
+                # no |<< or >>| buttons if we only have two pages
+                # we can't forbid it if someone ends up using it but remove
+                # it from the default set
+                continue
+
             await self.bot.add_reaction(self.message, reaction)
 
     async def checked_show_page(self, page):
