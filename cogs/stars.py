@@ -480,7 +480,7 @@ class Stars:
         await self.stars.put(ctx.guild_id, ctx.db)
 
     @star.command(name='clean', pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_messages=True)
+    @checks.admin_or_permissions(manage_server=True)
     @requires_starboard()
     async def star_clean(self, ctx, stars:int = 1):
         """Cleans the starboard
@@ -491,7 +491,7 @@ class Stars:
         To continuously do this over a period of time see
         the `janitor` subcommand.
 
-        This command requires the Manage Messages permission or the
+        This command requires the Manage Server permission or the
         Bot Admin role.
         """
 
