@@ -154,6 +154,7 @@ class Meta:
         if member is None:
             member = ctx.message.author
 
+        e = discord.Embed()
         roles = [role.name.replace('@', '@\u200b') for role in member.roles]
         shared = sum(1 for m in self.bot.get_all_members() if m.id == member.id)
         voice = member.voice_channel
@@ -164,19 +165,19 @@ class Meta:
         else:
             voice = 'Not connected.'
 
-        entries = [
-            ('Name', member.name),
-            ('Tag', member.discriminator),
-            ('ID', member.id),
-            ('Joined', member.joined_at),
-            ('Created', member.created_at),
-            ('Roles', ', '.join(roles)),
-            ('Servers', '{} shared'.format(shared)),
-            ('Voice', voice),
-            ('Avatar', member.avatar_url),
-        ]
+        e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
+        e.set_footer(text='Member since').timestamp = member.joined_at
+        e.add_field(name='ID', value=member.id)
+        e.add_field(name='Servers', value='%s shared' % shared)
+        e.add_field(name='Voice', value=voice)
+        e.add_field(name='Created', value=member.created_at)
+        e.add_field(name='Roles', value=', '.join(roles))
+        e.colour = member.colour
 
-        await formats.indented_entry_to_code(self.bot, entries)
+        if member.avatar:
+            e.set_image(url=member.avatar_url)
+
+        await self.bot.say(embed=e)
 
     @info.command(name='server', pass_context=True, no_pm=True)
     async def server_info(self, ctx):
@@ -203,22 +204,31 @@ class Meta:
         regular_channels = len(server.channels) - secret_channels
         voice_channels = len(server.channels) - text_channels
         member_by_status = Counter(str(m.status) for m in server.members)
-        member_fmt = '{0} ({1[online]} online, {1[idle]} idle, {1[offline]} offline)'
-        channels_fmt = '{} Text ({} secret) / {} Voice ({} locked)'
-        channels = channels_fmt.format(text_channels, secret_channels, voice_channels, secret_voice)
 
-        entries = [
-            ('Name', server.name),
-            ('ID', server.id),
-            ('Channels', channels),
-            ('Created', server.created_at),
-            ('Members', member_fmt.format(len(server.members), member_by_status)),
-            ('Owner', server.owner),
-            ('Icon', server.icon_url),
-            ('Roles', ', '.join(roles)),
-        ]
+        e = discord.Embed()
+        e.title = 'Info for ' + server.name
+        e.add_field(name='ID', value=server.id)
+        e.add_field(name='Owner', value=server.owner)
+        if server.icon:
+            e.set_thumbnail(url=server.icon_url)
 
-        await formats.indented_entry_to_code(self.bot, entries)
+        if server.splash:
+            e.set_image(url=server.splash_url)
+
+        e.add_field(name='Partnered?', value='Yes' if server.features else 'No')
+
+        fmt = 'Text %s (%s secret)\nVoice %s (%s locked)'
+        e.add_field(name='Channels', value=fmt % (text_channels, secret_channels, voice_channels, secret_voice))
+
+        fmt = 'Total: {0}\nOnline: {1[online]}' \
+              ', Offline: {1[offline]}' \
+              '\nDnD: {1[dnd]}' \
+              ', Idle: {1[idle]}'
+
+        e.add_field(name='Members', value=fmt.format(server.member_count, member_by_status))
+        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else '%s roles' % len(roles))
+        e.set_footer(text='Created').timestamp = server.created_at
+        await self.bot.say(embed=e)
 
     async def say_permissions(self, member, channel):
         permissions = channel.permissions_for(member)
