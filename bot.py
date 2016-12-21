@@ -13,6 +13,13 @@ description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
 """
 
+try:
+    import uvloop
+except ImportError:
+    pass
+else:
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
 initial_extensions = [
     'cogs.meta',
     'cogs.splatoon',
