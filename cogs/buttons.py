@@ -102,6 +102,19 @@ class Buttons:
             e.description = ''.join(currency.itertext())
             return e
 
+        # check for release date card
+        release = parent.find(".//div[@id='_vBb']")
+        if release is not None:
+            try:
+                date = ''.join(release[0].itertext()).strip()
+                info = ''.join(release[1].itertext()).strip()
+            except:
+                return None
+            else:
+                e.title = 'Date Info'
+                e.description = '%s\n%s' % (date, info)
+                return e
+
         # check for weather card
         # this one is the most complicated of the group lol
         # everything is under a <div class="e"> which has a
@@ -175,6 +188,9 @@ class Buttons:
                 raise RuntimeError('Google somehow failed to respond.')
 
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
+
+            # with open('google.html', 'w', encoding='utf-8') as f:
+            #     f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
 
             """
             Tree looks like this.. sort of..
