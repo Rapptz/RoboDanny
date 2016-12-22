@@ -176,9 +176,6 @@ class Buttons:
 
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
-            with open('google.html', 'w', encoding='utf-8') as f:
-                f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
-
             """
             Tree looks like this.. sort of..
 
