@@ -73,6 +73,88 @@ class Buttons:
         if type(error) is commands.BadArgument:
             await self.bot.say(error)
 
+    def parse_google_card(self, node):
+        if node is None:
+            return None
+
+        e = discord.Embed(colour=0x738bd7)
+
+        # check if it's a calculator card:
+        calculator = node.find(".//table/tr/td/span[@class='nobr']/h2[@class='r']")
+        if calculator is not None:
+            e.title = 'Calculator'
+            e.description = ''.join(calculator.itertext())
+            return e
+
+        parent = node.getparent()
+
+        # check for unit conversion card
+        unit = parent.find(".//ol//div[@class='_Tsb']")
+        if unit is not None:
+            e.title = 'Unit Conversion'
+            e.description = ''.join(''.join(n.itertext()) for n in unit)
+            return e
+
+        # check for currency conversion card
+        currency = parent.find(".//ol/table[@class='std _tLi']/tr/td/h2")
+        if currency is not None:
+            e.title = 'Currency Conversion'
+            e.description = ''.join(currency.itertext())
+            return e
+
+        # check for weather card
+        # this one is the most complicated of the group lol
+        # everything is under a <div class="e"> which has a
+        # <h3>{{ weather for place }}</h3>
+        # string, the rest is fucking table fuckery.
+        weather = parent.find(".//ol//div[@class='e']")
+        if weather is None:
+            return None
+
+        location = weather.find('h3')
+        if location is None:
+            return None
+
+        e.title = ''.join(location.itertext())
+
+        table = weather.find('table')
+        if table is None:
+            return None
+
+        # This is gonna be a bit fucky.
+        # So the part we care about is on the second data
+        # column of the first tr
+        try:
+            tr = table[0]
+            img = tr[0].find('img')
+            category = img.get('alt')
+            image = 'https:' + img.get('src')
+            temperature = tr[1].xpath("./span[@class='wob_t']//text()")[0]
+        except:
+            return None # RIP
+        else:
+            e.set_thumbnail(url=image)
+            e.description = '*%s*' % category
+            e.add_field(name='Temperature', value=temperature)
+
+        # On the 4th column it tells us our wind speeds
+        try:
+            wind = ''.join(table[3].itertext()).replace('Wind: ', '')
+        except:
+            return None
+        else:
+            e.add_field(name='Wind', value=wind)
+
+        # On the 5th column it tells us our humidity
+        try:
+            humidity = ''.join(table[4][0].itertext()).replace('Humidity: ', '')
+        except:
+            return None
+        else:
+            e.add_field(name='Humidity', value=humidity)
+
+        return e
+
     async def get_google_entries(self, query):
         params = {
             'q': query,
@@ -85,11 +167,17 @@ class Buttons:
         # list of URLs
         entries = []
 
+        # the result of a google card, an embed
+        card = None
+
         async with aiohttp.get('https://www.google.com/search', params=params, headers=headers) as resp:
             if resp.status != 200:
                 raise RuntimeError('Google somehow failed to respond.')
 
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
+
+            with open('google.html', 'w', encoding='utf-8') as f:
+                f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
 
             """
             Tree looks like this.. sort of..
@@ -106,6 +194,9 @@ class Buttons:
                 </span>
             </div>
             """
+
+            card_node = root.find(".//div[@id='topstuff']")
+            card = self.parse_google_card(card_node)
 
             search_nodes = root.findall(".//div[@class='g']")
             for node in search_nodes:
@@ -129,16 +220,21 @@ class Buttons:
                 #     text = ''.join(short.itertext())
                 #     entries.append((url, text.replace('...', '')))
 
-        return entries
+        return card, entries
 
     @commands.command(aliases=['google'])
     async def g(self, *, query):
         """Searches google and gives you top result."""
         try:
-            entries = await self.get_google_entries(query)
+            card, entries = await self.get_google_entries(query)
         except RuntimeError as e:
             await self.bot.say(str(e))
         else:
+            if card:
+                msg = '\n'.join(map(lambda x: '<%s>' % x, entries[:3]))
+                card.add_field(name='Search Results', value='\n'.join(entries[:3]), inline=False)
+                return await self.bot.say(embed=card)
+
             next_two = entries[1:3]
             if next_two:
                 formatted = '\n'.join(map(lambda x: '<%s>' % x, next_two))
