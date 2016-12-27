@@ -4,30 +4,43 @@ import aiohttp
 import json
 
 class CodeBlock:
+    missing_error = 'Missing code block. Please use the following markdown\n\\`\\`\\`language\ncode here\n\\`\\`\\`'
     def __init__(self, argument):
-        block, code = argument.split('\n', 1)
+        try:
+            block, code = argument.split('\n', 1)
+        except ValueError:
+            raise commands.BadArgument(self.missing_error)
+
         if not block.startswith('```') and not code.endswith('```'):
-            raise commands.BadArgument('Could not find a code block.')
+            raise commands.BadArgument(self.missing_error)
 
         language = block[3:]
-        self.command = self.get_command_from_language(language)
+        self.command = self.get_command_from_language(language.lower())
         self.source = code.rstrip('`')
 
     def get_command_from_language(self, language):
-        commands = {
+        cmds = {
             'cpp': 'g++ -std=c++14 -O2 -Wall -Wextra -pedantic -pthread main.cpp && ./a.out',
+            'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
             'py': 'python main.cpp', # coliru has no python3
             'python': 'python main.cpp',
             'haskell': 'runhaskell main.cpp'
         }
 
+        cpp = cmds['cpp']
+        for alias in ('cc', 'h', 'c++', 'h++', 'hpp'):
+            cmds[alias] = cpp
         try:
-            return commands[language.lower()]
+            return cmds[language]
         except KeyError as e:
-            raise commands.BadArgument('Unknown language to compile for: {}'.format(e)) from e
+            if language:
+                fmt = 'Unknown language to compile for: {}'.format(language)
+            else:
+                fmt = 'Could not find a language to compile with.'
+            raise commands.BadArgument(fmt) from e
 
 class Lounge:
-    """Commands for Lounge<C++> only.
+    """Commands made for Lounge<C++>.
 
     Don't abuse these.
     """
@@ -36,19 +49,21 @@ class Lounge:
         self.bot = bot
 
     @commands.command(pass_context=True)
-    @checks.is_lounge_cpp()
-    async def coliru(self, ctx, *, code : CodeBlock):
+    async def coliru(self, ctx, *, code: CodeBlock):
         """Compiles code via Coliru.
 
-        You have to pass in a codeblock with the language syntax
+        You have to pass in a code block with the language syntax
         either set to one of these:
 
         - cpp
+        - c
         - python
         - py
         - haskell
 
         Anything else isn't supported. The C++ compiler uses g++ -std=c++14.
+
+        The python support is only python2.7 (unfortunately).
 
         Please don't spam this for Stacked's sake.
         """
@@ -59,6 +74,7 @@ class Lounge:
 
         data = json.dumps(payload)
 
+        await self.bot.type()
         async with aiohttp.post('http://coliru.stacked-crooked.com/compile', data=data) as resp:
             if resp.status != 200:
                 await self.bot.say('Coliru did not respond in time.')
@@ -71,31 +87,19 @@ class Lounge:
                 return
 
             # output is too big so post it in gist
-            gist = {
-                'description': 'The response for {0.author}\'s compilation.'.format(ctx.message),
-                'public': True,
-                'files': {
-                    'output': {
-                        'content': output
-                    },
-                    'original': {
-                        'content': code.source
-                    }
-                }
-            }
-
-            async with aiohttp.post('https://api.github.com/gists', data=json.dumps(gist)) as gh:
-                if gh.status != 201:
-                    await self.bot.say('Could not create gist.')
+            async with aiohttp.post('http://coliru.stacked-crooked.com/share', data=data) as resp:
+                if resp.status != 200:
+                    await self.bot.say('Could not create coliru shared link')
                 else:
-                    js = await gh.json()
-                    await self.bot.say('Output too big. The content is in: {0[html_url]}'.format(js))
-
+                    shared_id = await resp.text()
+                    await self.bot.say('Output too big. Coliru link: http://coliru.stacked-crooked.com/a/' + shared_id)
 
     @coliru.error
     async def coliru_error(self, error, ctx):
         if isinstance(error, commands.BadArgument):
             await self.bot.say(error)
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self.bot.say(CodeBlock.missing_error)
 
 def setup(bot):
     bot.add_cog(Lounge(bot))

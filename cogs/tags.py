@@ -1,15 +1,22 @@
 from .utils import config, checks, formats
+from .utils.paginator import Pages
+
 from discord.ext import commands
 import json
-import discord.utils
+import datetime
+import discord
+import difflib
 
 class TagInfo:
+    __slots__ = ('name', 'content', 'owner_id', 'uses', 'location', 'created_at')
+
     def __init__(self, name, content, owner_id, **kwargs):
         self.name = name
         self.content = content
         self.owner_id = owner_id
         self.uses = kwargs.pop('uses', 0)
         self.location = kwargs.pop('location')
+        self.created_at = kwargs.pop('created_at', 0.0)
 
     @property
     def is_generic(self):
@@ -18,33 +25,38 @@ class TagInfo:
     def __str__(self):
         return self.content
 
-    def info_entries(self, ctx, db):
+    async def embed(self, ctx, db):
+        e = discord.Embed(title=self.name)
+
+        e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
+        e.add_field(name='Uses', value=self.uses)
+
         popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
         try:
-            rank = popular.index(self) + 1
+            e.add_field(name='Rank', value=popular.index(self) + 1)
         except:
-            rank = '<Not found>'
+            e.add_field(name='Rank', value='Unknown')
 
-        data = [
-            ('Name', self.name),
-            ('Uses', self.uses),
-            ('Rank', rank),
-            ('Type', 'Generic' if self.is_generic else 'Server-specific'),
-        ]
+        if self.created_at:
+            e.timestamp = datetime.datetime.fromtimestamp(self.created_at)
 
-        # we can make the assumption that if the tag requested is a server specific tag
-        # then the server the message belongs to will be the server of the server specific tag.
-        members = ctx.bot.get_all_members() if self.is_generic else ctx.message.server.members
-        owner = discord.utils.get(members, id=self.owner_id)
-        data.append(('Owner', owner.name if owner is not None else '<Not Found>'))
-        data.append(('Owner ID', self.owner_id))
-        return data
+        owner = discord.utils.find(lambda m: m.id == self.owner_id, ctx.bot.get_all_members())
+        if owner is None:
+            owner = await ctx.bot.get_user_info(self.owner_id)
+
+        e.set_author(name=str(owner), icon_url=owner.avatar_url or owner.default_avatar_url)
+
+        e.set_footer(text='Generic' if self.is_generic else 'Server-specific')
+        return e
 
 
 class TagEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, TagInfo):
-            payload = obj.__dict__.copy()
+            payload = {
+                attr: getattr(obj, attr)
+                for attr in TagInfo.__slots__
+            }
             payload['__tag__'] = True
             return payload
         return json.JSONEncoder.default(self, obj)
@@ -61,25 +73,6 @@ class Tags:
         self.bot = bot
         self.config = config.Config('tags.json', encoder=TagEncoder, object_hook=tag_decoder,
                                                  loop=bot.loop, load_later=True)
-
-    def get_tag(self, server, name):
-        # Basically, if we're in a PM then we will use the generic tag database
-        # if we aren't, we will check the server specific tag database.
-        # If we don't have a server specific database, fallback to generic.
-        # If it isn't found, fallback to generic.
-
-        generic = self.config.get('generic', {})
-        if server is None:
-            return generic.get(name)
-
-        db = self.config.get(server.id)
-        if db is None:
-            return generic.get(name)
-
-        entry = db.get(name)
-        if entry is None:
-            return generic.get(name)
-        return entry
 
     def get_database_location(self, message):
         return 'generic' if message.channel.is_private else message.server.id
@@ -100,6 +93,20 @@ class Tags:
         generic.update(self.config.get(server.id, {}))
         return generic
 
+    def get_tag(self, server, name):
+        # Basically, if we're in a PM then we will use the generic tag database
+        # if we aren't, we will check the server specific tag database.
+        # If we don't have a server specific database, fallback to generic.
+        # If it isn't found, fallback to generic.
+        all_tags = self.get_possible_tags(server)
+        try:
+            return all_tags[name]
+        except KeyError:
+            possible_matches = difflib.get_close_matches(name, tuple(all_tags.keys()))
+            if not possible_matches:
+                raise RuntimeError('Tag not found.')
+            raise RuntimeError('Tag not found. Did you mean...\n' + '\n'.join(possible_matches))
+
     @commands.group(pass_context=True, invoke_without_command=True)
     async def tag(self, ctx, *, name : str):
         """Allows you to tag text for later retrieval.
@@ -109,10 +116,10 @@ class Tags:
         """
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-        if tag is None:
-            await self.bot.say('Tag not found.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         tag.uses += 1
         await self.bot.say(tag)
@@ -149,8 +156,7 @@ class Tags:
         try:
             self.verify_lookup(lookup)
         except RuntimeError as e:
-            await self.bot.say(e)
-            return
+            return await self.bot.say(e)
 
         location = self.get_database_location(ctx.message)
         db = self.config.get(location, {})
@@ -158,9 +164,16 @@ class Tags:
             await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
             return
 
-        db[lookup] = TagInfo(name, content, ctx.message.author.id, location=location)
+        db[lookup] = TagInfo(name, content, ctx.message.author.id,
+                             location=location,
+                             created_at=datetime.datetime.utcnow().timestamp())
         await self.config.put(location, db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
+
+    @create.error
+    async def create_error(self, error, ctx):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self.bot.say('Tag ' + str(error))
 
     @tag.command(pass_context=True)
     async def generic(self, ctx, name : str, *, content : str):
@@ -182,11 +195,18 @@ class Tags:
             await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
             return
 
-        db[lookup] = TagInfo(name, content, ctx.message.author.id, location='generic')
+        db[lookup] = TagInfo(name, content, ctx.message.author.id,
+                             location='generic',
+                             created_at=datetime.datetime.utcnow().timestamp())
         await self.config.put('generic', db)
         await self.bot.say('Tag "{}" successfully created.'.format(name))
 
-    @tag.command(pass_context=True)
+    @generic.error
+    async def generic_error(self, error, ctx):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self.bot.say('Tag ' + str(error))
+
+    @tag.command(pass_context=True, ignore_extra=False)
     async def make(self, ctx):
         """Interactive makes a tag for you.
 
@@ -230,31 +250,51 @@ class Tags:
         else:
             content = self.clean_tag_content(content.content)
 
-        db[lookup] = TagInfo(name.content, content, name.author.id, location=location)
+        db[lookup] = TagInfo(name.content, content, name.author.id,
+                             location=location,
+                             created_at=datetime.datetime.utcnow().timestamp())
         await self.config.put(location, db)
         await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
 
-    def generate_stats(self, db, label):
-        yield '- Total {} tags: {}'.format(label, len(db))
-        if db:
-            popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
-            total_uses = sum(t.uses for t in popular)
-            yield '- Total {} tag uses: {}'.format(label, total_uses)
-            for i, tag in enumerate(popular[:3], 1):
-                yield '- Rank {0} tag: {1.name} with {1.uses} uses'.format(i, tag)
+    @make.error
+    async def tag_make_error(self, error, ctx):
+        if type(error) is commands.TooManyArguments:
+            await self.bot.say('Please call just {0.prefix}tag make'.format(ctx))
+
+    def top_three_tags(self, db):
+        emoji = 129351 # ord(':first_place:')
+        popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
+        for tag in popular[:3]:
+            yield (chr(emoji), tag)
+            emoji += 1
 
     @tag.command(pass_context=True)
     async def stats(self, ctx):
         """Gives stats about the tag database."""
-        result = []
         server = ctx.message.server
         generic = self.config.get('generic', {})
-        result.extend(self.generate_stats(generic, 'Generic'))
+        e = discord.Embed()
+        e.add_field(name='Generic', value='%s tags\n%s uses' % (len(generic), sum(t.uses for t in generic.values())))
+
+        total_tags = sum(len(c) for c in self.config.all().values())
+        total_uses = sum(sum(t.uses for t in c.values()) for c in self.config.all().values())
+        e.add_field(name='Global', value='%s tags\n%s uses' % (total_tags, total_uses))
 
         if server is not None:
-            result.extend(self.generate_stats(self.config.get(server.id, {}), 'Server Specific'))
+            db = self.config.get(server.id, {})
+            e.add_field(name='Server-Specific', value='%s tags\n%s uses' % (len(db), sum(t.uses for t in db.values())))
+        else:
+            db = {}
+            e.add_field(name='Server-Specific', value='No Info')
 
-        await self.bot.say('\n'.join(result))
+        fmt = '{0.name} ({0.uses} uses)'
+        for emoji, tag in self.top_three_tags(generic):
+            e.add_field(name=emoji + ' Generic Tag', value=fmt.format(tag))
+
+        for emoji, tag in self.top_three_tags(db):
+            e.add_field(name=emoji + ' Server Tag', value=fmt.format(tag))
+
+        await self.bot.say(embed=e)
 
     @tag.command(pass_context=True)
     async def edit(self, ctx, name : str, *, content : str):
@@ -268,11 +308,10 @@ class Tags:
         content = self.clean_tag_content(content)
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-
-        if tag is None:
-            await self.bot.say('The tag does not exist.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         if tag.owner_id != ctx.message.author.id:
             await self.bot.say('Only the tag owner can edit this tag.')
@@ -294,11 +333,10 @@ class Tags:
         """
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
-
-        if tag is None:
-            await self.bot.say('Tag not found.')
-            return
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
         if not tag.is_generic:
             can_delete = checks.role_or_permissions(ctx, lambda r: r.name == 'Bot Admin', manage_messages=True)
@@ -316,7 +354,7 @@ class Tags:
         await self.config.put(tag.location, db)
         await self.bot.say('Tag successfully removed.')
 
-    @tag.command(pass_context=True)
+    @tag.command(pass_context=True, aliases=['owner'])
     async def info(self, ctx, *, name : str):
         """Retrieves info about a tag.
 
@@ -325,14 +363,13 @@ class Tags:
 
         lookup = name.lower()
         server = ctx.message.server
-        tag = self.get_tag(server, lookup)
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
 
-        if tag is None:
-            await self.bot.say('Tag not found.')
-            return
-
-        entries = tag.info_entries(ctx, self.get_possible_tags(server))
-        await formats.entry_to_code(self.bot, entries)
+        embed = await tag.embed(ctx, self.get_possible_tags(server))
+        await self.bot.say(embed=embed)
 
     @info.error
     async def info_error(self, error, ctx):
@@ -354,11 +391,84 @@ class Tags:
         if server is not None:
             tags.extend(tag.name for tag in self.config.get(server.id, {}).values() if tag.owner_id == owner.id)
 
+        tags.sort()
+
         if tags:
-            fmt = '{0.name} has the following {1} tags:\n{2}'
-            await self.bot.say(fmt.format(owner, len(tags), ', '.join(tags)))
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=tags)
+                p.embed.colour = 0x738bd7 # blurple
+                p.embed.set_author(name=owner.display_name, icon_url=owner.avatar_url or owner.default_avatar_url)
+                await p.paginate()
+            except Exception as e:
+                await self.bot.say(e)
         else:
             await self.bot.say('{0.name} has no tags.'.format(owner))
+
+    @tag.command(name='all', pass_context=True, no_pm=True)
+    async def _all(self, ctx):
+        """Lists all server-specific tags for this server."""
+
+        tags = [tag.name for tag in self.config.get(ctx.message.server.id, {}).values()]
+        tags.sort()
+
+        if tags:
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=tags, per_page=15)
+                p.embed.colour =  0x738bd7 # blurple
+                await p.paginate()
+            except Exception as e:
+                await self.bot.say(e)
+        else:
+            await self.bot.say('This server has no server-specific tags.')
+
+    @tag.command(pass_context=True, no_pm=True)
+    @checks.mod_or_permissions(manage_messages=True)
+    async def purge(self, ctx, member: discord.Member):
+        """Removes all server-specific tags by a user.
+
+        You must have Manage Messages permissions to use this.
+        """
+
+        db = self.config.get(ctx.message.server.id, {})
+        tags = [key for key, tag in db.items() if tag.owner_id == member.id]
+
+        if not ctx.message.channel.permissions_for(ctx.message.server.me).add_reactions:
+            return await self.bot.say('Bot cannot add reactions.')
+
+        if not tags:
+            return await self.bot.say('This user has no server-specific tags.')
+
+        msg = await self.bot.say('This will delete %s tags are you sure? **This action cannot be reversed**.\n\n' \
+                                 'React with either \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.' % len(tags))
+
+        cancel = False
+        author_id = ctx.message.author.id
+        def check(reaction, user):
+            nonlocal cancel
+            if user.id != author_id:
+                return False
+
+            if reaction.emoji == '\N{WHITE HEAVY CHECK MARK}':
+                return True
+            elif reaction.emoji == '\N{CROSS MARK}':
+                cancel = True
+                return True
+            return False
+
+        for emoji in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
+            await self.bot.add_reaction(msg, emoji)
+
+        react = await self.bot.wait_for_reaction(message=msg, check=check, timeout=60.0)
+        if react is None or cancel:
+            await self.bot.delete_message(msg)
+            return await self.bot.say('Cancelling.')
+
+        for key in tags:
+            db.pop(key)
+
+        await self.config.put(ctx.message.server.id, db)
+        await self.bot.delete_message(msg)
+        await self.bot.say('Successfully removed all %s tags that belong to %s' % (len(tags), member.display_name))
 
     @tag.command(pass_context=True)
     async def search(self, ctx, *, query : str):
@@ -373,21 +483,18 @@ class Tags:
         server = ctx.message.server
         query = query.lower()
         if len(query) < 2:
-            await self.bot.say('The query length must be at least two characters.')
-            return
+            return await self.bot.say('The query length must be at least two characters.')
 
-        generic = self.config.get('generic', {})
-        results = {value.name for name, value in generic.items() if query in name}
+        tags = self.get_possible_tags(server)
+        results = [tag.name for key, tag in tags.items() if query in key]
 
-        if server is not None:
-            db = self.config.get(server.id, {})
-            for name, value in db.items():
-                if query in name:
-                    results.add(value.name)
-
-        fmt = '{} tag(s) found.\n{}'
         if results:
-            await self.bot.say(fmt.format(len(results), ', '.join(results)))
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=results, per_page=15)
+                p.embed.colour = 0x738bd7 # blurple
+                await p.paginate()
+            except Exception as e:
+                await self.bot.say(e)
         else:
             await self.bot.say('No tags found.')
 

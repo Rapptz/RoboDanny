@@ -124,7 +124,7 @@ class Mentions:
 
             origin = server.get_member(member)
 
-            if mode is MentionMode.on and origin.status == discord.Status.online:
+            if mode is MentionMode.on and origin.status in (discord.Status.online, discord.Status.dnd):
                 continue
 
             coro = self.handle_message_mention(origin, message)

@@ -13,6 +13,13 @@ description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
 """
 
+try:
+    import uvloop
+except ImportError:
+    pass
+else:
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
 initial_extensions = [
     'cogs.meta',
     'cogs.splatoon',
@@ -27,6 +34,10 @@ initial_extensions = [
     'cogs.api',
     'cogs.stars',
     'cogs.admin',
+    'cogs.buttons',
+    'cogs.pokemon',
+    'cogs.permissions',
+    'cogs.stats',
 ]
 
 discord_logger = logging.getLogger('discord')
@@ -37,7 +48,9 @@ handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
 log.addHandler(handler)
 
 help_attrs = dict(hidden=True)
-bot = commands.Bot(command_prefix=['?', '!', '\u2757'], description=description, pm_help=None, help_attrs=help_attrs)
+
+prefix = ['?', '!', '\N{HEAVY EXCLAMATION MARK SYMBOL}']
+bot = commands.Bot(command_prefix=prefix, description=description, pm_help=None, help_attrs=help_attrs)
 
 @bot.event
 async def on_command_error(error, ctx):
@@ -64,18 +77,6 @@ async def on_resumed():
     print('resumed...')
 
 @bot.event
-async def on_command(command, ctx):
-    bot.commands_used[command.name] += 1
-    message = ctx.message
-    destination = None
-    if message.channel.is_private:
-        destination = 'Private Message'
-    else:
-        destination = '#{0.channel.name} ({0.server.name})'.format(message)
-
-    log.info('{0.timestamp}: {0.author.name} in {1}: {0.content}'.format(message, destination))
-
-@bot.event
 async def on_message(message):
     if message.author.bot:
         return
@@ -83,6 +84,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.command(pass_context=True, hidden=True)
+@checks.is_owner()
 async def do(ctx, times : int, *, command):
     """Repeats a command a specified number of times."""
     msg = copy.copy(ctx.message)
@@ -99,22 +101,25 @@ def load_credentials():
     with open('credentials.json') as f:
         return json.load(f)
 
-
 if __name__ == '__main__':
-    if any('debug' in arg.lower() for arg in sys.argv):
-        bot.command_prefix = '$'
-
     credentials = load_credentials()
+    debug = any('debug' in arg.lower() for arg in sys.argv)
+    if debug:
+        bot.command_prefix = '$'
+        token = credentials.get('debug_token', credentials['token'])
+    else:
+        token = credentials['token']
+
     bot.client_id = credentials['client_id']
-    bot.commands_used = Counter()
     bot.carbon_key = credentials['carbon_key']
+    bot.bots_key = credentials['bots_key']
     for extension in initial_extensions:
         try:
             bot.load_extension(extension)
         except Exception as e:
             print('Failed to load extension {}\n{}: {}'.format(extension, type(e).__name__, e))
 
-    bot.run(credentials['token'])
+    bot.run(token)
     handlers = log.handlers[:]
     for hdlr in handlers:
         hdlr.close()

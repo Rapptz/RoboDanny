@@ -188,6 +188,7 @@ class Splatoon:
                 await self.bot.say('Could not figure out what mode you meant.')
                 return
         else:
+            random.shuffle(modes)
             scrims = get_random_scrims(modes, maps, game_count)
             result = ['Game {0}: {1.mode} on {1.stage}'.format(game, scrim) for game, scrim in enumerate(scrims, 1)]
 

@@ -1,15 +1,54 @@
 from discord.ext import commands
 from .utils import checks, config
 import asyncio
+import aiohttp
 import discord
 import datetime
+import difflib
+import re
+import lxml.etree as etree
 from collections import Counter
 
 DISCORD_API_ID = '81384788765712384'
+DISCORD_BOTS_ID = '110373943822540800'
 USER_BOTS_ROLE = '178558252869484544'
+CONTRIBUTORS_ROLE = '111173097888993280'
 
 def is_discord_api():
     return checks.is_in_servers(DISCORD_API_ID)
+
+def can_run_log():
+    def predicate(ctx):
+        server = ctx.message.server
+        if server is None:
+            return False
+
+        if server.id == DISCORD_BOTS_ID:
+            return ctx.message.author.server_permissions.kick_members
+
+        if server.id != DISCORD_API_ID:
+            return False
+
+        role = discord.utils.find(lambda r: r.id == CONTRIBUTORS_ROLE, server.roles)
+        if role is None:
+            return False
+
+        return ctx.message.author.top_role >= role
+
+    return commands.check(predicate)
+
+def contributor_or_higher():
+    def predicate(ctx):
+        server = ctx.message.server
+        if server is None:
+            return False
+
+        role = discord.utils.find(lambda r: r.id == CONTRIBUTORS_ROLE, server.roles)
+        if role is None:
+            return False
+
+        return ctx.message.author.top_role >= role
+    return commands.check(predicate)
 
 class API:
     """Discord API exclusive things."""
@@ -23,6 +62,12 @@ class API:
 
         # channel_id to dict with <name> to <role id> mapping
         self.feeds = config.Config('feeds.json')
+
+        # regex for Pollr format
+        self.pollr = re.compile(r'\*\*(?P<type>.+?)\*\*\s\|\sCase\s(?P<case>\d+)\n' \
+                                r'\*\*User\*\*:\s(?P<user>.+?)\n' \
+                                r'\*\*Reason\*\*:\s(?P<reason>.+?)\n' \
+                                r'\*\*Responsible Moderator\*\*:\s(?P<mod>.+)')
 
     async def on_member_join(self, member):
         if member.server.id != DISCORD_API_ID:
@@ -77,6 +122,8 @@ class API:
             'perms': discord.Permissions,
             'channel': discord.Channel,
             'chan': discord.Channel,
+            'obj': discord.Object,
+            'object': discord.Object,
         }
 
         base_url = 'http://discordpy.rtfd.io/en/latest/api.html'
@@ -144,13 +191,16 @@ class API:
 
 
         # first we get the most used users
-        top_five = counter.most_common(5)
-        if top_five:
-            output.append('**Top {} users**:'.format(len(top_five)))
+        top_ten = counter.most_common(10)
+        if top_ten:
+            output.append('**Top {} users**:'.format(len(top_ten)))
 
-            for rank, (user, uses) in enumerate(top_five, 1):
+            for rank, (user, uses) in enumerate(top_ten, 1):
                 member = server.get_member(user)
-                output.append('{}\u20e3 {}: {}'.format(rank, member, uses))
+                if rank != 10:
+                    output.append('{}\u20e3 {}: {}'.format(rank, member, uses))
+                else:
+                    output.append('\N{KEYCAP TEN} {}: {}'.format(member, uses))
 
         await self.bot.say('\n'.join(output))
 
@@ -236,8 +286,12 @@ class API:
         feeds = self.feeds.get(channel.id, {})
         feed = feed.lower()
 
+        if len(feeds) == 0:
+            await self.bot.say('This channel has no feeds set up.')
+            return
+
         if feed not in feeds:
-            await self.bot.say('This feed does not exist.')
+            await self.bot.say('This feed does not exist.\nValid feeds: ' + ', '.join(feeds))
             return
 
         role = feeds[feed]
@@ -310,6 +364,68 @@ class API:
 
         # then make the role unmentionable
         await self.bot.edit_role(server, role, mentionable=False)
+
+    @commands.command(pass_context=True)
+    @can_run_log()
+    async def log(self, ctx, *, user: str):
+        """Shows mod log entries for a user.
+
+        Only searches the past 1000 cases.
+        """
+
+        server = ctx.message.server
+        if server.id == DISCORD_API_ID:
+            mod_log = server.get_channel('173201159761297408')
+        else:
+            mod_log = server.get_channel('124622509881425920')
+
+        entries = []
+        entry_fmt = '**{type} #{case}** {user}\n{mod}: {reason}'
+        async for m in self.bot.logs_from(mod_log, limit=1000):
+            entry = self.pollr.match(m.content)
+            if entry is None:
+                continue
+
+            if user in entry.group('user'):
+                entries.append(entry_fmt.format(**entry.groupdict()))
+
+        fmt = 'Found {} entries:\n{}'
+        await self.bot.say(fmt.format(len(entries), '\n\n'.join(entries)))
+
+    async def refresh_faq_cache(self):
+        self.faq_entries = {}
+        async with aiohttp.get('http://discordpy.readthedocs.io/en/latest/faq.html') as resp:
+            text = await resp.text()
+
+            root = etree.fromstring(text, etree.HTMLParser())
+            nodes = root.findall(".//div[@id='questions']/ul[@class='simple']//ul/li/a")
+            for node in nodes:
+                self.faq_entries[''.join(node.itertext()).strip()] = node.get('href').strip()
+
+    @commands.command()
+    @is_discord_api()
+    async def faq(self, *, query: str = None):
+        """Shows an FAQ entry from the discord.py documentation"""
+        if not hasattr(self, 'faq_entries'):
+            await self.refresh_faq_cache()
+
+        if query is None:
+            return await self.bot.say('http://discordpy.readthedocs.io/en/latest/faq.html')
+
+        query = query.lower()
+        seq = difflib.SequenceMatcher(lambda x: x == ' ', None, query)
+        def key(s):
+            o = s.lower()
+            seq.set_seq1(o)
+            m = seq.find_longest_match(0, len(o), 0, len(query))
+            return m.size
+
+        key = max(self.faq_entries, key=key)
+        if key is None:
+            return await self.bot.say('No matches found...')
+
+        value = self.faq_entries[key]
+        await self.bot.say('**%s**\nhttp://discordpy.readthedocs.io/en/latest/faq.html%s' % (key, value))
 
 def setup(bot):
     bot.add_cog(API(bot))

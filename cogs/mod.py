@@ -1,19 +1,62 @@
 from discord.ext import commands
 from .utils import config, checks
 from collections import Counter
+from inspect import cleandoc
+
 import re
+import json
 import discord
+import enum
+import datetime
 import asyncio
+import argparse, shlex
+import logging
+
+log = logging.getLogger(__name__)
+
+class Arguments(argparse.ArgumentParser):
+    def error(self, message):
+        raise RuntimeError(message)
+
+class RaidMode(enum.Enum):
+    off = 0
+    on = 1
+    strict = 2
+
+    def __str__(self):
+        return self.name
+
+def object_hook(obj):
+    if '__raids__' in obj:
+        raids = obj['__raids__']
+        obj['__raids__'] = { k: (RaidMode(mode), v) for k, (mode, v) in raids.items() }
+        return obj
+    else:
+        return obj
+
+class RaidModeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if type(o) is RaidMode:
+            return o.value
+
+        super().default(o)
 
 class Mod:
     """Moderation related commands."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = config.Config('mod.json', loop=bot.loop)
+        self.config = config.Config('mod.json', loop=bot.loop, object_hook=object_hook, encoder=RaidModeEncoder)
 
     def bot_user(self, message):
         return message.server.me if message.channel.is_private else self.bot.user
+
+    def is_plonked(self, server, member):
+        db = self.config.get('plonks', {}).get(server.id, [])
+        bypass_ignore = member.server_permissions.manage_server
+        if not bypass_ignore and member.id in db:
+            return True
+        return False
 
     def __check(self, ctx):
         msg = ctx.message
@@ -21,8 +64,9 @@ class Mod:
             return True
 
         # user is bot banned
-        if msg.author.id in self.config.get('plonks', []):
-            return False
+        if msg.server:
+            if self.is_plonked(msg.server, msg.author):
+                return False
 
         # check if the channel is ignored
         # but first, resolve their permissions
@@ -36,6 +80,248 @@ class Mod:
             return False
 
         return True
+
+    async def create_temporary_invite(self, channel_id):
+        # discord.py currently doesn't support this so just patch this in.
+        http = self.bot.http
+        url = '{0.CHANNELS}/{1}/invites'.format(http, channel_id)
+        payload = {
+            'max_age': 0,
+            'max_uses': 1,
+            'temporary': False,
+            'unique': True
+        }
+
+        data = await http.post(url, json=payload, bucket='create_invite')
+        return 'https://discord.gg/' + data['code']
+
+    async def check_raid(self, message):
+        guild = message.server
+        member = message.author
+
+        raids = self.config.get('__raids__', {}).get(guild.id, (RaidMode.off, None))
+        if raids[0] is not RaidMode.strict:
+            return
+
+        delta  = (member.created_at - member.joined_at).total_seconds() // 60
+
+        # they must have created their account at most 30 minutes before they joined.
+        if delta > 30:
+            return
+
+        delta = (message.timestamp - member.joined_at).total_seconds() // 60
+
+        # check if this is their first message in the 30 minutes they joined
+        if delta > 30:
+            return
+
+        fmt = """Howdy. The server {0.name} is currently in a raid mode lockdown.
+
+              A raid is when a server is being bombarded with trolls or low effort posts.
+              Unfortunately, what this means is that you have been automatically kicked for
+              meeting the suspicious thresholds currently set.
+
+              **Do not worry though, as you will be able to join again in the future!**
+
+              Please use this invite in an hour or so when things have cooled down! {1}
+              """
+
+        try:
+            invite = await self.create_temporary_invite(guild.id)
+            fmt = cleandoc(fmt).format(guild, invite)
+            await self.bot.send_message(member, fmt)
+        except discord.HTTPException:
+            pass
+
+        # kick anyway
+        try:
+            await self.bot.kick(member)
+        except discord.HTTPException:
+            pass
+        else:
+            log.info('[Raid Mode] Kicked {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
+            channel = self.bot.get_channel(raids[1])
+            await self.bot.send_message(channel, 'Kicked {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
+
+    async def on_message(self, message):
+        if message.author == self.bot.user or checks.is_owner_check(message):
+            return
+
+        if message.server is None:
+            return
+
+        # check for raid mode stuff
+        await self.check_raid(message)
+
+        # auto-ban tracking for mention spams begin here
+
+        if len(message.mentions) <= 3:
+            return
+
+        counts = self.config.get('mentions', {})
+        settings = counts.get(message.server.id)
+        if settings is None:
+            return
+
+        # check if it meets the thresholds required
+        if len(message.mentions) < settings['count']:
+            return
+
+        if message.channel.id in settings.get('ignored', []):
+            return
+
+        try:
+            await self.bot.ban(message.author)
+        except Exception as e:
+            log.info('Failed to autoban member {0.author} (ID: {0.author.id}) in server {0.server}'.format(message))
+        else:
+            fmt = '{0} (ID: {0.id}) has been banned for spamming mentions ({1} mentions).'
+            await self.bot.send_message(message.channel, fmt.format(message.author, len(message.mentions)))
+            log.info('Member {0.author} (ID: {0.author.id}) has been autobanned from server {0.server}'.format(message))
+
+    async def on_member_join(self, member):
+        raids = self.config.get('__raids__', {})
+        data = raids.get(member.server.id, (RaidMode.off, None))
+        if data[0] is RaidMode.off:
+            return
+
+        now = datetime.datetime.utcnow()
+
+        # these are the dates in minutes
+        created = (now - member.created_at).total_seconds() // 60
+
+        # Do the broadcasted message to the channel
+        e = discord.Embed(title='Member Joined')
+        e.timestamp = member.created_at
+        e.colour = discord.Colour.green()
+        e.set_footer(text='Created')
+        e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
+
+        if created > 30:
+            e.add_field(name='Created', value='More than 30 minutes ago')
+        else:
+            e.add_field(name='Created', value='%d minutes ago' % created)
+
+        e.add_field(name='ID', value=member.id)
+        e.add_field(name='Joined', value=member.joined_at)
+        channel = self.bot.get_channel(data[1])
+        await self.bot.send_message(channel, embed=e)
+
+    @commands.group(aliases=['raids'], pass_context=True, invoke_without_command=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid(self, ctx):
+        """Controls raid mode on the server.
+
+        Calling this command with no arguments will show the current raid
+        mode information.
+
+        You must have Manage Server permissions or have the Bot Admin role
+        to use this command or its subcommands.
+        """
+
+        raids = self.config.get('__raids__', {})
+        # Raid data is [type, channel_id?], i.e. a tuple
+        data = raids.get(ctx.message.server.id, (RaidMode.off, None))
+
+        fmt = 'Raid Mode: {}\nBroadcast Channel: {}'
+        ch = '<#%s>' % data[1] if data[1] else None
+        await self.bot.say(fmt.format(data[0], ch))
+
+    @raid.command(name='on', aliases=['enable', 'enabled'], pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid_on(self, ctx, *, channel: discord.Channel = None):
+        """Enables basic raid mode on the server.
+
+        When enabled, server verification level is set to table flip
+        levels and allows the bot to broadcast new members joining
+        to a specified channel.
+
+        If no channel is given, then the bot will broadcast join
+        messages on the channel this command was used in.
+        """
+
+        if channel is None:
+            channel = ctx.message.channel
+
+        if channel.type is not discord.ChannelType.text:
+            return await self.bot.say('That is not a text channel.')
+
+        guild = ctx.message.server
+        try:
+            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.high)
+        except discord.HTTPException:
+            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+
+        raids = self.config.get('__raids__', {})
+        raids[guild.id] = (RaidMode.on, channel.id)
+        await self.config.put('__raids__', raids)
+        fmt = 'Raid mode enabled. Broadcasting join messages to %s.' % channel.mention
+        await self.bot.say(fmt)
+
+    @raid.command(name='off', aliases=['disable', 'disabled'], pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid_off(self, ctx):
+        """Disables raid mode on the server.
+
+        When disabled, the server verification levels are set
+        back to Low levels and the bot will stop broadcasting
+        join messages.
+        """
+
+        guild = ctx.message.server
+
+        try:
+            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.low)
+        except discord.HTTPException:
+            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+
+        raids = self.config.get('__raids__', {})
+        raids[guild.id] = (RaidMode.off, None)
+        await self.config.put('__raids__', raids)
+        await self.bot.say('Raid mode disabled. No longer broadcasting join messages.')
+
+    @raid.command(name='strict', pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def raid_strict(self, ctx, *, channel: discord.Channel = None):
+        """Enables strict raid mode on the server.
+
+        Strict mode is similar to regular enabled raid mode, with the added
+        benefit of auto-kicking members that meet all of the following requirements:
+
+        - Account creation date and join date are at most 30 minutes apart.
+        - First message recorded on the server is 30 minutes apart from join date.
+
+        Members who meet these requirements will get a private message saying that the
+        server is currently in lock down and if they are legitimate to join back at a
+        later time via a created one-time use invite.
+
+        If this is considered too strict, it is recommended to fall back to regular
+        raid mode.
+        """
+
+        if channel is None:
+            channel = ctx.message.channel
+
+        if channel.type is not discord.ChannelType.text:
+            return await self.bot.say('That is not a text channel.')
+
+        guild = ctx.message.server
+        my_permissions = guild.default_channel.permissions_for(guild.me)
+
+        if not (my_permissions.kick_members and my_permissions.create_instant_invite):
+            return await self.bot.say('\N{NO ENTRY SIGN} I do not have permissions to kick members or create invites.')
+
+        try:
+            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.high)
+        except discord.HTTPException:
+            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+
+        raids = self.config.get('__raids__', {})
+        raids[guild.id] = (RaidMode.strict, channel.id)
+        await self.config.put('__raids__', raids)
+
+        fmt = 'Raid mode enabled strictly. Broadcasting join messages to %s.' % channel.mention
+        await self.bot.say(fmt)
 
     @commands.group(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_channels=True)
@@ -108,29 +394,42 @@ class Mod:
         await self.config.put('ignored', list(set(ignored))) # make unique
         await self.bot.say('\U0001f44c')
 
-    @commands.command(pass_context=True, no_pm=True)
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     @checks.admin_or_permissions(manage_channels=True)
-    async def unignore(self, ctx, *, channel : discord.Channel = None):
-        """Unignores a specific channel from being processed.
+    async def unignore(self, ctx, *channels: discord.Channel):
+        """Unignores channels from being processed.
 
-        If no channel is specified, it unignores the current channel.
+        If no channels are specified, it unignores the current channel.
 
         To use this command you must have the Manage Channels permission or have the
         Bot Admin role.
         """
 
-        if channel is None:
-            channel = ctx.message.channel
+        if len(channels) == 0:
+            channels = (ctx.message.channel,)
 
         # a set is the proper data type for the ignore list
         # however, JSON only supports arrays and objects not sets.
         ignored = self.config.get('ignored', [])
-        try:
-            ignored.remove(channel.id)
-        except ValueError:
-            await self.bot.say('Channel was not ignored in the first place.')
-        else:
-            await self.bot.say('\U0001f44c')
+        for channel in channels:
+            try:
+                ignored.remove(channel.id)
+            except ValueError:
+                pass
+
+        await self.config.put('ignored', ignored)
+        await self.bot.say('\N{OK HAND SIGN}')
+
+    @unignore.command(name='all', pass_context=True, no_pm=True)
+    @checks.admin_or_permissions(manage_channels=True)
+    async def unignore_all(self, ctx):
+        """Unignores all channels in this server from being processed.
+
+        To use this command you must have the Manage Channels permission or have the
+        Bot Admin role.
+        """
+        channels = [c for c in ctx.message.server.channels if c.type is discord.ChannelType.text]
+        await ctx.invoke(self.unignore, *channels)
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.mod_or_permissions(manage_messages=True)
@@ -152,6 +451,8 @@ class Mod:
         spammers = Counter()
         channel = ctx.message.channel
         prefixes = self.bot.command_prefix
+        if callable(prefixes):
+            prefixes = prefixes(self.bot, ctx.message)
 
         def is_possible_command_invoke(entry):
             valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
@@ -176,19 +477,21 @@ class Mod:
                     except discord.Forbidden:
                         continue
                     else:
-                        spammers[entry.author.name] += 1
+                        spammers[entry.author.display_name] += 1
                         api_calls += 1
         else:
             predicate = lambda m: m.author == self.bot.user or is_possible_command_invoke(m)
             deleted = await self.bot.purge_from(channel, limit=search, before=ctx.message, check=predicate)
-            spammers = Counter(m.author.name for m in deleted)
+            spammers = Counter(m.author.display_name for m in deleted)
 
-        reply = await self.bot.say('Clean up completed. {} message(s) were deleted.'.format(sum(spammers.values())))
-        spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
-        stats = '\n'.join(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
-        await self.bot.whisper(stats)
-        await asyncio.sleep(3)
-        await self.bot.delete_message(reply)
+        deleted = sum(spammers.values())
+        messages = ['%s %s removed.' % (deleted, 'message was' if deleted == 1 else 'messages were')]
+        if deleted:
+            messages.append('')
+            spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
+            messages.extend(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
+
+        await self.bot.say('\n'.join(messages), delete_after=10)
 
     @commands.command(no_pm=True)
     @checks.admin_or_permissions(kick_members=True)
@@ -253,50 +556,159 @@ class Mod:
         else:
             await self.bot.say('\U0001f44c')
 
-    @commands.command(no_pm=True)
+    @commands.command(no_pm=True, pass_context=True)
     @checks.admin_or_permissions(manage_server=True)
-    async def plonk(self, *, member : discord.Member):
+    async def plonk(self, ctx, *, member: discord.Member):
         """Bans a user from using the bot.
 
-        Note that this ban is **global**. So they are banned from
-        all servers that they access the bot with. So use this with
-        caution.
-
-        There is no way to bypass a plonk regardless of role or permissions.
-        The only person who cannot be plonked is the bot creator. So this
-        must be used with caution.
+        This bans a person from using the bot in the current server.
+        There is no concept of a global ban. This ban can be bypassed
+        by having the Manage Server permission.
 
         To use this command you must have the Manage Server permission
         or have a Bot Admin role.
         """
 
-        plonks = self.config.get('plonks', [])
-        if member.id in plonks:
-            await self.bot.say('That user is already bot banned.')
+        plonks = self.config.get('plonks', {})
+        guild_id = ctx.message.server.id
+        db = plonks.get(guild_id, [])
+
+        if member.id in db:
+            await self.bot.say('That user is already bot banned in this server.')
             return
 
-        plonks.append(member.id)
+        db.append(member.id)
+        plonks[guild_id] = db
         await self.config.put('plonks', plonks)
-        await self.bot.say('{0.name} has been banned from using the bot.'.format(member))
+        await self.bot.say('%s has been banned from using the bot in this server.' % member)
 
-    @commands.command(no_pm=True)
+    @commands.command(no_pm=True, pass_context=True)
     @checks.admin_or_permissions(manage_server=True)
-    async def unplonk(self, *, member : discord.Member):
+    async def plonks(self, ctx):
+        """Shows members banned from the bot."""
+        plonks = self.config.get('plonks', {})
+        guild = ctx.message.server
+        db = plonks.get(guild.id, [])
+        members = ', '.join(map(str, filter(None, map(guild.get_member, db))))
+        if members:
+            await self.bot.say(members)
+        else:
+            await self.bot.say('No members are banned in this server.')
+
+    @commands.command(no_pm=True, pass_context=True)
+    @checks.admin_or_permissions(manage_server=True)
+    async def unplonk(self, ctx, *, member: discord.Member):
         """Unbans a user from using the bot.
 
         To use this command you must have the Manage Server permission
         or have a Bot Admin role.
         """
 
-        plonks = self.config.get('plonks', [])
+        plonks = self.config.get('plonks', {})
+        guild_id = ctx.message.server.id
+        db = plonks.get(guild_id, [])
 
         try:
-            plonks.remove(member.id)
+            db.remove(member.id)
         except ValueError:
-            pass
+            await self.bot.say('%s is not banned from using the bot in this server.' % member)
         else:
+            plonks[guild_id] = db
             await self.config.put('plonks', plonks)
-            await self.bot.say('{0.name} has been unbanned from using the bot.'.format(member))
+            await self.bot.say('%s has been unbanned from using the bot in this server.' % member)
+
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
+    @checks.admin_or_permissions(ban_members=True)
+    async def mentionspam(self, ctx, count: int=None):
+        """Enables auto-banning accounts that spam mentions.
+
+        If a message contains `count` or more mentions then the
+        bot will automatically attempt to auto-ban the member.
+        The `count` must be greater than 3. If the `count` is 0
+        then this is disabled.
+
+        This only applies for user mentions. Everyone or Role
+        mentions are not included.
+
+        To use this command you must have the Ban Members permission
+        or have a Bot Admin role.
+        """
+
+        counts = self.config.get('mentions', {})
+        settings = counts.get(ctx.message.server.id)
+        if count is None:
+            if settings is None:
+                return await self.bot.say('This server has not set up mention spam banning.')
+
+            ignores = ', '.join('<#%s>' % e for e in settings.get('ignore', []))
+            ignores = ignores if ignores else 'None'
+            count = settings['count']
+            return await self.bot.say('- Threshold: %s mentions\n- Ignored Channels: %s' % (count, ignores))
+
+        if count == 0:
+            counts.pop(ctx.message.server.id, None)
+            await self.config.put('mentions', counts)
+            await self.bot.say('Auto-banning members has been disabled.')
+            return
+
+        if count <= 3:
+            await self.bot.say('\N{NO ENTRY SIGN} Auto-ban threshold must be greater than three.')
+            return
+
+        if settings is None:
+            # new entry
+            settings = {
+                'ignore': []
+            }
+
+        settings.update(count=count)
+        counts[ctx.message.server.id] = settings
+        await self.config.put('mentions', counts)
+        await self.bot.say('Now auto-banning members that mention more than %s users.' % count)
+
+    @mentionspam.command(name='ignore', pass_context=True, no_pm=True, aliases=['bypass'])
+    async def mentionspam_ignore(self, ctx, *channels: discord.Channel):
+        """Specifies what channels ignore mentionspam auto-bans.
+
+        If a channel is given then that channel will no longer be protected
+        by auto-banning from spammers.
+        """
+        counts = self.config.get('mentions', {})
+        settings = counts.get(ctx.message.server.id)
+        if settings is None:
+            return await self.bot.say('\N{WARNING SIGN} This server has not configured mentionspam.')
+
+        if len(channels) == 0:
+            return await self.bot.say('Missing channels to ignore.')
+
+        ignores = settings.get('ignore', [])
+        ignores.extend(c.id for c in channels)
+        settings['ignore'] = list(set(ignores)) # make it unique
+        await self.config.put('mentions', counts)
+        await self.bot.say('Mentions are now ignored on %s' % ', '.join('<#%s>' % c.id for c in channels))
+
+    @mentionspam.command(name='protect', pass_context=True, no_pm=True, aliases=['unignore'])
+    async def mentionspam_protect(self, ctx, *channels: discord.Channel):
+        """Specifies what channels to take off the ignore list."""
+
+        counts = self.config.get('mentions', {})
+        settings = counts.get(ctx.message.server.id)
+        if settings is None:
+            return await self.bot.say('\N{WARNING SIGN} This server has not configured mentionspam.')
+
+        if len(channels) == 0:
+            return await self.bot.say('Missing channels to protect.')
+
+        ignores = settings.get('ignore', [])
+        unique = set(channels)
+        for c in unique:
+            try:
+                ignores.remove(c.id)
+            except ValueError:
+                pass
+
+        await self.config.put('mentions', counts)
+        await self.bot.say('Updated mentionspam ignore list.')
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(manage_roles=True)
@@ -318,7 +730,7 @@ class Mod:
         else:
             await self.bot.say('\U0001f44c')
 
-    @commands.group(pass_context=True, no_pm=True)
+    @commands.group(pass_context=True, no_pm=True, aliases=['purge'])
     @checks.admin_or_permissions(manage_messages=True)
     async def remove(self, ctx):
         """Removes messages that meet a criteria.
@@ -337,12 +749,13 @@ class Mod:
     async def do_removal(self, message, limit, predicate):
         deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
         spammers = Counter(m.author.display_name for m in deleted)
-        reply = await self.bot.say('{} messages(s) were removed.'.format(len(deleted)))
-        spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
-        stats = '\n'.join(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
-        await self.bot.whisper(stats)
-        await asyncio.sleep(3)
-        await self.bot.delete_message(reply)
+        messages = ['%s %s removed.' % (len(deleted), 'message was' if len(deleted) == 1 else 'messages were')]
+        if len(deleted):
+            messages.append('')
+            spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
+            messages.extend(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
+
+        await self.bot.say('\n'.join(messages), delete_after=10)
 
     @remove.command(pass_context=True)
     async def embeds(self, ctx, search=100):
@@ -380,6 +793,107 @@ class Mod:
             return
 
         await self.do_removal(ctx.message, 100, lambda e: substr in e.content)
+
+    @remove.command(name='bot', pass_context=True)
+    async def _bot(self, ctx, prefix, *, member: discord.Member):
+        """Removes a bot user's messages and messages with their prefix.
+
+        The member doesn't have to have the [Bot] tag to qualify for removal.
+        """
+
+        def predicate(m):
+            return m.author == member or m.content.startswith(prefix)
+        await self.do_removal(ctx.message, 100, predicate)
+
+    @remove.command(pass_context=True)
+    async def custom(self, ctx, *, args: str):
+        """A more advanced prune command.
+
+        Allows you to specify more complex prune commands with multiple
+        conditions and search criteria. The criteria are passed in the
+        syntax of `--criteria value`. Most criteria support multiple
+        values to indicate 'any' match. A flag does not have a value.
+        If the value has spaces it must be quoted.
+
+        The messages are only deleted if all criteria are met unless
+        the `--or` flag is passed.
+
+        Criteria:
+          user      A mention or name of the user to remove.
+          contains  A substring to search for in the message.
+          starts    A substring to search if the message starts with.
+          ends      A substring to search if the message ends with.
+          bot       A flag indicating if it's a bot user.
+          embeds    A flag indicating if the message has embeds.
+          files     A flag indicating if the message has attachments.
+          emoji     A flag indicating if the message has custom emoji.
+          search    How many messages to search. Default 100. Max 2000.
+          or        A flag indicating to use logical OR for all criteria.
+          not       A flag indicating to use logical NOT for all criteria.
+        """
+        parser = Arguments(add_help=False, allow_abbrev=False)
+        parser.add_argument('--user', nargs='+')
+        parser.add_argument('--contains', nargs='+')
+        parser.add_argument('--starts', nargs='+')
+        parser.add_argument('--ends', nargs='+')
+        parser.add_argument('--or', action='store_true', dest='_or')
+        parser.add_argument('--not', action='store_true', dest='_not')
+        parser.add_argument('--emoji', action='store_true')
+        parser.add_argument('--bot', action='store_const', const=lambda m: m.author.bot)
+        parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
+        parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
+        parser.add_argument('--search', type=int, default=100)
+
+        try:
+            args = parser.parse_args(shlex.split(args))
+        except Exception as e:
+            await self.bot.say(str(e))
+            return
+
+        predicates = []
+        if args.bot:
+            predicates.append(args.bot)
+
+        if args.embeds:
+            predicates.append(args.embeds)
+
+        if args.files:
+            predicates.append(args.files)
+
+        if args.emoji:
+            custom_emoji = re.compile(r'<:(\w+):(\d+)>')
+            predicates.append(lambda m: custom_emoji.search(m.content))
+
+        if args.user:
+            users = []
+            for u in args.user:
+                try:
+                    converter = commands.MemberConverter(ctx, u)
+                    users.append(converter.convert())
+                except Exception as e:
+                    await self.bot.say(str(e))
+                    return
+
+            predicates.append(lambda m: m.author in users)
+
+        if args.contains:
+            predicates.append(lambda m: any(sub in m.content for sub in args.contains))
+
+        if args.starts:
+            predicates.append(lambda m: any(m.content.startswith(s) for s in args.starts))
+
+        if args.ends:
+            predicates.append(lambda m: any(m.content.endswith(s) for s in args.ends))
+
+        op = all if not args._or else any
+        def predicate(m):
+            r = op(p(m) for p in predicates)
+            if args._not:
+                return not r
+            return r
+
+        args.search = max(0, min(2000, args.search)) # clamp from 0-2000
+        await self.do_removal(ctx.message, args.search, predicate)
 
 def setup(bot):
     bot.add_cog(Mod(bot))
