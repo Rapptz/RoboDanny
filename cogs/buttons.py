@@ -115,6 +115,20 @@ class Buttons:
                 e.description = '%s\n%s' % (date, info)
                 return e
 
+        # check for "time in" card
+        time_in = parent.find(".//ol//div[@class='_Tsb _HOb _Qeb']")
+        if time_in is not None:
+            try:
+                time_place = ''.join(time_in.find("span[@class='_HOb _Qeb']").itertext()).strip()
+                the_time = ''.join(time_in.find("div[@class='_rkc _Peb']").itertext()).strip()
+                the_date = ''.join(time_in.find("div[@class='_HOb _Qeb']").itertext()).strip()
+            except:
+                return None
+            else:
+                e.title = time_place
+                e.description = '%s\n%s' % (the_time, the_date)
+                return e
+
         # check for weather card
         # this one is the most complicated of the group lol
         # everything is under a <div class="e"> which has a
