@@ -116,18 +116,16 @@ class Buttons:
                 return e
 
         # check for definition card
-        definition_card = parent.find(".//ol/div[@class='g']/div")
-        if definition_card is not None:
+        words = parent.find(".//ol/div[@class='g']/div/h3[@class='r']/div")
+        if words is not None:
             try:
-                word_info = definition_card[0]
-                definition_info = definition_card[1]
+                definition_info = words.getparent().getparent()[1] # yikes
             except:
                 pass
             else:
                 try:
                     # inside is a <div> with two <span>
                     # the first is the actual word, the second is the pronunciation
-                    words = word_info[0]
                     e.title = words[0].text
                     e.description = words[1].text
                 except:
