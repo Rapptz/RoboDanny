@@ -116,8 +116,9 @@ class Buttons:
                 return e
 
         # check for definition card
-        definition_card = parent.find(".//ol/div[@class='g']/div")
+        definition_card = parent.find(".//ol/div[@class='g']/div/h3[@class='r']")
         if definition_card is not None:
+            definition_card = definition_card.getparent()
             try:
                 word_info = definition_card[0]
                 definition_info = definition_card[1]
