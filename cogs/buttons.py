@@ -311,5 +311,51 @@ class Buttons:
 
             await self.bot.say(msg)
 
+    @commands.command(pass_context=True)
+    @commands.cooldown(rate=1, per=60.0, type=commands.BucketType.user)
+    async def feedback(self, ctx, *, content: str):
+        """Gives feedback about the bot.
+
+        This is a quick way to request features or bug fixes
+        without being in the bot's server.
+
+        The bot will communicate with you via PM about the status
+        of your request if possible.
+
+        You can only request feedback once a minute.
+        """
+
+        e = discord.Embed(title='Feedback', colour=0x738bd7)
+        msg = ctx.message
+
+        channel = self.bot.get_channel('263814407191134218')
+        if channel is None:
+            return
+
+        e.set_author(name=str(msg.author), icon_url=msg.author.avatar_url or msg.author.default_avatar_url)
+        e.description = content
+        e.timestamp = msg.timestamp
+
+        if msg.server is not None:
+            e.add_field(name='Server', value='{0.name} (ID: {0.id})'.format(msg.server), inline=False)
+
+        e.add_field(name='Channel', value='{0} (ID: {0.id})'.format(msg.channel), inline=False)
+        e.set_footer(text='Author ID: ' + msg.author.id)
+
+        await self.bot.send_message(channel, embed=e)
+        await self.bot.send_message(msg.channel, 'Successfully sent feedback \u2705')
+
+    @commands.command()
+    @checks.is_owner()
+    async def pm(self, user_id: str, *, content: str):
+        user = await self.bot.get_user_info(user_id)
+
+        try:
+            await self.bot.send_message(user, content)
+        except:
+            await self.bot.say('Could not PM user by ID ' + user_id)
+        else:
+            await self.bot.say('PM successfully sent.')
+
 def setup(bot):
     bot.add_cog(Buttons(bot))
