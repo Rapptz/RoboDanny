@@ -112,6 +112,20 @@ class Buttons:
             except:
                 return None
 
+        # Check for translation card
+        translation = node.find(".//div[@id='tw-ob']")
+        if translation is not None:
+            try:
+                source_language = translation.find(".//select[@id='tw-sl']").attrib['data-dsln']
+                target_language = translation.find(".//select[@id='tw-tl']/option[@selected='1']").text
+                translation = translation.find(".//pre[@id='tw-target-text']/span").text
+            except:
+                return None
+            else:
+                e.title = 'Translation from {} to {}'.format(source_language, target_language)
+                e.description = translation
+                return e
+
         # check for definition card
         words = parent.find(".//ol/div[@class='g']/div/h3[@class='r']/div")
         if words is not None:
