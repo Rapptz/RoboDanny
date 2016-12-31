@@ -138,6 +138,7 @@ class Stars:
         # build the embed
         author = msg.author
         avatar = author.default_avatar_url if not author.avatar else author.avatar_url
+        avatar = avatar.replace('.gif', '.jpg')
         e.set_author(name=author.display_name, icon_url=avatar)
         e.timestamp = msg.timestamp
         e.colour = self.star_gradient_colour(starrers)
