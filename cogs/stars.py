@@ -68,6 +68,11 @@ class Stars:
             if isinstance(data, list) and len(data[1]) <= stars and data[0] is not None
         }
 
+        # delete all the keys from the dict
+        for msg_id in dead_messages:
+            db.pop(msg_id, None)
+
+        await self.stars.put(ctx.guild_id, ctx.db)
         await self.bot.purge_from(ctx.starboard, limit=1000, check=lambda m: m.id in dead_messages)
 
     async def janitor(self, guild_id):
