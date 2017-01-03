@@ -3,7 +3,7 @@ from datetime import datetime
 import discord
 from .utils import checks
 import aiohttp
-from urllib.parse import parse_qs
+from urllib.parse import urlparse, parse_qs
 from lxml import etree
 
 def date(argument):
@@ -80,37 +80,81 @@ class Buttons:
         e = discord.Embed(colour=0x738bd7)
 
         # check if it's a calculator card:
-        calculator = node.find(".//table/tr/td/span[@class='nobr']/h2[@class='r']")
+        calculator = node.find(".//span[@id='cwos']")
         if calculator is not None:
             e.title = 'Calculator'
-            e.description = ''.join(calculator.itertext())
+            e.description = calculator.text
             return e
-
-        parent = node.getparent()
 
         # check for unit conversion card
-        unit = parent.find(".//ol//div[@class='_Tsb']")
+        # The 'main' div contains 2 div for the source and the target of the conversion.
+        # Each contains an <input> and a <select> where we can find the value and the label of the used unit.
+        unit = node.find(".//div[@class='vk_c _cy obcontainer card-section']")
         if unit is not None:
-            e.title = 'Unit Conversion'
-            e.description = ''.join(''.join(n.itertext()) for n in unit)
-            return e
-
-        # check for currency conversion card
-        currency = parent.find(".//ol/table[@class='std _tLi']/tr/td/h2")
-        if currency is not None:
-            e.title = 'Currency Conversion'
-            e.description = ''.join(currency.itertext())
-            return e
-
-        # check for release date card
-        release = parent.find(".//div[@id='_vBb']")
-        if release is not None:
             try:
-                e.description = ''.join(release[0].itertext()).strip()
-                e.title = ''.join(release[1].itertext()).strip()
-                return e
+                source = unit.find(".//div[@id='_Aif']")
+                source_value = source.find("./input").attrib['value']
+                source_unit = source.find("./select/option[@selected='1']").text
+                target = unit.find(".//div[@id='_Cif']")
+                target_value = target.find("./input").attrib['value']
+                target_unit = target.find(".//select/option[@selected='1']").text
             except:
                 return None
+            else:
+                e.title = 'Unit Conversion'
+                e.description = '{} {} = {} {}'.format(source_value, source_unit, target_value, target_unit)
+                return e
+
+        # check for currency conversion card
+        # The 'main' div contains 2 div for the source and the target of the conversion.
+        # The source div has a span with the value in its content, and the unit in the tail
+        # The target div has 2 spans, respectively containing the value and the unit
+        currency = node.find(".//div[@class='currency g vk_c obcontainer']")
+        if currency is not None:
+            try:
+                source = ''.join(currency.find(".//div[@class='vk_sh vk_gy cursrc']").itertext()).strip()
+                target = ''.join(currency.find(".//div[@class='vk_ans vk_bk curtgt']").itertext()).strip()
+            except:
+                return None
+            else:
+                e.title = 'Currency Conversion'
+                e.description = '{} {}'.format(source , target)
+                return e
+
+        # check for release date card
+        # The 'main' div has 2 sections, one for the 'title', one for the 'body'.
+        # The 'title' is a serie of 3 spans, 1st and 3rd with another nexted span containing the info, the 2nd
+        # just contains a forward slash.
+        # The 'body' is separated in 2 divs, one with the date and extra info, the other with 15 more nested
+        # divs finally containing a <a> from which we can extract the thumbnail url.
+        release = node.find(".//div[@class='xpdopen']/div[@class='_OKe']")
+        if release is not None:
+            # TODO : Check for timeline cards which are matched here with queries like `python release date`
+
+            # Extract the release card title
+            try:
+                title = ' '.join(release.find(".//div[@class='_tN _IWg mod']/div[@class='_f2g']").itertext()).strip()
+            except:
+                e.title = 'Date info'
+            else:
+                e.title = title
+
+            card_body = release.find(".//div[@class='kp-header']/div[@class='_axe _T9h']")
+
+            # Extract the date info
+            try:
+                description = '\n'.join(card_body.find("./div[@class='_cFb']//div[@class='_uX kno-fb-ctx']").itertext()).strip()
+            except:
+                return None
+            else:
+                e.description = description
+
+            # Extract the thumbnail
+            thumbnail = card_body.find("./div[@class='_bFb']//a[@class='bia uh_rl']")
+            if thumbnail is not None:
+                e.set_thumbnail(url=parse_qs(urlparse(thumbnail.attrib['href']).query)['imgurl'][0])
+
+            return e
 
         # Check for translation card
         translation = node.find(".//div[@id='tw-ob']")
@@ -127,113 +171,69 @@ class Buttons:
                 return e
 
         # check for definition card
-        words = parent.find(".//ol/div[@class='g']/div/h3[@class='r']/div")
-        if words is not None:
+        definition = node.find(".//div[@id='uid_0']//div[@class='lr_dct_ent vmod']")
+        if definition is not None:
             try:
-                definition_info = words.getparent().getparent()[1] # yikes
+                e.title = definition.find("./div[@class='vk_ans']/span").text
+                definition_info = definition.findall("./div[@class='vmod']/div")
+                e.description = definition_info[0].getchildren()[0].getchildren()[0].text # yikes v2
+                for category in definition_info[1:]:
+                    lexical_category = category.find("./div[@class='lr_dct_sf_h']/i/span").text
+                    definitions = category.findall("./ol/li/div[@class='vmod']//div[@class='_Jig']/div/span")
+                    body = []
+                    for index, definition in enumerate(definitions, 1):
+                        body.append('{}. {}'.format(index, definition.text))
+                    e.add_field(name=lexical_category, value='\n'.join(body), inline=False)
             except:
-                pass
+                return None
             else:
-                try:
-                    # inside is a <div> with two <span>
-                    # the first is the actual word, the second is the pronunciation
-                    e.title = words[0].text
-                    e.description = words[1].text
-                except:
-                    return None
-
-                # inside the table there's the actual definitions
-                # they're separated as noun/verb/adjective with a list
-                # of definitions
-                for row in definition_info:
-                    if len(row.attrib) != 0:
-                        # definitions are empty <tr>
-                        # if there is something in the <tr> then we're done
-                        # with the definitions
-                        break
-
-                    try:
-                        data = row[0]
-                        lexical_category = data[0].text
-                        body = []
-                        for index, definition in enumerate(data[1], 1):
-                            body.append('%s. %s' % (index, definition.text))
-
-                        e.add_field(name=lexical_category, value='\n'.join(body), inline=False)
-                    except:
-                        continue
-
                 return e
 
         # check for "time in" card
-        time_in = parent.find(".//ol//div[@class='_Tsb _HOb _Qeb']")
+        time_in = node.find(".//div[@class='vk_c vk_gy vk_sh card-section _MZc']")
         if time_in is not None:
             try:
-                time_place = ''.join(time_in.find("span[@class='_HOb _Qeb']").itertext()).strip()
-                the_time = ''.join(time_in.find("div[@class='_rkc _Peb']").itertext()).strip()
-                the_date = ''.join(time_in.find("div[@class='_HOb _Qeb']").itertext()).strip()
+                time_place = time_in.find("./span").text
+                the_time = time_in.find("./div[@class='vk_bk vk_ans']").text
+                the_date = ''.join(time_in.find("./div[@class='vk_gy vk_sh']").itertext()).strip()
             except:
                 return None
             else:
                 e.title = time_place
-                e.description = '%s\n%s' % (the_time, the_date)
+                e.description = '{}\n{}'.format(the_time, the_date)
                 return e
 
         # check for weather card
-        # this one is the most complicated of the group lol
-        # everything is under a <div class="e"> which has a
-        # <h3>{{ weather for place }}</h3>
-        # string, the rest is fucking table fuckery.
-        weather = parent.find(".//ol//div[@class='e']")
-        if weather is None:
-            return None
+        weather = node.find(".//div[@id='wob_wc']")
+        if weather is not None:
+            try:
+                location = weather.find("./div[@id='wob_loc']").text
+                summary = weather.find(".//span[@id='wob_dc']").text
+                image = 'https:' + weather.find(".//img[@id='wob_tci']").attrib['src']
+                temp_degrees = weather.find(".//span[@id='wob_tm']").text
+                temp_farenheit = weather.find(".//span[@id='wob_ttm']").text
+                precipitations = weather.find(".//span[@id='wob_pp']").text
+                humidity = weather.find(".//span[@id='wob_hm']").text
+                wind_kmh = weather.find(".//span[@id='wob_ws']").text
+                wind_mph = weather.find(".//span[@id='wob_tws']").text
+            except:
+                return None
+            else:
+                e.title = 'Weather in ' + location
+                e.description = summary
+                e.set_thumbnail(url=image)
+                e.add_field(name='Temperature', value='{}°C - {}°F'.format(temp_degrees, temp_farenheit))
+                e.add_field(name='Precipitations', value=precipitations)
+                e.add_field(name='Humidity', value=humidity)
+                e.add_field(name='Wind speed', value='{} - {}'.format(wind_kmh, wind_mph))
+                return e
 
-        location = weather.find('h3')
-        if location is None:
-            return None
-
-        e.title = ''.join(location.itertext())
-
-        table = weather.find('table')
-        if table is None:
-            return None
-
-        # This is gonna be a bit fucky.
-        # So the part we care about is on the second data
-        # column of the first tr
-        try:
-            tr = table[0]
-            img = tr[0].find('img')
-            category = img.get('alt')
-            image = 'https:' + img.get('src')
-            temperature = tr[1].xpath("./span[@class='wob_t']//text()")[0]
-        except:
-            return None # RIP
-        else:
-            e.set_thumbnail(url=image)
-            e.description = '*%s*' % category
-            e.add_field(name='Temperature', value=temperature)
-
-        # On the 4th column it tells us our wind speeds
-        try:
-            wind = ''.join(table[3].itertext()).replace('Wind: ', '')
-        except:
-            return None
-        else:
-            e.add_field(name='Wind', value=wind)
-
-        # On the 5th column it tells us our humidity
-        try:
-            humidity = ''.join(table[4][0].itertext()).replace('Humidity: ', '')
-        except:
-            return None
-        else:
-            e.add_field(name='Humidity', value=humidity)
-
-        return e
+        # nothing matched
+        return None
 
     async def get_google_entries(self, query):
         params = {
+            'hl': 'en',
             'q': query,
             'safe': 'on'
         }
@@ -272,7 +272,7 @@ class Buttons:
             </div>
             """
 
-            card_node = root.find(".//div[@id='topstuff']")
+            card_node = root.find(".//div[@id='res']")
             card = self.parse_google_card(card_node)
 
             search_nodes = root.findall(".//div[@class='g']")
@@ -282,20 +282,14 @@ class Buttons:
                     continue
 
                 url = url_node.attrib['href']
-                if not url.startswith('/url?'):
-                    continue
-
-                url = parse_qs(url[5:])['q'][0] # get the URL from ?q query string
-
-                # if I ever cared about the description, this is how
                 entries.append(url)
 
+                # if I ever cared about the description, this is how
                 # short = node.find(".//span[@class='st']")
                 # if short is None:
                 #     entries.append((url, ''))
                 # else:
-                #     text = ''.join(short.itertext())
-                #     entries.append((url, text.replace('...', '')))
+                #     entries.append((url, short.text.replace('...', '')))
 
         return card, entries
 
