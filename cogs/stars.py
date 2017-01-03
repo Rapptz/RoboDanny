@@ -353,14 +353,16 @@ class Stars:
         data = json.loads(data)
         event = data.get('t')
         payload = data.get('d')
-        if event not in ('MESSAGE_DELETE', 'MESSAGE_REACTION_ADD', 'MESSAGE_REACTION_REMOVE'):
+        if event not in ('MESSAGE_DELETE', 'MESSAGE_REACTION_ADD',
+                         'MESSAGE_REACTION_REMOVE', 'MESSAGE_REACTION_REMOVE_ALL'):
             return
 
         is_message_delete = event[8] == 'D'
+        is_reaction_clear = event.endswith('_ALL')
         is_reaction = event.endswith('_ADD')
 
         # make sure the reaction is proper
-        if not is_message_delete:
+        if not is_message_delete and not is_reaction_clear:
             emoji = payload['emoji']
             if emoji['name'] != '\N{WHITE MEDIUM STAR}':
                 return # not a star reaction
@@ -371,7 +373,7 @@ class Stars:
 
         # everything past this point is pointless if we're adding a reaction,
         # so let's just see if we can star the message and get it over with.
-        if not is_message_delete:
+        if not is_message_delete and not is_reaction_clear:
             message = await self.get_message(channel, payload['message_id'])
             member = channel.server.get_member(payload['user_id'])
             if member is None or member.bot:
@@ -393,17 +395,27 @@ class Stars:
             return
 
         starboard = self.bot.get_channel(db.get('channel'))
-        if starboard is None or channel.id != starboard.id:
+        if starboard is None or (is_message_delete and channel.id != starboard.id):
             # the starboard might have gotten deleted?
             # or it might not be a delete worth dealing with
             return
 
         # see if the message being deleted is in the starboard
-        msg_id = payload['id']
-        exists = discord.utils.find(lambda k: isinstance(db[k], list) and db[k][0] == msg_id, db)
-        if exists:
-            db.pop(exists)
-            await self.stars.put(server.id, db)
+        if is_message_delete:
+            msg_id = payload['id']
+            exists = discord.utils.find(lambda k: isinstance(db[k], list) and db[k][0] == msg_id, db)
+            if exists:
+                db.pop(exists)
+                await self.stars.put(server.id, db)
+        else:
+            msg_id = payload['message_id']
+            try:
+                value = db.pop(msg_id)
+            except KeyError:
+                pass
+            else:
+                await self.bot.http.delete_message(starboard.id, value[0], guild_id=server.id)
+                await self.stars.put(server.id, db)
 
     @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     async def star(self, ctx, message: int):
