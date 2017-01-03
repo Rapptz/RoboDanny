@@ -42,6 +42,7 @@ class Stars:
         # config format: (yeah, it's not ideal or really any good but whatever)
         # <guild_id> : <data> where <data> is
         # channel: <starboard channel id>
+        # locked: <boolean indicating locked status>
         # message_id: [bot_message, [starred_user_ids]]
         self.stars = config.Config('stars.json')
 
@@ -156,6 +157,9 @@ class Stars:
         if starboard is None:
             raise StarError('\N{WARNING SIGN} Starboard channel not found.')
 
+        if db.get('locked'):
+            raise StarError('\N{NO ENTRY SIGN} Starboard is locked.')
+
         stars = db.get(message_id, [None, []]) # ew, I know.
         starrers = stars[1]
 
@@ -255,6 +259,9 @@ class Stars:
         starboard = self.bot.get_channel(db.get('channel'))
         if starboard is None:
             raise StarError('\N{WARNING SIGN} Starboard channel not found.')
+
+        if db.get('locked'):
+            raise StarError('\N{NO ENTRY SIGN} Starboard is locked.')
 
         stars = db.get(message_id)
         if stars is None:
@@ -681,6 +688,43 @@ class Stars:
                 return
 
         await self.bot.say('Sorry, all I could find are deleted messages. Try again?')
+
+    @star.command(pass_context=True, no_pm=True, name='lock')
+    @checks.admin_or_permissions(manage_server=True)
+    @requires_starboard()
+    async def star_lock(self, ctx):
+        """Locks the starboard from being processed.
+
+        This is a moderation tool that allows you to temporarily
+        disable the starboard to aid in dealing with star spam.
+
+        When the starboard is locked, no new entries are added to
+        the starboard as the bot will no longer listen to reactions or
+        star/unstar commands.
+
+        To unlock the starboard, use the `unlock` subcommand.
+
+        To use this command you need Bot Admin role or Manage Server
+        permission.
+        """
+
+        ctx.db['locked'] = True
+        await self.stars.put(ctx.guild_id, ctx.db)
+        await self.bot.say('Starboard is now locked.')
+
+    @star.command(pass_context=True, no_pm=True, name='unlock')
+    @checks.admin_or_permissions(manage_server=True)
+    @requires_starboard()
+    async def star_unlock(self, ctx):
+        """Unlocks the starboard for re-processing.
+
+        To use this command you need Bot Admin role or Manage Server
+        permission.
+        """
+
+        ctx.db['locked'] = False
+        await self.stars.put(ctx.guild_id, ctx.db)
+        await self.bot.say('Starboard is now unlocked.')
 
 def setup(bot):
     bot.add_cog(Stars(bot))
