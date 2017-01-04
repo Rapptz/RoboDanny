@@ -300,6 +300,9 @@ class Buttons:
                     card.add_field(name='Search Results', value=value, inline=False)
                 return await self.bot.say(embed=card)
 
+            if len(entries) == 0:
+                return await self.bot.say('No results found... sorry.')
+
             next_two = entries[1:3]
             if next_two:
                 formatted = '\n'.join(map(lambda x: '<%s>' % x, next_two))
