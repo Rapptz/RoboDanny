@@ -106,14 +106,11 @@ class Buttons:
         release = parent.find(".//div[@id='_vBb']")
         if release is not None:
             try:
-                date = ''.join(release[0].itertext()).strip()
-                info = ''.join(release[1].itertext()).strip()
+                e.description = ''.join(release[0].itertext()).strip()
+                e.title = ''.join(release[1].itertext()).strip()
+                return e
             except:
                 return None
-            else:
-                e.title = 'Date Info'
-                e.description = '%s\n%s' % (date, info)
-                return e
 
         # check for definition card
         words = parent.find(".//ol/div[@class='g']/div/h3[@class='r']/div")
