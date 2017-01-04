@@ -295,8 +295,9 @@ class Buttons:
             await self.bot.say(str(e))
         else:
             if card:
-                msg = '\n'.join(map(lambda x: '<%s>' % x, entries[:3]))
-                card.add_field(name='Search Results', value='\n'.join(entries[:3]), inline=False)
+                value = '\n'.join(entries[:3])
+                if value:
+                    card.add_field(name='Search Results', value=value, inline=False)
                 return await self.bot.say(embed=card)
 
             next_two = entries[1:3]
