@@ -121,16 +121,31 @@ class Buttons:
                 e.description = '{} {}'.format(source , target)
                 return e
 
-        # check for release date card
+        # Check for quick search, release date or timeline
+        # Those 3 cards follow the same base structure
+        # Define which one it is here and parse it afterward
+        quick_search = node.find(".//div[@class='xpdopen']/div[@class='_OKe']")
+        release = None
+        timeline = None
+        if quick_search is not None:
+            # Try to match things specific to the timeline or release date card
+            timeline = quick_search.find("./div/div[@class='mod']/div[@class='_l6j']")
+            release_body = quick_search.find(".//div[@class='kp-header']/div[@class='_axe _T9h']")
+
+            # Check the results
+            if timeline is not None:
+                quick_search = None
+            elif release_body is not None:
+                release = quick_search
+                quick_search = None
+
+        # Parse release date cards
         # The 'main' div has 2 sections, one for the 'title', one for the 'body'.
         # The 'title' is a serie of 3 spans, 1st and 3rd with another nexted span containing the info, the 2nd
         # just contains a forward slash.
         # The 'body' is separated in 2 divs, one with the date and extra info, the other with 15 more nested
         # divs finally containing a <a> from which we can extract the thumbnail url.
-        release = node.find(".//div[@class='xpdopen']/div[@class='_OKe']")
         if release is not None:
-            # TODO : Check for timeline cards which are matched here with queries like `python release date`
-
             # Extract the release card title
             try:
                 title = ' '.join(release.find(".//div[@class='_tN _IWg mod']/div[@class='_f2g']").itertext()).strip()
@@ -139,22 +154,53 @@ class Buttons:
             else:
                 e.title = title
 
-            card_body = release.find(".//div[@class='kp-header']/div[@class='_axe _T9h']")
-
             # Extract the date info
             try:
-                description = '\n'.join(card_body.find("./div[@class='_cFb']//div[@class='_uX kno-fb-ctx']").itertext()).strip()
+                description = '\n'.join(release_body.find("./div[@class='_cFb']//div[@class='_uX kno-fb-ctx']").itertext()).strip()
             except:
                 return None
             else:
                 e.description = description
 
             # Extract the thumbnail
-            thumbnail = card_body.find("./div[@class='_bFb']//a[@class='bia uh_rl']")
+            thumbnail = release_body.find("./div[@class='_bFb']//a[@class='bia uh_rl']")
             if thumbnail is not None:
                 e.set_thumbnail(url=parse_qs(urlparse(thumbnail.attrib['href']).query)['imgurl'][0])
 
             return e
+
+        # Parse quick search cards
+        if quick_search is not None:
+            try:
+                title_node = quick_search.find("./div/div[@class='g']//a")
+                title = title_node.text
+                url = title_node.attrib['href']
+                summary = ''.join(quick_search.find("./div/div[@class='mod']/div[@class='_oDd']/span[@class='_Tgc']").itertext()).strip()
+                image = quick_search.find("./div/div[@class='_tN _VCh _WCh _IWg mod']//a[@class='bia uh_rl']")
+                thumbnail = parse_qs(urlparse(image.attrib['href']).query)['imgurl'][0]
+            except:
+                return None
+            else:
+                e.title = title
+                e.url = url
+                e.description = summary
+                e.set_thumbnail(url=thumbnail)
+                return e
+
+        # Parse timeline cards
+        if timeline is not None:
+            try:
+                title = timeline.find("./div[@class='_NZg']").text
+                table = timeline.find("./div/table/tbody")
+                body = []
+                for row in table:
+                    body.append(' - '.join(row.itertext()).strip())
+            except:
+                return None
+            else:
+                e.title = title
+                e.description = '*{}*\n{}'.format(body[0], '\n'.join(body[1:]))
+                return e
 
         # Check for translation card
         translation = node.find(".//div[@id='tw-ob']")
@@ -228,6 +274,10 @@ class Buttons:
                 e.add_field(name='Wind speed', value='{} - {}'.format(wind_kmh, wind_mph))
                 return e
 
+        # TODO : look for the side cards for people, places, events, they're under a higher node than our current card root
+        # Examples queries: `New York`, `Einstein`, `olympic`
+        # Watch for queries like `flag of france` having a quick search card along with the side card
+
         # nothing matched
         return None
 
@@ -254,7 +304,7 @@ class Buttons:
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
             # with open('google.html', 'w', encoding='utf-8') as f:
-            #     f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
+            #    f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
 
             """
             Tree looks like this.. sort of..
