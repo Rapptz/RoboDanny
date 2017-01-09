@@ -185,7 +185,7 @@ class Buttons:
                 image = quick_search.find("./div/div[@class='_tN _VCh _WCh _IWg mod']//a[@class='bia uh_rl']")
                 thumbnail = parse_qs(urlparse(image.attrib['href']).query)['imgurl'][0]
             except:
-                return None
+                pass
             else:
                 e.title = title
                 e.url = url
