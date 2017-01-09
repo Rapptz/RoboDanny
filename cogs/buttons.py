@@ -80,10 +80,16 @@ class Buttons:
         e = discord.Embed(colour=0x738bd7)
 
         # check if it's a calculator card:
-        calculator = node.find(".//span[@id='cwos']")
+        calculator = node.find(".//div[@id='cwmcwd']")
         if calculator is not None:
-            e.title = 'Calculator'
-            e.description = calculator.text
+            try:
+                formula = calculator.find(".//span[@id='cwles']").text.strip()
+                result = calculator.find(".//span[@id='cwos']").text.strip()
+            except:
+                return None
+            else:
+                e.title = 'Calculator'
+                e.description = '{} {}'.format(formula, result)
             return e
 
         # check for unit conversion card
@@ -304,7 +310,7 @@ class Buttons:
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
             # with open('google.html', 'w', encoding='utf-8') as f:
-            #    f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
+            #     f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
 
             """
             Tree looks like this.. sort of..
