@@ -118,7 +118,7 @@ class Meta:
         author = ctx.message.author
         reminder = None
         completed = None
-        message = message.replace('@everyone', '@\u200beveryone')
+        message = message.replace('@everyone', '@\u200beveryone').replace('@here', '@\u200bhere')
 
         if not message:
             reminder = 'Okay {0.mention}, I\'ll remind you in {1.seconds} seconds.'
