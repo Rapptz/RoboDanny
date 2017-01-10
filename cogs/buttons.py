@@ -179,18 +179,29 @@ class Buttons:
         if quick_search is not None:
             try:
                 title_node = quick_search.find("./div/div[@class='g']//a")
-                title = title_node.text
-                url = title_node.attrib['href']
-                summary = ''.join(quick_search.find("./div/div[@class='mod']/div[@class='_oDd']/span[@class='_Tgc']").itertext()).strip()
-                image = quick_search.find("./div/div[@class='_tN _VCh _WCh _IWg mod']//a[@class='bia uh_rl']")
-                thumbnail = parse_qs(urlparse(image.attrib['href']).query)['imgurl'][0]
+                if title_node is not None:
+                    # Let's call this the rich quick search card
+                    title = title_node.text
+                    url = title_node.attrib['href']
+                    summary = ''.join(quick_search.find("./div/div[@class='mod']/div[@class='_oDd']/span[@class='_Tgc']").itertext()).strip()
+                    image = quick_search.find("./div/div[@class='_tN _VCh _WCh _IWg mod']//a[@class='bia uh_rl']")
+                    thumbnail = parse_qs(urlparse(image.attrib['href']).query)['imgurl'][0] if image is not None else None
+                else:
+                    # And let's call this the poor quick search card
+                    title_node = quick_search.find("./div/div[@class='_tN _IWg mod']/div[@class='_f2g']")
+                    title = ' '.join(title_node.itertext()).strip()
+                    body_node = quick_search.find("./div/div[@class='kp-header']//a")
+                    summary = body_node.text
+                    url = 'https://www.google.com' + body_node.attrib['href']
+                    thumbnail = None
             except:
                 pass
             else:
                 e.title = title
                 e.url = url
                 e.description = summary
-                e.set_thumbnail(url=thumbnail)
+                if thumbnail:
+                    e.set_thumbnail(url=thumbnail)
                 return e
 
         # Parse timeline cards
