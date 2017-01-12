@@ -60,6 +60,10 @@ class TagAlias:
     def is_generic(self):
         return False
 
+    @property
+    def uses(self):
+        return 0 # compatibility with TagInfo
+
     async def embed(self, ctx, db):
         e = discord.Embed(title=self.name)
         e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
