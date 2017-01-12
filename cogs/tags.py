@@ -27,7 +27,6 @@ class TagInfo:
 
     async def embed(self, ctx, db):
         e = discord.Embed(title=self.name)
-
         e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
         e.add_field(name='Uses', value=self.uses)
 
@@ -45,10 +44,36 @@ class TagInfo:
             owner = await ctx.bot.get_user_info(self.owner_id)
 
         e.set_author(name=str(owner), icon_url=owner.avatar_url or owner.default_avatar_url)
-
         e.set_footer(text='Generic' if self.is_generic else 'Server-specific')
         return e
 
+class TagAlias:
+    __slots__ = ('name', 'original', 'owner_id', 'created_at')
+
+    def __init__(self, **kwargs):
+        self.name = kwargs.pop('name')
+        self.original = kwargs.pop('original')
+        self.owner_id = kwargs.pop('owner_id')
+        self.created_at = kwargs.pop('created_at', 0.0)
+
+    @property
+    def is_generic(self):
+        return False
+
+    async def embed(self, ctx, db):
+        e = discord.Embed(title=self.name)
+        e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
+        e.add_field(name='Original Tag', value=self.original)
+
+        if self.created_at:
+            e.timestamp = datetime.datetime.fromtimestamp(self.created_at)
+
+        owner = discord.utils.find(lambda m: m.id == self.owner_id, ctx.bot.get_all_members())
+        if owner is None:
+            owner = await ctx.bot.get_user_info(self.owner_id)
+
+        e.set_author(name=str(owner), icon_url=owner.avatar_url or owner.default_avatar_url)
+        return e
 
 class TagEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -59,11 +84,20 @@ class TagEncoder(json.JSONEncoder):
             }
             payload['__tag__'] = True
             return payload
+        if isinstance(obj, TagAlias):
+            payload = {
+                attr: getattr(obj, attr)
+                for attr in TagAlias.__slots__
+            }
+            payload['__tag_alias__'] = True
+            return payload
         return json.JSONEncoder.default(self, obj)
 
 def tag_decoder(obj):
     if '__tag__' in obj:
         return TagInfo(**obj)
+    if '__tag_alias__' in obj:
+        return TagAlias(**obj)
     return obj
 
 class Tags:
@@ -93,14 +127,20 @@ class Tags:
         generic.update(self.config.get(server.id, {}))
         return generic
 
-    def get_tag(self, server, name):
+    def get_tag(self, server, name, *, redirect=True):
         # Basically, if we're in a PM then we will use the generic tag database
         # if we aren't, we will check the server specific tag database.
         # If we don't have a server specific database, fallback to generic.
         # If it isn't found, fallback to generic.
         all_tags = self.get_possible_tags(server)
         try:
-            return all_tags[name]
+            tag = all_tags[name]
+            if isinstance(tag, TagInfo):
+                return tag
+            elif redirect:
+                return all_tags[tag.original.lower()]
+            else:
+                return tag
         except KeyError:
             possible_matches = difflib.get_close_matches(name, tuple(all_tags.keys()))
             if not possible_matches:
@@ -206,6 +246,49 @@ class Tags:
         if isinstance(error, commands.MissingRequiredArgument):
             await self.bot.say('Tag ' + str(error))
 
+    @tag.command(pass_context=True, no_pm=True)
+    async def alias(self, ctx, new_name: str, *, old_name: str):
+        """Creates an alias for a pre-existing tag.
+
+        You own the tag alias. However, when the original
+        tag is deleted the alias is deleted as well.
+
+        Tag aliases cannot be edited. You must delete
+        the alias and remake it to point it to another
+        location.
+
+        You cannot have generic aliases.
+        """
+
+        message = ctx.message
+        server = ctx.message.server
+        lookup = new_name.lower().strip()
+        old = old_name.lower()
+
+        tags = self.get_possible_tags(server)
+        db = self.config.get(server.id, {})
+        try:
+            original = tags[old]
+        except KeyError:
+            return await self.bot.say('Pointed to tag does not exist.')
+
+        if isinstance(original, TagAlias):
+            return await self.bot.say('Cannot make an alias to an alias.')
+
+        try:
+            self.verify_lookup(lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
+
+        if lookup in db:
+            return await self.bot.say('A tag with this name already exists.')
+
+        db[lookup] = TagAlias(name=new_name, original=old, owner_id=ctx.message.author.id,
+                              created_at=datetime.datetime.utcnow().timestamp())
+
+        await self.config.put(server.id, db)
+        await self.bot.say('Tag alias "{}" that points to "{.name}" successfully created.'.format(new_name, original))
+
     @tag.command(pass_context=True, ignore_extra=False)
     async def make(self, ctx):
         """Interactive makes a tag for you.
@@ -309,9 +392,12 @@ class Tags:
         lookup = name.lower()
         server = ctx.message.server
         try:
-            tag = self.get_tag(server, lookup)
+            tag = self.get_tag(server, lookup, redirect=False)
         except RuntimeError as e:
             return await self.bot.say(e)
+
+        if isinstance(tag, TagAlias):
+            return await self.bot.say('Cannot edit tag aliases. Remake it if you want to re-point it.')
 
         if tag.owner_id != ctx.message.author.id:
             await self.bot.say('Only the tag owner can edit this tag.')
@@ -330,11 +416,13 @@ class Tags:
         deletion and has Manage Messages permissions or a Bot Mod role then
         they can also remove tags from the server-specific database. Generic
         tags can only be deleted by the bot owner or the tag owner.
+
+        Deleting a tag will delete all of its aliases as well.
         """
         lookup = name.lower()
         server = ctx.message.server
         try:
-            tag = self.get_tag(server, lookup)
+            tag = self.get_tag(server, lookup, redirect=False)
         except RuntimeError as e:
             return await self.bot.say(e)
 
@@ -349,10 +437,26 @@ class Tags:
             await self.bot.say('You do not have permissions to delete this tag.')
             return
 
-        db = self.config.get(tag.location)
-        del db[lookup]
-        await self.config.put(tag.location, db)
-        await self.bot.say('Tag successfully removed.')
+        if isinstance(tag, TagAlias):
+            location = server.id
+            db = self.config.get(location)
+            del db[lookup]
+            msg = 'Tag alias successfully removed.'
+        else:
+            location = tag.location
+            db = self.config.get(location)
+            msg = 'Tag and all corresponding aliases successfully removed.'
+
+            if server is not None:
+                alias_db = self.config.get(server.id)
+                aliases = [key for key, t in alias_db.items() if isinstance(t, TagAlias) and t.original == lookup]
+                for alias in aliases:
+                    alias_db.pop(alias, None)
+
+            del db[lookup]
+
+        await self.config.put(location, db)
+        await self.bot.say(msg)
 
     @tag.command(pass_context=True, aliases=['owner'])
     async def info(self, ctx, *, name : str):
@@ -364,7 +468,7 @@ class Tags:
         lookup = name.lower()
         server = ctx.message.server
         try:
-            tag = self.get_tag(server, lookup)
+            tag = self.get_tag(server, lookup, redirect=False)
         except RuntimeError as e:
             return await self.bot.say(e)
 
