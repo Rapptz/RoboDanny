@@ -90,6 +90,9 @@ class Pages:
         if not self.permissions.add_reactions:
             raise CannotPaginate('Bot does not have add reactions permission.')
 
+        if not self.permissions.read_message_history:
+            raise CannotPaginate('Bot does not have Read Message History permission.')
+
         p.append('')
         p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
         self.embed.description = '\n'.join(p)
@@ -177,7 +180,7 @@ class Pages:
         self.paginating = False
 
     def react_check(self, reaction, user):
-        if user.id != self.author.id:
+        if user is None or user.id != self.author.id:
             return False
 
         for (emoji, func) in self.reaction_emojis:
