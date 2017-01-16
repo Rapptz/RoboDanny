@@ -71,10 +71,10 @@ class Stars:
 
         # delete all the keys from the dict
         for msg_id in dead_messages:
-            db.pop(msg_id, None)
+            ctx.db.pop(msg_id, None)
 
         await self.stars.put(ctx.guild_id, ctx.db)
-        await self.bot.purge_from(ctx.starboard, limit=1000, check=lambda m: m.id in dead_messages)
+        await self.bot.purge_from(ctx.starboard, limit=100, check=lambda m: m.id in dead_messages)
 
     async def janitor(self, guild_id):
         try:
