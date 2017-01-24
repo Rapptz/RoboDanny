@@ -5,6 +5,7 @@ from .utils import checks
 import aiohttp
 from urllib.parse import parse_qs
 from lxml import etree
+import random
 
 def date(argument):
     formats = (
@@ -39,7 +40,8 @@ class Buttons:
     @commands.command()
     async def love(self):
         """What is love?"""
-        await self.bot.say('http://i.imgur.com/JthwtGA.png')
+        x = random.choice(['https://www.youtube.com/watch?v=HEXWRTEbj1I', 'http://i.imgur.com/JthwtGA.png'])
+        await self.bot.say(x)
 
     @commands.command(hidden=True)
     async def bored(self):
