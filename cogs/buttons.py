@@ -136,7 +136,7 @@ class Buttons:
         if quick_search is not None:
             # Try to match things specific to the timeline or release date card
             timeline = quick_search.find("./div/div[@class='mod']/div[@class='_l6j']")
-            release_body = quick_search.find(".//div[@class='kp-header']/div[@class='_axe _T9h']")
+            release_body = quick_search.find(".//div[@class='kp-header']/div[@class='_axe _T9h kp-rgc']")
 
             # Check the results
             if timeline is not None:
