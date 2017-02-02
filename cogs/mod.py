@@ -554,7 +554,7 @@ class Mod:
             await self.bot.say('\U0001f44c')
 
     @commands.command(no_pm=True)
-    @checks.admin_or_permissions(ban_members=True)
+    @checks.admin_or_permissions(kick_members=True)
     async def softban(self, *, member : discord.Member):
         """Soft bans a member from the server.
 
@@ -562,7 +562,7 @@ class Mod:
         then unbanning the member as well. This allows you to essentially
         kick the member while removing their messages.
 
-        To use this command you must have Ban Members permissions or have
+        To use this command you must have Kick Members permissions or have
         the Bot Admin role. Note that the bot must have the permission as well.
         """
 
