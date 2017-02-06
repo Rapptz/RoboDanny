@@ -14,6 +14,9 @@ log = logging.getLogger(__name__)
 class StarError(commands.CommandError):
     pass
 
+class MockContext:
+    pass
+
 def requires_starboard():
     def predicate(ctx):
         ctx.guild_id = ctx.message.server.id
@@ -76,15 +79,24 @@ class Stars:
         await self.stars.put(ctx.guild_id, ctx.db)
         await self.bot.purge_from(ctx.starboard, limit=100, check=lambda m: m.id in dead_messages)
 
+    async def run_janitor(self, guild_id):
+        ctx = MockContext()
+        ctx.guild_id = guild_id
+        try:
+            ctx.db = self.stars[guild_id]
+            ctx.starboard = self.bot.get_channel(ctx.db.get('channel'))
+            await self.clean_starboard(ctx, 1)
+            await asyncio.sleep(ctx.db['janitor'])
+        except KeyError:
+            pass
+
     async def janitor(self, guild_id):
         try:
             await self.bot.wait_until_ready()
             while not self.bot.is_closed:
-                await self.clean_starboard(guild_id, 1)
-                await asyncio.sleep(self.stars.get(guild_id)['janitor'])
+                await run_janitor(guild_id)
         except asyncio.CancelledError:
             pass
-
 
     def star_emoji(self, stars):
         if 5 >= stars >= 0:
