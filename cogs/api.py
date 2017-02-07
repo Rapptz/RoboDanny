@@ -13,6 +13,7 @@ DISCORD_API_ID = '81384788765712384'
 DISCORD_BOTS_ID = '110373943822540800'
 USER_BOTS_ROLE = '178558252869484544'
 CONTRIBUTORS_ROLE = '111173097888993280'
+DISCORD_PY_ID = '84319995256905728'
 
 def is_discord_api():
     return checks.is_in_servers(DISCORD_API_ID)
@@ -69,6 +70,9 @@ class API:
                                 r'\*\*Reason\*\*:\s(?P<reason>.+?)\n' \
                                 r'\*\*Responsible Moderator\*\*:\s(?P<mod>.+)')
 
+        # regex for issue format
+        self.issue = re.compile(r'##(?P<number>[0-9]+)')
+
     async def on_member_join(self, member):
         if member.server.id != DISCORD_API_ID:
             return
@@ -80,6 +84,15 @@ class API:
             except:
                 await asyncio.sleep(10)
                 await self.bot.add_roles(member, role)
+
+    async def on_message(self, message):
+        if message.channel.id != DISCORD_PY_ID:
+            return
+
+        m = self.issue.search(message.content)
+        if m is not None:
+            url = 'https://github.com/Rapptz/discord.py/issues/'
+            await self.bot.send_message(discord.Object(id=DISCORD_PY_ID), url + m.group('number'))
 
     @commands.group(pass_context=True, aliases=['rtfd'], invoke_without_command=True)
     @is_discord_api()
