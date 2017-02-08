@@ -19,6 +19,9 @@ class MockContext:
 
 def requires_starboard():
     def predicate(ctx):
+        if ctx.cog is None or ctx.message.server is None:
+            return True
+
         ctx.guild_id = ctx.message.server.id
         ctx.db = ctx.cog.stars.get(ctx.guild_id, {})
         ctx.starboard = ctx.bot.get_channel(ctx.db.get('channel'))
