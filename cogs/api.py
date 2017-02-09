@@ -137,6 +137,7 @@ class API:
             'chan': discord.Channel,
             'obj': discord.Object,
             'object': discord.Object,
+            'embed': discord.Embed,
         }
 
         base_url = 'http://discordpy.rtfd.io/en/latest/api.html'
