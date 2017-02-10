@@ -151,9 +151,10 @@ class RNG:
         To denote multiple choices, you should use double quotes.
         """
         if len(choices) < 2:
-            await self.bot.say('Not enough choices to pick from.')
-        else:
-            await self.bot.say(rng.choice(choices))
+            return await self.bot.say('Not enough choices to pick from.')
+
+        choice = rng.choice(choices).replace('@', '@\u200b') # this breaks user mentions
+        await self.bot.say(choice)
 
 def setup(bot):
     bot.add_cog(RNG(bot))
