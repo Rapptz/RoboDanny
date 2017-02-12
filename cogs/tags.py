@@ -3,6 +3,7 @@ from .utils.paginator import Pages
 
 from discord.ext import commands
 import json
+import re
 import datetime
 import discord
 import difflib
@@ -483,6 +484,34 @@ class Tags:
     async def info_error(self, error, ctx):
         if isinstance(error, commands.MissingRequiredArgument):
             await self.bot.say('Missing tag name to get info of.')
+
+    @tag.command(pass_context=True)
+    async def raw(self, ctx, *, name: str):
+        """Gets the raw content of the tag.
+
+        This is with markdown escaped. Useful for editing.
+        """
+
+        lookup = name.lower()
+        server = ctx.message.server
+        try:
+            tag = self.get_tag(server, lookup)
+        except RuntimeError as e:
+            return await self.bot.say(e)
+
+        transformations = {
+            re.escape(c): '\\' + c
+            for c in ('*', '`', '_', '~', '\\', '<')
+        }
+
+        def replace(obj):
+            return transformations.get(re.escape(obj.group(0)), '')
+
+        pattern = re.compile('|'.join(transformations.keys()))
+        result = pattern.sub(replace, tag.content)
+
+        e = discord.Embed(description=result, colour=0x738bd7, title=tag.name)
+        await self.bot.say(embed=e)
 
     @tag.command(name='list', pass_context=True)
     async def _list(self, ctx, *, member : discord.Member = None):
