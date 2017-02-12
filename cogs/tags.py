@@ -508,10 +508,7 @@ class Tags:
             return transformations.get(re.escape(obj.group(0)), '')
 
         pattern = re.compile('|'.join(transformations.keys()))
-        result = pattern.sub(replace, tag.content)
-
-        e = discord.Embed(description=result, colour=0x738bd7, title=tag.name)
-        await self.bot.say(embed=e)
+        await self.bot.say(pattern.sub(replace, tag.content))
 
     @tag.command(name='list', pass_context=True)
     async def _list(self, ctx, *, member : discord.Member = None):
