@@ -99,6 +99,9 @@ class Mod:
         guild = message.server
         member = message.author
 
+        if isinstance(member, discord.User):
+            return
+
         raids = self.config.get('__raids__', {}).get(guild.id, (RaidMode.off, None))
         if raids[0] is not RaidMode.strict:
             return
