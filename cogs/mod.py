@@ -1,5 +1,6 @@
 from discord.ext import commands
 from .utils import config, checks
+from .utils.formats import human_timedelta
 from collections import Counter
 from inspect import cleandoc
 
@@ -199,16 +200,34 @@ class Mod:
         e.colour = discord.Colour.green()
         e.set_footer(text='Created')
         e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
-
-        if created > 30:
-            e.add_field(name='Created', value='More than 30 minutes ago')
-        else:
-            e.add_field(name='Created', value='%d minutes ago' % created)
-
+        e.add_field(name='Created', value=human_timedelta(member.created_at))
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
         channel = self.bot.get_channel(data[1])
         await self.bot.send_message(channel, embed=e)
+
+    @commands.command(pass_context=True, no_pm=True, aliases=['newmembers'])
+    async def newusers(self, ctx, *, count=5):
+        """Tells you the newest members of the server.
+
+        This is useful to check if any suspicious members have
+        joined.
+
+        The count parameter can only be up to 25.
+        """
+        guild = ctx.message.server
+        count = max(min(count, 25), 5)
+
+        members = sorted(guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
+
+        e = discord.Embed(title='New Members', colour=discord.Colour.green())
+
+        for member in members:
+            body = 'joined {0}, created {1}'.format(human_timedelta(member.joined_at),
+                                                    human_timedelta(member.created_at))
+            e.add_field(name='{0} (ID: {0.id})'.format(member), value=body, inline=False)
+
+        await self.bot.say(embed=e)
 
     @commands.group(aliases=['raids'], pass_context=True, invoke_without_command=True, no_pm=True)
     @checks.admin_or_permissions(manage_server=True)
