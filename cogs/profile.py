@@ -1,5 +1,5 @@
+import discord
 from discord.ext import commands
-import discord.utils
 from .utils import config, formats
 import json, re
 from collections import Counter
@@ -17,27 +17,47 @@ class MemberParser:
 
     def __init__(self, argument):
         self.argument = argument.strip()
-        self.regex = re.compile(r'<@([0-9]+)>')
+        self.regex = re.compile(r'<@\!?([0-9]+)>')
 
     def member_entry(self, tup):
         index = tup[0]
         member = tup[1]
-        return '{0}. {1.name}#{1.discriminator} from {1.server.name}'.format(index, member)
+        return '{0}: {1} from {1.server.name}'.format(index, member)
+
+    def has_potential_discriminator(self):
+        return len(self.argument) > 5 and self.argument[-5] == '#'
+
+    def get_server_members(self, server):
+        if self.has_potential_discriminator():
+            discrim = self.argument[-4:]
+            direct = discord.utils.get(server.members, name=self.argument[:-5], discriminator=discrim)
+            if direct is not None:
+                return { direct }
+
+        return { m for m in server.members if m.display_name == self.argument }
 
     async def get(self, ctx):
         """Given an invocation context, gets a user."""
         server = ctx.message.server
         bot = ctx.bot
-        members = server.members if server is not None else bot.get_all_members()
 
         # check if the argument is a mention
         m = self.regex.match(self.argument)
         if m:
             user_id = m.group(1)
-            return discord.utils.get(members, id=user_id)
+            if server:
+                return server.get_member(user_id)
+
+            # get the first member found in all servers with the user ID.
+            gen = filter(None, map(lambda s: s.get_member(user_id), bot.servers))
+            return next(gen, None)
 
         # it isn't, so search by name
-        results = {m for m in members if m.name == self.argument}
+        if server:
+            results = self.get_server_members(server)
+        else:
+            results = set(filter(None, map(lambda s: s.get_member_named(self.argument), bot.servers)))
+
         results = list(results)
         if len(results) == 0:
             # we have no matches... so we must return None
@@ -55,13 +75,33 @@ class MemberParser:
 
 
 class Weapon:
+    __slots__ = ('sub', 'name', 'special')
+
+    cache = {}
+
     def __init__(self, **kwargs):
-        self.__dict__ = kwargs
+        for attr in self.__slots__:
+            try:
+                value = kwargs[attr]
+            except KeyError:
+                value = None
+            finally:
+                setattr(self, attr, value)
+
+    @classmethod
+    def from_cache(cls, *, name, **kwargs):
+        try:
+            return cls.cache[name]
+        except KeyError:
+            cls.cache[name] = weapon = cls(name=name, **kwargs)
+            return weapon
 
     def __str__(self):
         return self.name
 
 class ProfileInfo:
+    __slots__ = ('nnid', 'squad', 'weapon', 'rank')
+
     def __init__(self, **kwargs):
         self.nnid = kwargs.get('nnid')
         self.rank = kwargs.get('rank')
@@ -70,32 +110,41 @@ class ProfileInfo:
         if 'weapon' in kwargs:
             weapon = kwargs['weapon']
             if weapon is not None:
-                self.weapon = Weapon(**weapon)
+                self.weapon = Weapon.from_cache(**weapon)
             else:
                 self.weapon = None
         else:
             self.weapon = None
 
-    def __str__(self):
-        output = []
-        output.append('NNID: {0.nnid}'.format(self))
-        output.append('Rank: {0.rank}'.format(self))
-        output.append('Squad: {0.squad}'.format(self))
-        if self.weapon is not None:
-            output.append('Weapon: {0.name} ({0.sub} with {0.special})'.format(self.weapon))
-        else:
-            output.append('Weapon: None')
-        return '\n'.join(output)
+    def embed(self):
+        ret = discord.Embed(title='Profile')
+        squad = self.squad if self.squad else 'None'
+        nnid = self.nnid if self.nnid else 'None'
+        rank = self.rank if self.rank else 'None'
 
+        ret.add_field(name='NNID', value=nnid)
+        ret.add_field(name='Rank', value=rank)
+        ret.add_field(name='Squad', value=squad)
+
+        if self.weapon is not None:
+            wep = self.weapon
+            ret.add_field(name='Main Weapon', value=wep.name)
+            ret.add_field(name='Sub Weapon', value=wep.sub)
+            ret.add_field(name='Special', value=wep.special)
+
+        return ret
 
 class ProfileEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ProfileInfo):
-            payload = obj.__dict__.copy()
+            payload = {
+                attr: getattr(obj, attr)
+                for attr in ProfileInfo.__slots__
+            }
             payload['__profile__'] = True
             return payload
         if isinstance(obj, Weapon):
-            return obj.__dict__
+            return { attr: getattr(obj, attr) for attr in Weapon.__slots__ }
         return json.JSONEncoder.default(self, obj)
 
 def profile_decoder(obj):
@@ -134,8 +183,10 @@ class Profile:
                 await self.config.put(member.id, ProfileInfo())
                 await ctx.invoke(self.make)
         else:
-            fmt = 'Profile for **{0.name}#{0.discriminator}**:\n{1}'
-            await self.bot.say(fmt.format(member, profile))
+            e = profile.embed()
+            avatar = member.avatar_url if member.avatar else member.default_avatar_url
+            e.set_author(name=str(member), icon_url=avatar)
+            await self.bot.say(embed=e)
 
     @commands.group(pass_context=True, invoke_without_command=True)
     async def profile(self, ctx, *, member : MemberParser = MyOwnProfile):
@@ -173,7 +224,12 @@ class Profile:
 
         If you don't have a profile set up then it'll create one for you.
         """
-        await self.edit_field('nnid', ctx, NNID.strip('"'))
+        nid = NNID.strip('"')
+        if len(nid) > 16:
+            await self.bot.say('An NNID has a maximum of 16 characters.')
+            return
+
+        await self.edit_field('nnid', ctx, nid)
 
     @profile.command(pass_context=True)
     async def rank(self, ctx, rank : str):
@@ -193,7 +249,15 @@ class Profile:
 
         If you don't have a profile set up then it'll create one for you.
         """
-        await self.edit_field('squad', ctx, squad.strip('"'))
+        squad = squad.strip('"')
+        if len(squad) > 100:
+            await self.bot.say('Your squad is way too long. Keep it less than 100 characters.')
+            return
+
+        if squad.startswith('http'):
+            squad = '<' + squad + '>'
+
+        await self.edit_field('squad', ctx, squad)
 
     @profile.command(pass_context=True)
     async def weapon(self, ctx, *, weapon : str):
@@ -220,20 +284,20 @@ class Profile:
             await self.bot.say('No weapon found that matches "{}"'.format(weapon))
             return
         elif len(result) == 1:
-            await self.edit_field('weapon', ctx, Weapon(**result[0]))
+            await self.edit_field('weapon', ctx, Weapon.from_cache(**result[0]))
             return True
 
         def weapon_entry(tup):
             index = tup[0]
             wep = tup[1]['name']
-            return '#{0}: {1}'.format(index, wep)
+            return '{0}: {1}'.format(index, wep)
 
         try:
             match = await formats.too_many_matches(self.bot, ctx.message, result, weapon_entry)
         except commands.CommandError as e:
             await self.bot.say(e)
         else:
-            await self.edit_field('weapon', ctx, Weapon(**match))
+            await self.edit_field('weapon', ctx, Weapon.from_cache(**match))
             return True
 
     @profile.command()
@@ -254,7 +318,7 @@ class Profile:
             entries.append((rank, format(value, '.2%')))
 
         weapons = Counter(profile.weapon.name for profile in profiles if profile.weapon is not None)
-        entries.append(('Players with Weapons', sum(weapons.values())))
+        entries.append(('Players with Weapon.from_caches', sum(weapons.values())))
         top_cut = weapons.most_common(3)
         for weapon, count in top_cut:
             entries.append((weapon, count))
@@ -306,24 +370,95 @@ class Profile:
         """
 
         message = ctx.message
-        await self.bot.say('Hello. Let\'s walk you through making a profile!\nWhat is your NNID?')
-        nnid = await self.bot.wait_for_message(author=message.author, channel=message.channel)
+        author = message.author
+        sentinel = ctx.prefix + 'cancel'
+
+        fmt = 'Hello {0.mention}. Let\'s walk you through making a profile!\n' \
+              '**You can cancel this process whenever you want by typing {1.prefix}cancel.**\n' \
+              'Now, what is your NNID?'
+
+        await self.bot.say(fmt.format(author, ctx))
+        check = lambda m: 16 >= len(m.content) >= 4 and m.content.count('\n') == 0
+        nnid = await self.bot.wait_for_message(author=author, channel=message.channel, timeout=60.0, check=check)
+
+        if nnid is None:
+            await self.bot.say('You took too long {0.mention}. Goodbye.'.format(author))
+            return
+
+        if nnid.content == sentinel:
+            await self.bot.say('Profile making cancelled. Goodbye.')
+            return
+
         await ctx.invoke(self.nnid, NNID=nnid.content)
         await self.bot.say('Now tell me, what is your Splatoon rank? Please don\'t put the number.')
-        check = lambda m: m.content.upper() in self.valid_ranks
-        rank = await self.bot.wait_for_message(author=message.author, channel=message.channel, check=check, timeout=60.0)
+        check = lambda m: m.content.upper() in self.valid_ranks or m.content == sentinel
+        rank = await self.bot.wait_for_message(author=author, channel=message.channel, check=check, timeout=60.0)
+
         if rank is None:
             await self.bot.say('Alright.. you took too long to give me a proper rank. Goodbye.')
             return
 
+        if rank.content == sentinel:
+            await self.bot.say('Profile making cancelled. Goodbye.')
+            return
+
         await self.edit_field('rank', ctx, rank.content.upper())
         await self.bot.say('What weapon do you main?')
-        weapon = await self.bot.wait_for_message(author=message.author, channel=message.channel)
-        success = await ctx.invoke(self.weapon, weapon=weapon.content)
-        if success:
-            await self.bot.say('Alright! Your profile is all ready now.')
+        for i in range(3):
+            weapon = await self.bot.wait_for_message(author=author, channel=message.channel)
+
+            if weapon.content == sentinel:
+                await self.bot.say('Profile making cancelled. Goodbye.')
+                return
+
+            success = await ctx.invoke(self.weapon, weapon=weapon.content)
+            if success:
+                await self.bot.say('Alright! Your profile is all ready now.')
+                break
+            else:
+                await self.bot.say('Oops. You have {} tries remaining.'.format(2 - i))
         else:
-            await self.bot.say('Make sure to use {0.prefix}profile weapon to change your weapon.'.format(ctx))
+            # if we're here then we didn't successfully set up a weapon.
+            tmp = 'Sorry we couldn\'t set up your profile. You should try using {0.prefix}profile weapon'
+            await self.bot.say(tmp.format(ctx))
+
+    @profile.command()
+    async def search(self, *, query : str):
+        """Searches profiles via either NNID or Squad.
+
+        The query must be at least 3 characters long.
+
+        First a search is passed through the NNID database and then we pass
+        through the Squad database. Results are returned matching whichever
+        criteria is met.
+        """
+        lowered = query.lower()
+        if len(lowered) < 3:
+            await self.bot.say('Query must be at least 3 characters long.')
+            return
+
+        profiles = self.config.all().items()
+        members = set()
+        def predicate(t):
+            p = t[1]
+            if p.squad is not None:
+                if lowered in p.squad.lower():
+                    return True
+
+            if p.nnid is not None:
+                if lowered in p.nnid.lower():
+                    return True
+
+            return False
+
+        for user_id, profile in filter(predicate, profiles):
+            for server in self.bot.servers:
+                member = server.get_member(user_id)
+                if member is not None:
+                    members.add(member.name)
+
+        fmt = 'Found the {} members matching the search:\n{}'
+        await self.bot.say(fmt.format(len(members), ', '.join(members)))
 
 def setup(bot):
     bot.add_cog(Profile(bot))

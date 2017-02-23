@@ -4,6 +4,9 @@ import discord
 from collections import OrderedDict, deque, Counter
 import os, datetime
 import re, asyncio
+import copy
+import unicodedata
+import inspect
 
 class TimeParser:
     def __init__(self, argument):
@@ -27,6 +30,12 @@ class TimeParser:
             if seconds is not None:
                 self.seconds += int(seconds)
 
+        if self.seconds < 0:
+            raise commands.BadArgument('I don\'t do negative time.')
+
+        if self.seconds > 604800: # 7 days
+            raise commands.BadArgument('That\'s a bit too far in the future for me.')
+
 class Meta:
     """Commands for utilities related to Discord or the Bot itself."""
 
@@ -36,10 +45,67 @@ class Meta:
     @commands.command(hidden=True)
     async def hello(self):
         """Displays my intro message."""
-        await self.bot.say('Hello! I\'m a robot! I am currently **version 3.0.0**. Danny made me.')
+        await self.bot.say('Hello! I\'m a robot! Danny#0007 made me.')
 
+    @commands.command()
+    async def charinfo(self, *, characters: str):
+        """Shows you information about a number of characters.
 
-    @commands.command(pass_context=True)
+        Only up to 15 characters at a time.
+        """
+
+        if len(characters) > 15:
+            await self.bot.say('Too many characters ({}/15)'.format(len(characters)))
+            return
+
+        fmt = '`\\U{0:>08}`: {1} - {2} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{0}>'
+
+        def to_string(c):
+            digit = format(ord(c), 'x')
+            name = unicodedata.name(c, 'Name not found.')
+            return fmt.format(digit, name, c)
+
+        await self.bot.say('\n'.join(map(to_string, characters)))
+
+    @commands.command()
+    async def source(self, command : str = None):
+        """Displays my full source code or for a specific command.
+
+        To display the source code of a subcommand you have to separate it by
+        periods, e.g. tag.create for the create subcommand of the tag command.
+        """
+        source_url = 'https://github.com/Rapptz/RoboDanny'
+        if command is None:
+            await self.bot.say(source_url)
+            return
+
+        code_path = command.split('.')
+        obj = self.bot
+        for cmd in code_path:
+            try:
+                obj = obj.get_command(cmd)
+                if obj is None:
+                    await self.bot.say('Could not find the command ' + cmd)
+                    return
+            except AttributeError:
+                await self.bot.say('{0.name} command has no subcommands'.format(obj))
+                return
+
+        # since we found the command we're looking for, presumably anyway, let's
+        # try to access the code itself
+        src = obj.callback.__code__
+        lines, firstlineno = inspect.getsourcelines(src)
+        if not obj.callback.__module__.startswith('discord'):
+            # not a built-in command
+            location = os.path.relpath(src.co_filename).replace('\\', '/')
+        else:
+            location = obj.callback.__module__.replace('.', '/') + '.py'
+            source_url = 'https://github.com/Rapptz/discord.py'
+
+        final_url = '<{}/blob/master/{}#L{}-L{}>'.format(source_url, location, firstlineno, firstlineno + len(lines) - 1)
+        await self.bot.say(final_url)
+
+    @commands.command(pass_context=True, aliases=['reminder', 'remind'])
     async def timer(self, ctx, time : TimeParser, *, message=''):
         """Reminds you of something after a certain amount of time.
 
@@ -52,6 +118,7 @@ class Meta:
         author = ctx.message.author
         reminder = None
         completed = None
+        message = message.replace('@everyone', '@\u200beveryone').replace('@here', '@\u200bhere')
 
         if not message:
             reminder = 'Okay {0.mention}, I\'ll remind you in {1.seconds} seconds.'
@@ -64,13 +131,18 @@ class Meta:
         await asyncio.sleep(time.seconds)
         await self.bot.say(completed.format(author, message))
 
+    @timer.error
+    async def timer_error(self, error, ctx):
+        if type(error) is commands.BadArgument:
+            await self.bot.say(str(error))
+
     @commands.command(name='quit', hidden=True)
     @checks.is_owner()
     async def _quit(self):
         """Quits the bot."""
         await self.bot.logout()
 
-    @commands.command(pass_context=True)
+    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
     async def info(self, ctx, *, member : discord.Member = None):
         """Shows info about a member.
 
@@ -78,43 +150,88 @@ class Meta:
         a member then the info returned will be yours.
         """
         channel = ctx.message.channel
-        if channel.is_private:
-            await self.bot.say('You cannot use this in PMs.')
-            return
-
         if member is None:
             member = ctx.message.author
 
+        e = discord.Embed()
         roles = [role.name.replace('@', '@\u200b') for role in member.roles]
         shared = sum(1 for m in self.bot.get_all_members() if m.id == member.id)
         voice = member.voice_channel
         if voice is not None:
-            voice = '{} with {} people'.format(voice, len(voice.voice_members))
+            other_people = len(voice.voice_members) - 1
+            voice_fmt = '{} with {} others' if other_people else '{} by themselves'
+            voice = voice_fmt.format(voice.name, other_people)
         else:
             voice = 'Not connected.'
 
-        entries = [
-            ('Name', member.name),
-            ('User ID', member.id),
-            ('Joined', member.joined_at),
-            ('Roles', ', '.join(roles)),
-            ('Servers', '{} shared'.format(shared)),
-            ('Channel', channel.name),
-            ('Voice Channel', voice),
-            ('Channel ID', channel.id),
-            ('Avatar', member.avatar_url),
-        ]
+        e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
+        e.set_footer(text='Member since').timestamp = member.joined_at
+        e.add_field(name='ID', value=member.id)
+        e.add_field(name='Servers', value='%s shared' % shared)
+        e.add_field(name='Voice', value=voice)
+        e.add_field(name='Created', value=member.created_at)
+        e.add_field(name='Roles', value=', '.join(roles))
+        e.colour = member.colour
 
-        await formats.entry_to_code(self.bot, entries)
+        if member.avatar:
+            e.set_image(url=member.avatar_url)
+
+        await self.bot.say(embed=e)
+
+    @info.command(name='server', pass_context=True, no_pm=True)
+    async def server_info(self, ctx):
+        server = ctx.message.server
+        roles = [role.name.replace('@', '@\u200b') for role in server.roles]
+
+        secret_member = copy.copy(server.me)
+        secret_member.id = '0'
+        secret_member.roles = [server.default_role]
+
+        # figure out what channels are 'secret'
+        secret_channels = 0
+        secret_voice = 0
+        text_channels = 0
+        for channel in server.channels:
+            perms = channel.permissions_for(secret_member)
+            is_text = channel.type == discord.ChannelType.text
+            text_channels += is_text
+            if is_text and not perms.read_messages:
+                secret_channels += 1
+            elif not is_text and (not perms.connect or not perms.speak):
+                secret_voice += 1
+
+        regular_channels = len(server.channels) - secret_channels
+        voice_channels = len(server.channels) - text_channels
+        member_by_status = Counter(str(m.status) for m in server.members)
+
+        e = discord.Embed()
+        e.title = 'Info for ' + server.name
+        e.add_field(name='ID', value=server.id)
+        e.add_field(name='Owner', value=server.owner)
+        if server.icon:
+            e.set_thumbnail(url=server.icon_url)
+
+        if server.splash:
+            e.set_image(url=server.splash_url)
+
+        e.add_field(name='Partnered?', value='Yes' if server.features else 'No')
+
+        fmt = 'Text %s (%s secret)\nVoice %s (%s locked)'
+        e.add_field(name='Channels', value=fmt % (text_channels, secret_channels, voice_channels, secret_voice))
+
+        fmt = 'Total: {0}\nOnline: {1[online]}' \
+              ', Offline: {1[offline]}' \
+              '\nDnD: {1[dnd]}' \
+              ', Idle: {1[idle]}'
+
+        e.add_field(name='Members', value=fmt.format(server.member_count, member_by_status))
+        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else '%s roles' % len(roles))
+        e.set_footer(text='Created').timestamp = server.created_at
+        await self.bot.say(embed=e)
 
     async def say_permissions(self, member, channel):
         permissions = channel.permissions_for(member)
-        entries = []
-        for attr in dir(permissions):
-            is_property = isinstance(getattr(type(permissions), attr), property)
-            if is_property:
-                entries.append((attr.replace('_', ' ').title(), getattr(permissions, attr)))
-
+        entries = [(attr.replace('_', ' ').title(), val) for attr, val in permissions]
         await formats.entry_to_code(self.bot, entries)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -145,100 +262,36 @@ class Meta:
         member = ctx.message.server.me
         await self.say_permissions(member, channel)
 
-    def get_bot_uptime(self):
-        now = datetime.datetime.utcnow()
-        delta = now - self.bot.uptime
-        hours, remainder = divmod(int(delta.total_seconds()), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        days, hours = divmod(hours, 24)
-        if days:
-            fmt = '{d} days, {h} hours, {m} minutes, and {s} seconds'
-        else:
-            fmt = '{h} hours, {m} minutes, and {s} seconds'
-
-        return fmt.format(d=days, h=hours, m=minutes, s=seconds)
-
-    @commands.command()
-    async def join(self, invite : discord.Invite):
-        """Joins a server via invite."""
-        await self.bot.accept_invite(invite)
-        await self.bot.say('\U0001f44c')
-
-    @commands.command(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def leave(self, ctx):
-        """Leaves the server.
-
-        To use this command you must have Manage Server permissions or have
-        the Bot Admin role.
-        """
-        server = ctx.message.server
-        try:
-            await self.bot.leave_server(server)
-        except:
-            await self.bot.say('Could not leave..')
-
-
-    @commands.command()
-    async def uptime(self):
-        """Tells you how long the bot has been up for."""
-        await self.bot.say('Uptime: **{}**'.format(self.get_bot_uptime()))
-
-    def format_message(self, message):
-        return 'On {0.timestamp}, {0.author} said {0.content}'.format(message)
-
-    @commands.command(pass_context=True)
-    async def mentions(self, ctx, channel : discord.Channel = None, context : int = 3):
-        """Tells you when you were mentioned in a channel.
-
-        If a channel is not given, then it tells you when you were mentioned in a
-        the current channel. The context is an integer that tells you how many messages
-        before should be shown. The context cannot be greater than 5 or lower than 0.
-        """
-        if channel is None:
-            channel = ctx.message.channel
-
-        context = min(5, max(0, context))
-
-        author = ctx.message.author
-        previous = deque(maxlen=context)
-        async for message in self.bot.logs_from(channel, limit=1000):
-            previous.append(message)
-            if author in message.mentions or message.mention_everyone:
-                # we're mentioned so..
-                try:
-                    await self.bot.whisper('\n'.join(map(self.format_message, previous)))
-                except discord.HTTPException:
-                    await self.bot.whisper('An error happened while fetching mentions.')
-
-    @commands.command()
-    async def about(self):
-        """Tells you information about the bot itself."""
-        revision = os.popen(r'git show -s HEAD --format="%s (%cr)"').read().strip()
-        result = ['**About Me:**']
-        result.append('- Author: Danny (Discord ID: 80088516616269824)')
-        result.append('- Library: discord.py (Python)')
-        result.append('- Latest Change: {}'.format(revision))
-        result.append('- Uptime: {}'.format(self.get_bot_uptime()))
-        result.append('- Servers: {}'.format(len(self.bot.servers)))
-        result.append('- Commands Run: {}'.format(self.bot.commands_executed))
-        # statistics
-        total_members = sum(len(s.members) for s in self.bot.servers)
-        total_online  = sum(1 for m in self.bot.get_all_members() if m.status != discord.Status.offline)
-        unique_members = set(self.bot.get_all_members())
-        unique_online = sum(1 for m in unique_members if m.status != discord.Status.offline)
-        channel_types = Counter(c.type for c in self.bot.get_all_channels())
-        voice = channel_types[discord.ChannelType.voice]
-        text = channel_types[discord.ChannelType.text]
-        result.append('- Total Members: {} ({} online)'.format(total_members, total_online))
-        result.append('- Unique Members: {} ({} online)'.format(len(unique_members), unique_online))
-        result.append('- {} text channels, {} voice channels'.format(text, voice))
-        await self.bot.say('\n'.join(result))
+    @commands.command(aliases=['invite'])
+    async def join(self):
+        """Joins a server."""
+        perms = discord.Permissions.none()
+        perms.read_messages = True
+        perms.send_messages = True
+        perms.manage_roles = True
+        perms.ban_members = True
+        perms.kick_members = True
+        perms.manage_messages = True
+        perms.embed_links = True
+        perms.read_message_history = True
+        perms.attach_files = True
+        perms.add_reactions = True
+        await self.bot.say(discord.utils.oauth_url(self.bot.client_id, perms))
 
     @commands.command(rest_is_raw=True, hidden=True)
     @checks.is_owner()
     async def echo(self, *, content):
         await self.bot.say(content)
+
+    @commands.command(hidden=True)
+    async def cud(self):
+        """pls no spam"""
+
+        for i in range(3):
+            await self.bot.say(3 - i)
+            await asyncio.sleep(1)
+
+        await self.bot.say('go')
 
 def setup(bot):
     bot.add_cog(Meta(bot))

@@ -46,14 +46,12 @@ async def get_new_splatnet_cookie(username, password):
                   'username': username,
                   'password': password}
 
-    response = await aiohttp.post(NINTENDO_LOGIN_PAGE, data=parameters)
-
-    cookie = response.history[-1].cookies.get('_wag_session')
-    await response.release()
-    if cookie is None:
-        print(req)
-        raise Exception("Couldn't retrieve cookie")
-    return cookie
+    async with aiohttp.post(NINTENDO_LOGIN_PAGE, data=parameters) as response:
+        cookie = response.history[-1].cookies.get('_wag_session')
+        if cookie is None:
+            print(req)
+            raise Exception("Couldn't retrieve cookie")
+        return cookie
 
 def parse_splatnet_time(timestr):
     # time is given as "MM/DD at H:MM [p|a].m. (PDT|PST)"
@@ -98,9 +96,6 @@ def parse_splatnet_time(timestr):
 async def get_splatnet_schedule(splatnet_cookie):
     cookies = {'_wag_session': splatnet_cookie}
 
-    response = await aiohttp.get(SPLATNET_SCHEDULE_URL, cookies=cookies, data={'locale':"en"})
-    text = await response.text()
-    root = etree.fromstring(text, etree.HTMLParser())
 
     """
     This is repeated 3 times:
@@ -124,27 +119,29 @@ async def get_splatnet_schedule(splatnet_cookie):
     """
 
     schedule = []
+    async with aiohttp.get(SPLATNET_SCHEDULE_URL, cookies=cookies, data={'locale':"en"}) as response:
+        text = await response.text()
+        root = etree.fromstring(text, etree.HTMLParser())
+        stage_schedule_nodes = root.xpath("//*[@class='stage-schedule']")
+        stage_list_nodes = root.xpath("//*[@class='stage-list']")
 
-    stage_schedule_nodes = root.xpath("//*[@class='stage-schedule']")
-    stage_list_nodes = root.xpath("//*[@class='stage-list']")
+        if len(stage_schedule_nodes)*2 != len(stage_list_nodes):
+            raise RuntimeError("SplatNet changed, need to update the parsing!")
 
-    if len(stage_schedule_nodes)*2 != len(stage_list_nodes):
-        raise RuntimeError("SplatNet changed, need to update the parsing!")
+        for sched_node in stage_schedule_nodes:
+            r = Rotation()
 
-    for sched_node in stage_schedule_nodes:
-        r = Rotation()
+            start_time, end_time = sched_node.text.split("~")
+            r.start = parse_splatnet_time(start_time)
+            r.end = parse_splatnet_time(end_time)
 
-        start_time, end_time = sched_node.text.split("~")
-        r.start = parse_splatnet_time(start_time)
-        r.end = parse_splatnet_time(end_time)
+            tw_list_node = stage_list_nodes.pop(0)
+            r.turf_maps = tw_list_node.xpath(".//*[@class='map-name']/text()")
 
-        tw_list_node = stage_list_nodes.pop(0)
-        r.turf_maps = tw_list_node.xpath(".//*[@class='map-name']/text()")
+            ranked_list_node = stage_list_nodes.pop(0)
+            r.ranked_maps = ranked_list_node.xpath(".//*[@class='map-name']/text()")
+            r.ranked_mode = ranked_list_node.xpath(".//*[@class='rule-description']/text()")[0]
 
-        ranked_list_node = stage_list_nodes.pop(0)
-        r.ranked_maps = ranked_list_node.xpath(".//*[@class='map-name']/text()")
-        r.ranked_mode = ranked_list_node.xpath(".//*[@class='rule-description']/text()")[0]
-
-        schedule.append(r)
+            schedule.append(r)
 
     return schedule

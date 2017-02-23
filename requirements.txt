@@ -1,2 +1,4 @@
-git+https://github.com/Rapptz/discord.py@async
+git+https://github.com/Rapptz/discord.py@master#egg=discord.py[voice]
 lxml
+requests
+psutil

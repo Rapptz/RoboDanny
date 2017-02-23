@@ -1,7 +1,6 @@
 from discord.ext import commands
 import random as rng
 
-
 class RNG:
     """Utilities that provide pseudo-RNG."""
 
@@ -15,19 +14,58 @@ class RNG:
             await self.bot.say('Incorrect random subcommand passed.')
 
     @random.command()
-    async def weapon(self):
-        """Displays a random Splatoon weapon."""
+    async def weapon(self, count=1):
+        """Displays a random Splatoon weapon.
+
+        The count parameter is how many to generate. It cannot be
+        negative. If it's negative or zero then only one weapon will be
+        selected. The maximum number of random weapons generated is 8.
+        """
         splatoon = self.bot.get_cog('Splatoon')
         if splatoon is None:
             await self.bot.say('Splatoon cog is not loaded.')
             return
 
+        count = count if count > 0 else 1
+        count = count if count < 8 else 8
+
         weapons = splatoon.config.get('weapons', [])
         if weapons:
-            weapon = rng.choice(weapons)
-            await self.bot.say(splatoon.weapon_to_string(weapon))
+            if count == 1:
+                weapon = rng.choice(weapons)
+                await self.bot.say(splatoon.weapon_to_string(weapon))
+            else:
+                sample = rng.sample(weapons, count)
+                msg = '\n'.join(map(lambda w: w['name'], sample))
+                await self.bot.say(msg)
 
         del splatoon
+
+    @random.command()
+    async def private(self):
+        """Displays an all private Splatoon match.
+
+        The map and mode is randomised along with both team's weapons.
+        """
+        splatoon = self.bot.get_cog('Splatoon')
+        if splatoon is None:
+            await self.bot.say('Splatoon cog is not loaded.')
+            return
+
+        maps = splatoon.config.get('maps', [])
+        stage = rng.choice(maps) if maps else 'Random Stage'
+        modes = [ 'Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control' ]
+        mode = rng.choice(modes)
+        result = ['Playing {} on {}'.format(mode, stage), '', '**Team Alpha**']
+        weapons = rng.sample(splatoon.config.get('weapons'), 8)
+        for i in range(8):
+            if i == 4:
+                result.append('')
+                result.append('**Team Bravo**')
+
+            result.append('Player {}: {[name]}'.format(i + 1, weapons[i]))
+
+        await self.bot.say('\n'.join(result))
 
     @random.command(pass_context=True)
     async def tag(self, ctx):
@@ -113,9 +151,10 @@ class RNG:
         To denote multiple choices, you should use double quotes.
         """
         if len(choices) < 2:
-            await self.bot.say('Not enough choices to pick from.')
-        else:
-            await self.bot.say(rng.choice(choices))
+            return await self.bot.say('Not enough choices to pick from.')
+
+        choice = rng.choice(choices).replace('@', '@\u200b') # this breaks user mentions
+        await self.bot.say(choice)
 
 def setup(bot):
     bot.add_cog(RNG(bot))

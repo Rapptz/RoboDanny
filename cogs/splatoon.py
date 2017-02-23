@@ -3,6 +3,37 @@ from .utils import config, checks, maps
 import asyncio, aiohttp
 from urllib.parse import quote as urlquote
 import random
+from collections import namedtuple
+
+GameEntry = namedtuple('GameEntry', ('stage', 'mode'))
+
+def is_valid_entry(result, entry):
+    # no dupes
+    if entry in result:
+        return False
+
+    # make sure the map isn't played in the last 2 games
+    last_two_games = result[-2:]
+    for prev in last_two_games:
+        if prev.stage == entry.stage:
+            return False
+
+    return True
+
+def get_random_scrims(modes, maps, count):
+    result = []
+    current_mode_index = 0
+    for index in range(count):
+        while True:
+            entry = GameEntry(stage=random.choice(maps), mode=modes[current_mode_index])
+            if is_valid_entry(result, entry):
+                result.append(entry)
+                current_mode_index += 1
+                if current_mode_index >= len(modes):
+                    current_mode_index = 0
+                break
+
+    return result
 
 class Splatoon:
     """Splatoon related commands."""
@@ -13,32 +44,36 @@ class Splatoon:
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
 
-    def __del__(self):
+    def __unload(self):
         self.map_updater.cancel()
 
-    async def update_maps(self):
-        # we sleep for 5 seconds to give other tasks their time to run
+    async def splatnet_cookie(self):
         username = self.config.get('username')
         password = self.config.get('password')
+        self.cookie = await maps.get_new_splatnet_cookie(username, password)
+
+    async def update_maps(self):
         try:
+            await self.splatnet_cookie()
             while not self.bot.is_closed:
-                try:
-                    cookie = await maps.get_new_splatnet_cookie(username, password)
-                    schedule = await maps.get_splatnet_schedule(cookie)
-                except Exception:
-                    # if we get an exception, keep the old data
-                    # make sure to remove the old data that already ended
-                    self.map_data = [data for data in self.map_data if not data.is_over]
-                else:
-                    self.map_data = []
-                    for entry in schedule:
-                        if entry.is_over:
-                            continue
-                        self.map_data.append(entry)
-                finally:
-                    await asyncio.sleep(120) # task runs every 2 minutes
+                await self.update_schedule()
+                await asyncio.sleep(120) # task runs every 2 minutes
         except asyncio.CancelledError:
             pass
+
+    async def update_schedule(self):
+        try:
+            schedule = await maps.get_splatnet_schedule(self.cookie)
+        except:
+            # if we get an exception, keep the old data
+            # make sure to remove the old data that already ended
+            self.map_data = [data for data in self.map_data if not data.is_over]
+        else:
+            self.map_data = []
+            for entry in schedule:
+                if entry.is_over:
+                    continue
+                self.map_data.append(entry)
 
     def get_map_message(self, index):
         try:
@@ -46,7 +81,13 @@ class Splatoon:
         except IndexError:
             return 'No map data found. Try again later.'
 
-    @commands.command()
+    @commands.command(hidden=True)
+    async def refreshmaps(self):
+        """Force refresh the maps in the rotation."""
+        await self.update_schedule()
+        await self.bot.say('\U0001f44c')
+
+    @commands.command(aliases=['rotation'])
     async def maps(self):
         """Shows the current maps in the Splatoon schedule."""
         await self.bot.say(self.get_map_message(0))
@@ -103,23 +144,53 @@ class Splatoon:
         else:
             await self.bot.say('\n'.join(output))
 
-    @commands.group(invoke_without_command=True)
-    async def scrim(self, games=5):
+    @commands.command(invoke_without_command=True)
+    async def scrim(self, games=5, *, mode : str = None):
         """Generates scrim map and mode combinations.
 
         The mode combinations do not have Turf War. The number of games must
-        be between 3 and 15.
+        be between 3 and 16.
+
+        The mode is rotated unless you pick a mode to play, in which all map
+        combinations will use that mode instead.
         """
 
         maps = self.config.get('maps', [])
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control']
-        result = []
-        games = max(min(games, 15), 3)
+        game_count = max(min(games, 16), 3)
 
-        for game in range(games):
-            stage = random.choice(maps)
-            mode = random.choice(modes)
-            result.append('{} on {}'.format(mode, stage))
+        if mode is not None:
+            mode = mode.lower()
+
+            # half-assed fuzzy matching
+            lookup = {
+                'tc': modes[2],
+                'tower': modes[2],
+                'tower control': modes[2],
+                'sz': modes[1],
+                'zones': modes[1],
+                'zone': modes[1],
+                'splat zone': modes[1],
+                'splat zones': modes[1],
+                'rainmaker': modes[0],
+                'rm': modes[0],
+                'turf': 'Turf War',
+                'turf war': 'Turf War',
+                'tw': 'Turf War'
+            }
+
+            resulting_mode = lookup.get(mode, None)
+            if resulting_mode is not None:
+                result = ['The following games will be played in {}'.format(resulting_mode)]
+                for index, stage in enumerate(random.sample(maps, game_count), 1):
+                    result.append('Game {}: {}'.format(index, stage))
+            else:
+                await self.bot.say('Could not figure out what mode you meant.')
+                return
+        else:
+            random.shuffle(modes)
+            scrims = get_random_scrims(modes, maps, game_count)
+            result = ['Game {0}: {1.mode} on {1.stage}'.format(game, scrim) for game, scrim in enumerate(scrims, 1)]
 
         await self.bot.say('\n'.join(result))
 
@@ -130,11 +201,11 @@ class Splatoon:
         If the query is an ability then it attempts to find out what brands
         influence that ability, otherwise it just looks for the brand being given.
 
-        The query must be at least 5 characters long.
+        The query must be at least 2 characters long.
         """
         query = query.strip().lower()
 
-        if len(query) < 5:
+        if len(query) < 2:
             await self.bot.say('The query must be at least 5 characters long.')
             return
 
@@ -186,7 +257,18 @@ class Splatoon:
     async def _list(self):
         """Lists all Splatoon brands."""
         brands = self.config.get('brands', [])
-        await self.bot.say(', '.join(map(lambda x: x['name'], brands)))
+        max_name = max(len(b['name']) for b in brands)
+        max_ability = max(len(b['buffed']) if b['buffed'] else 4 for b in brands)
+        output = ['```']
+        tmp = { 'name': 'Brand', 'nerfed': 'Nerfed', 'buffed': 'Buffed' }
+        fmt = '{0[name]!s:<{n}} {0[buffed]!s:<{a}} {0[nerfed]!s:<{a}}'
+        output.append(fmt.format(tmp, n=max_name, a=max_ability))
+        output.append('-' * (max_name + max_ability * 2))
+
+        for brand in brands:
+            output.append(fmt.format(brand, n=max_name, a=max_ability))
+        output.append('```')
+        await self.bot.say('\n'.join(output))
 
     @commands.command(hidden=True)
     async def marie(self):
@@ -240,7 +322,6 @@ class Splatoon:
                 await self.bot.say('It seems that Inkipedia is taking too long to respond. Try again later.')
             else:
                 await self.bot.say('An error has occurred of status code {0.status} happened. Tell Danny.'.format(resp))
-
 
 def setup(bot):
     bot.add_cog(Splatoon(bot))
