@@ -72,4 +72,4 @@ def human_timedelta(dt):
         if seconds:
             return '%s and %s ago' % (Plural(minute=minutes), Plural(second=seconds))
         return '%s ago' % Plural(minute=minutes)
-    return Plural(second=seconds) + ' ago'
+    return '%s ago' % Plural(second=seconds)
