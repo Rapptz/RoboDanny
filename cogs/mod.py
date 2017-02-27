@@ -121,13 +121,14 @@ class Mod:
             pass
 
         # kick anyway
+        channel = self.bot.get_channel(raids[1])
         try:
             await self.bot.kick(member)
         except discord.HTTPException:
-            pass
+            log.info('[Raid Mode] Faield to kick {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
+            await self.bot.send_message(channel, 'Failed to kick {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
         else:
             log.info('[Raid Mode] Kicked {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
-            channel = self.bot.get_channel(raids[1])
             await self.bot.send_message(channel, 'Kicked {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
 
     async def on_message(self, message):
