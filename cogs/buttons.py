@@ -306,11 +306,15 @@ class Buttons:
                 return await self.bot.say('No results found... sorry.')
 
             next_two = entries[1:3]
+            first_entry = entries[0]
+            if first_entry[-1] == ')':
+                first_entry = first_entry[:-1] + '%29'
+
             if next_two:
                 formatted = '\n'.join(map(lambda x: '<%s>' % x, next_two))
-                msg = '{}\n\n**See also:**\n{}'.format(entries[0], formatted)
+                msg = '{}\n\n**See also:**\n{}'.format(first_entry, formatted)
             else:
-                msg = entries[0]
+                msg = first_entry
 
             await self.bot.say(msg)
 
