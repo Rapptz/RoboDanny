@@ -82,11 +82,8 @@ class Mod:
 
         return True
 
-    async def check_raid(self, message):
-        guild = message.server
-        member = message.author
-
-        if isinstance(member, discord.User):
+    async def check_raid(self, guild, member, timestamp):
+        if not isinstance(member, discord.Member):
             return
 
         raids = self.config.get('__raids__', {}).get(guild.id, (RaidMode.off, None))
@@ -99,9 +96,9 @@ class Mod:
         if delta > 30:
             return
 
-        delta = (message.timestamp - member.joined_at).total_seconds() // 60
+        delta = (timestamp - member.joined_at).total_seconds() // 60
 
-        # check if this is their first message in the 30 minutes they joined
+        # check if this is their first action in the 30 minutes they joined
         if delta > 30:
             return
 
@@ -141,7 +138,7 @@ class Mod:
             return
 
         # check for raid mode stuff
-        await self.check_raid(message)
+        await self.check_raid(message.server, message.author, message.timestamp)
 
         # auto-ban tracking for mention spams begin here
 
@@ -168,6 +165,11 @@ class Mod:
             fmt = '{0} (ID: {0.id}) has been banned for spamming mentions ({1} mentions).'
             await self.bot.send_message(message.channel, fmt.format(message.author, len(message.mentions)))
             log.info('Member {0.author} (ID: {0.author.id}) has been autobanned from server {0.server}'.format(message))
+
+    async def on_voice_state_update(self, before, after):
+        # joined a voice channel
+        if before.voice_channel is None and after.voice_channel is not None:
+            await self.check_raid(after.server, after, datetime.datetime.utcnow())
 
     async def on_member_join(self, member):
         raids = self.config.get('__raids__', {})
@@ -294,10 +296,11 @@ class Mod:
         """Enables strict raid mode on the server.
 
         Strict mode is similar to regular enabled raid mode, with the added
-        benefit of auto-kicking members that meet all of the following requirements:
+        benefit of auto-kicking members that meet the following requirements:
 
         - Account creation date and join date are at most 30 minutes apart.
         - First message recorded on the server is 30 minutes apart from join date.
+        - Joining a voice channel within 30 minutes of joining.
 
         Members who meet these requirements will get a private message saying that the
         server is currently in lock down and if they are legitimate to join back at a
