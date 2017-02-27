@@ -82,20 +82,6 @@ class Mod:
 
         return True
 
-    async def create_temporary_invite(self, channel_id):
-        # discord.py currently doesn't support this so just patch this in.
-        http = self.bot.http
-        url = '{0.CHANNELS}/{1}/invites'.format(http, channel_id)
-        payload = {
-            'max_age': 0,
-            'max_uses': 1,
-            'temporary': False,
-            'unique': True
-        }
-
-        data = await http.post(url, json=payload, bucket='create_invite')
-        return 'https://discord.gg/' + data['code']
-
     async def check_raid(self, message):
         guild = message.server
         member = message.author
@@ -131,7 +117,7 @@ class Mod:
               """
 
         try:
-            invite = await self.create_temporary_invite(guild.id)
+            invite = await self.bot.create_invite(guild, max_uses=1, unique=True)
             fmt = cleandoc(fmt).format(guild, invite)
             await self.bot.send_message(member, fmt)
         except discord.HTTPException:
