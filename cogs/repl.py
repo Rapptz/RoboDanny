@@ -24,6 +24,8 @@ class REPL:
         return content.strip('` \n')
 
     def get_syntax_error(self, e):
+        if e.text is None:
+            return '```py\n{0.__class__.__name__}: {0}\n```'.format(e)
         return '```py\n{0.text}{1:>{0.offset}}\n{2}: {0}```'.format(e, '^', type(e).__name__)
 
     @commands.command(pass_context=True, hidden=True, name='eval')
