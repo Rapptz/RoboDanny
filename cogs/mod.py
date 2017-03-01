@@ -757,8 +757,8 @@ class Mod:
         """
         try:
             await self.bot.edit_role(ctx.message.server, role, colour=colour)
-        except discord.Forbidden:
-            await self.bot.say('The bot must have Manage Roles permissions to use this.')
+        except discord.HTTPException:
+            await self.bot.say('The bot must have Manage Roles permissions to use this and its role must be higher.')
         else:
             await self.bot.say('\U0001f44c')
 
