@@ -122,16 +122,16 @@ class Meta:
 
         if not message:
             reminder = 'Okay {0.mention}, I\'ll remind you in {1}.'
-            completed = 'Time is up {0.mention}! You asked to be reminded about something.'
+            completed = 'Time is up {0.mention}! You asked to be reminded about something {2}.'
         else:
             reminder = 'Okay {0.mention}, I\'ll remind you about "{2}" in {1}.'
-            completed = 'Time is up {0.mention}! You asked to be reminded about "{1}".'
+            completed = 'Time is up {0.mention}! You asked to be reminded about "{1}" {2}.'
 
         human_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=time.seconds)
-        human_time = formats.human_timedelta(human_time).replace(' ago', '')
-        await self.bot.say(reminder.format(author, human_time, message))
+        human_time = formats.human_timedelta(human_time)
+        await self.bot.say(reminder.format(author, human_time.replace('ago', ''), message))
         await asyncio.sleep(time.seconds)
-        await self.bot.say(completed.format(author, message))
+        await self.bot.say(completed.format(author, message, human_time))
 
     @timer.error
     async def timer_error(self, error, ctx):
