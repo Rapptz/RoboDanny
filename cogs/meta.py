@@ -10,7 +10,7 @@ import inspect
 
 class TimeParser:
     def __init__(self, argument):
-        compiled = re.compile(r"(?:(?P<hours>\d+)h)?(?:(?P<minutes>\d+)m)?(?:(?P<seconds>\d+)s)?")
+        compiled = re.compile(r"(?:(?P<hours>[0-9]{1,5})h)?(?:(?P<minutes>[0-9]{1,5})m)?(?:(?P<seconds>[0-9]{1,5})s)?$")
         self.original = argument
         try:
             self.seconds = int(argument)
@@ -30,8 +30,8 @@ class TimeParser:
             if seconds is not None:
                 self.seconds += int(seconds)
 
-        if self.seconds < 0:
-            raise commands.BadArgument('I don\'t do negative time.')
+        if self.seconds <= 0:
+            raise commands.BadArgument('Bad time provided.')
 
         if self.seconds > 604800: # 7 days
             raise commands.BadArgument('That\'s a bit too far in the future for me.')
