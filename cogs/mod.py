@@ -1,7 +1,7 @@
 from discord.ext import commands
 from .utils import config, checks
 from .utils.formats import human_timedelta
-from collections import Counter
+from collections import Counter, defaultdict
 from inspect import cleandoc
 
 import re
@@ -48,6 +48,9 @@ class Mod:
     def __init__(self, bot):
         self.bot = bot
         self.config = config.Config('mod.json', loop=bot.loop, object_hook=object_hook, encoder=RaidModeEncoder)
+
+        # guild_id: set(user_id)
+        self._recently_kicked = defaultdict(set)
 
     def bot_user(self, message):
         return message.server.me if message.channel.is_private else self.bot.user
@@ -125,11 +128,12 @@ class Mod:
         try:
             await self.bot.kick(member)
         except discord.HTTPException:
-            log.info('[Raid Mode] Faield to kick {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
+            log.info('[Raid Mode] Failed to kick {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
             await self.bot.send_message(channel, 'Failed to kick {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
         else:
             log.info('[Raid Mode] Kicked {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
             await self.bot.send_message(channel, 'Kicked {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
+            self._recently_kicked[guild.id].add(member.id)
 
     async def on_message(self, message):
         if message.author == self.bot.user or checks.is_owner_check(message):
@@ -182,11 +186,28 @@ class Mod:
 
         # these are the dates in minutes
         created = (now - member.created_at).total_seconds() // 60
+        was_kicked = False
+
+        if data[0] is RaidMode.strict:
+            was_kicked = self._recently_kicked.get(member.server.id)
+            if was_kicked is not None:
+                try:
+                    was_kicked.remove(member.id)
+                except KeyError:
+                    was_kicked = False
+                else:
+                    was_kicked = True
 
         # Do the broadcasted message to the channel
-        e = discord.Embed(title='Member Joined')
+        if was_kicked:
+            title = 'Member Re-Joined'
+            colour = 0xdd5f53 # red
+        else:
+            title = 'Member Joined'
+            colour = 0x53dda4 # green
+
+        e = discord.Embed(title=title, colour=colour)
         e.timestamp = member.created_at
-        e.colour = discord.Colour.green()
         e.set_footer(text='Created')
         e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
         e.add_field(name='Created', value=human_timedelta(member.created_at))
@@ -288,6 +309,7 @@ class Mod:
 
         raids = self.config.get('__raids__', {})
         raids[guild.id] = (RaidMode.off, None)
+        self._recently_kicked.pop(guild.id, None)
         await self.config.put('__raids__', raids)
         await self.bot.say('Raid mode disabled. No longer broadcasting join messages.')
 
