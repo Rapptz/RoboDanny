@@ -93,7 +93,7 @@ class Mod:
         if raids[0] is not RaidMode.strict:
             return
 
-        delta  = (member.created_at - member.joined_at).total_seconds() // 60
+        delta  = (member.joined_at - member.created_at).total_seconds() // 60
 
         # they must have created their account at most 30 minutes before they joined.
         if delta > 30:
