@@ -129,7 +129,7 @@ class Meta:
 
         human_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=time.seconds)
         human_time = formats.human_timedelta(human_time)
-        await self.bot.say(reminder.format(author, human_time.replace('ago', ''), message))
+        await self.bot.say(reminder.format(author, human_time.replace(' ago', ''), message))
         await asyncio.sleep(time.seconds)
         await self.bot.say(completed.format(author, message, human_time))
 
