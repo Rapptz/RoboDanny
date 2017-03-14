@@ -85,35 +85,7 @@ class API:
                 await asyncio.sleep(10)
                 await self.bot.add_roles(member, role)
 
-    def check_embed_too_large(self, m):
-        if not m.embeds:
-            return False
-
-        e = discord.Embed.from_data(m.embeds[0])
-        if e.type != 'rich':
-            return False
-
-        code_points = 0
-        if e.description:
-            code_points += len(e.description)
-
-        if e.footer:
-            code_points += len(e.footer)
-
-        for field in e.fields:
-            code_points += len(field.value) + len(field.name)
-
-        return code_points >= 10000
-
     async def on_message(self, message):
-        if message.server is None or message.server.id != DISCORD_API_ID:
-            return
-
-        if self.check_embed_too_large(message):
-            await self.bot.ban(message.author)
-            msg = 'Banned {0} (ID: {0.id}) for an excessively large embed.'.format(message.author)
-            await self.bot.send_message(discord.Object(id=DISCORD_API_ID), msg)
-
         if message.channel.id != DISCORD_PY_ID:
             return
 
