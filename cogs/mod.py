@@ -206,6 +206,9 @@ class Mod:
             title = 'Member Joined'
             colour = 0x53dda4 # green
 
+            if created < 30:
+                colour = 0xdda453 # yellow
+
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = member.created_at
         e.set_footer(text='Created')
