@@ -138,7 +138,7 @@ class Lounge:
                 if not href.startswith('/w/cpp'):
                     continue
 
-                if href.startswith('/w/cpp/language'):
+                if href.startswith(('/w/cpp/language', '/w/cpp/concept')):
                     # special page
                     special_pages.append(special_fmt.format(node.text, href))
                 else:
