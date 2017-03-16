@@ -132,7 +132,7 @@ class Lounge:
             description = []
             special_pages = []
             fmt = '[`{0}`](http://en.cppreference.com{1})'
-            special_fmt = '[{}](http://encppreference.com{})'
+            special_fmt = '[{}](http://en.cppreference.com{})'
             for node in nodes:
                 href = node.attrib['href']
                 if not href.startswith('/w/cpp'):
