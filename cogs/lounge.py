@@ -146,8 +146,12 @@ class Lounge:
 
             if len(special_pages) > 0:
                 e.add_field(name='Language Results', value='\n'.join(special_pages), inline=False)
-                e.add_field(name='Library Results', value='\n'.join(description[:10]), inline=False)
+                if len(description):
+                    e.add_field(name='Library Results', value='\n'.join(description[:10]), inline=False)
             else:
+                if not len(description):
+                    return await self.bot.say('No results found.')
+
                 e.title = 'Search Results'
                 e.description = '\n'.join(description[:15])
 
