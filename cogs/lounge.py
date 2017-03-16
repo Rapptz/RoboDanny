@@ -2,6 +2,8 @@ from discord.ext import commands
 from .utils import checks
 import aiohttp
 import json
+import discord
+from lxml import etree
 
 class CodeBlock:
     missing_error = 'Missing code block. Please use the following markdown\n\\`\\`\\`language\ncode here\n\\`\\`\\`'
@@ -47,6 +49,10 @@ class Lounge:
 
     def __init__(self, bot):
         self.bot = bot
+        self.session = aiohttp.ClientSession(loop=bot.loop)
+
+    def __unload(self):
+        self.session.close()
 
     @commands.command(pass_context=True)
     async def coliru(self, ctx, *, code: CodeBlock):
@@ -75,7 +81,7 @@ class Lounge:
         data = json.dumps(payload)
 
         await self.bot.type()
-        async with aiohttp.post('http://coliru.stacked-crooked.com/compile', data=data) as resp:
+        async with self.session.post('http://coliru.stacked-crooked.com/compile', data=data) as resp:
             if resp.status != 200:
                 await self.bot.say('Coliru did not respond in time.')
                 return
@@ -87,7 +93,7 @@ class Lounge:
                 return
 
             # output is too big so post it in gist
-            async with aiohttp.post('http://coliru.stacked-crooked.com/share', data=data) as resp:
+            async with self.session.post('http://coliru.stacked-crooked.com/share', data=data) as resp:
                 if resp.status != 200:
                     await self.bot.say('Could not create coliru shared link')
                 else:
@@ -100,6 +106,52 @@ class Lounge:
             await self.bot.say(error)
         if isinstance(error, commands.MissingRequiredArgument):
             await self.bot.say(CodeBlock.missing_error)
+
+    @commands.command()
+    async def cpp(self, *, query: str):
+        """Search something on cppreference"""
+
+        url = 'http://en.cppreference.com/w/cpp/index.php'
+        params = {
+            'title': 'Special:Search',
+            'search': query
+        }
+
+        async with self.session.get(url, params=params) as resp:
+            if resp.status != 200:
+                return await self.bot.say('An error occurred (status code: {0.status}). Retry later.'.format(resp))
+
+            if len(resp.history) > 0:
+                return await self.bot.say(resp.url)
+
+            e = discord.Embed()
+            root = etree.fromstring(await resp.text(), etree.HTMLParser())
+
+            nodes = root.findall(".//div[@class='mw-search-result-heading']/a")
+
+            description = []
+            special_pages = []
+            fmt = '[`{0}`](http://en.cppreference.com{1})'
+            special_fmt = '[{}](http://encppreference.com{})'
+            for node in nodes:
+                href = node.attrib['href']
+                if not href.startswith('/w/cpp'):
+                    continue
+
+                if href.startswith('/w/cpp/language'):
+                    # special page
+                    special_pages.append(special_fmt.format(node.text, href))
+                else:
+                    description.append(fmt.format(node.text, href))
+
+            if len(special_pages) > 0:
+                e.add_field(name='Language Results', value='\n'.join(special_pages), inline=False)
+                e.add_field(name='Library Results', value='\n'.join(description[:10]), inline=False)
+            else:
+                e.title = 'Search Results'
+                e.description = '\n'.join(description[:15])
+
+            await self.bot.say(embed=e)
 
 def setup(bot):
     bot.add_cog(Lounge(bot))
