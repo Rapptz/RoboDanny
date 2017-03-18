@@ -384,9 +384,9 @@ class Stars:
                          'MESSAGE_REACTION_REMOVE', 'MESSAGE_REACTION_REMOVE_ALL'):
             return
 
-        is_message_delete = event[8] == 'D'
-        is_reaction_clear = event.endswith('_ALL')
-        is_reaction = event.endswith('_ADD')
+        is_message_delete = event == 'MESSAGE_DELETE'
+        is_reaction_clear = event == 'MESSAGE_REACTION_REMOVE_ALL'
+        is_reaction = event == 'MESSAGE_REACTION_ADD'
 
         # make sure the reaction is proper
         if not is_message_delete and not is_reaction_clear:
