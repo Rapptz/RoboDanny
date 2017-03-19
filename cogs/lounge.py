@@ -22,7 +22,7 @@ class CodeBlock:
 
     def get_command_from_language(self, language):
         cmds = {
-            'cpp': 'g++ -std=c++14 -O2 -Wall -Wextra -pedantic -pthread main.cpp && ./a.out',
+            'cpp': 'g++ -std=c++1z -O2 -Wall -Wextra -pedantic -pthread main.cpp -lstdc++fs && ./a.out',
             'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
             'py': 'python main.cpp', # coliru has no python3
             'python': 'python main.cpp',
