@@ -97,7 +97,7 @@ class Stars:
         try:
             await self.bot.wait_until_ready()
             while not self.bot.is_closed:
-                await run_janitor(guild_id)
+                await self.run_janitor(guild_id)
         except asyncio.CancelledError:
             pass
 
