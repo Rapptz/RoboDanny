@@ -54,6 +54,7 @@ class Stars:
 
         # cache message objects to save Discord some HTTP requests.
         self._message_cache = {}
+        self._cleaner = self.bot.loop.create_task(self.clean_message_cache())
 
         self.janitor_tasks = {
             guild_id: self.bot.loop.create_task(self.janitor(guild_id))
@@ -62,11 +63,20 @@ class Stars:
         }
 
     def __unload(self):
+        self._cleaner.cancel()
         for task in self.janitor_tasks.values():
             try:
                 task.cancel()
             except:
                 pass
+
+    async def clean_message_cache(self):
+        try:
+            while not self.bot.is_closed:
+                self._message_cache.clear()
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            pass
 
     async def clean_starboard(self, ctx, stars):
         dead_messages = {
