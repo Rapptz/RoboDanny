@@ -227,6 +227,7 @@ class API:
         return name.replace('-', '.')
 
     @commands.command(no_pm=True, pass_context=True)
+    @commands.has_permissions(manage_roles=True)
     @is_discord_api()
     async def block(self, ctx, *, member: discord.Member):
         """Blocks a user from your channel."""
