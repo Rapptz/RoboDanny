@@ -226,6 +226,23 @@ class API:
             name = name[index + 1:]
         return name.replace('-', '.')
 
+    @commands.command(no_pm=True, pass_context=True)
+    @is_discord_api()
+    async def block(self, ctx, *, member: discord.Member):
+        """Blocks a user from your channel."""
+
+        overwrite = discord.PermissionOverwrite()
+        overwrite.read_messages = False
+        overwrite.send_messages = False
+
+        channel = ctx.message.channel
+        try:
+            await self.bot.edit_channel_permissions(channel, member, overwrite)
+        except:
+            await self.bot.say('\N{THUMBS DOWN SIGN}')
+        else:
+            await self.bot.say('\N{THUMBS UP SIGN}')
+
     @commands.group(name='feeds', pass_context=True, invoke_without_command=True)
     @is_discord_api()
     async def _feeds(self, ctx):
