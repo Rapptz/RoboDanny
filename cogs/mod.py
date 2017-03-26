@@ -572,7 +572,7 @@ class Mod:
 
     @commands.command(no_pm=True, pass_context=True)
     @checks.admin_or_permissions(ban_members=True)
-    async def hackban(self, ctx, member_id: int):
+    async def hackban(self, ctx, *member_ids: int):
         """Bans a member via their ID.
 
         In order for this to work, the bot must have Ban Member permissions.
@@ -581,14 +581,16 @@ class Mod:
         Bot Admin role.
         """
 
-        try:
-            await self.bot.http.ban(member_id, ctx.message.server.id)
-        except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to ban members.')
-        except discord.HTTPException:
-            await self.bot.say('Banning failed.')
-        else:
-            await self.bot.say('\U0001f44c')
+        if not ctx.message.server.me.server_permissions.ban_members:
+            return await self.bot.say('The bot does not have permissions to ban members.')
+
+        for member_id in member_ids:
+            try:
+                await self.bot.http.ban(member_id, ctx.message.server.id)
+            except discord.HTTPException:
+                pass
+
+        await self.bot.say('\U0001f44c')
 
     @commands.command(no_pm=True)
     @checks.admin_or_permissions(kick_members=True)
