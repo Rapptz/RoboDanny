@@ -68,28 +68,21 @@ class Meta:
         await self.bot.say('\n'.join(map(to_string, characters)))
 
     @commands.command()
-    async def source(self, command : str = None):
+    async def source(self, *, command: str = None):
         """Displays my full source code or for a specific command.
 
-        To display the source code of a subcommand you have to separate it by
-        periods, e.g. tag.create for the create subcommand of the tag command.
+        To display the source code of a subcommand you can separate it by
+        periods, e.g. tag.create for the create subcommand of the tag command
+        or by spaces.
         """
         source_url = 'https://github.com/Rapptz/RoboDanny'
         if command is None:
             await self.bot.say(source_url)
             return
 
-        code_path = command.split('.')
-        obj = self.bot
-        for cmd in code_path:
-            try:
-                obj = obj.get_command(cmd)
-                if obj is None:
-                    await self.bot.say('Could not find the command ' + cmd)
-                    return
-            except AttributeError:
-                await self.bot.say('{0.name} command has no subcommands'.format(obj))
-                return
+        obj = self.bot.get_command(command.replace('.', ' '))
+        if obj is None:
+            return await self.bot.say('Could not find command.')
 
         # since we found the command we're looking for, presumably anyway, let's
         # try to access the code itself
