@@ -37,7 +37,7 @@ def object_hook(obj):
 
 class RaidModeEncoder(json.JSONEncoder):
     def default(self, o):
-        if type(o) is RaidMode:
+        if isinstance(o, RaidMode):
             return o.value
 
         super().default(o)

@@ -26,7 +26,7 @@ def object_hook(obj):
 
 class MentionsEncoder(json.JSONEncoder):
     def default(self, o):
-        if type(o) is MentionMode:
+        if isinstance(o, MentionMode):
             return o.value
 
         super().default(o)

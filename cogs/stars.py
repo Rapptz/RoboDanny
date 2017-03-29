@@ -476,7 +476,7 @@ class Stars:
 
     @star.error
     async def star_error(self, error, ctx):
-        if type(error) is commands.BadArgument:
+        if isinstance(error, commands.BadArgument):
             await self.bot.say('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
 
     @commands.command(pass_context=True, no_pm=True)

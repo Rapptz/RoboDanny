@@ -128,7 +128,7 @@ class Meta:
 
     @timer.error
     async def timer_error(self, error, ctx):
-        if type(error) is commands.BadArgument:
+        if isinstance(error, commands.BadArgument):
             await self.bot.say(str(error))
 
     @commands.command(name='quit', hidden=True)

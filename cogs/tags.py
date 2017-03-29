@@ -346,7 +346,7 @@ class Tags:
 
     @make.error
     async def tag_make_error(self, error, ctx):
-        if type(error) is commands.TooManyArguments:
+        if isinstance(error, commands.TooManyArguments):
             await self.bot.say('Please call just {0.prefix}tag make'.format(ctx))
 
     def top_three_tags(self, db):
