@@ -544,7 +544,7 @@ class Mod:
         try:
             await self.bot.kick(member)
         except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to kick members.')
+            await self.bot.say('The bot does not have permissions to kick this member.')
         except discord.HTTPException:
             await self.bot.say('Kicking failed.')
         else:
@@ -564,7 +564,7 @@ class Mod:
         try:
             await self.bot.ban(member)
         except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to ban members.')
+            await self.bot.say('The bot does not have permissions to ban this member.')
         except discord.HTTPException:
             await self.bot.say('Banning failed.')
         else:
@@ -609,7 +609,7 @@ class Mod:
             await self.bot.ban(member)
             await self.bot.unban(member.server, member)
         except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to ban members.')
+            await self.bot.say('The bot does not have permissions to ban this member.')
         except discord.HTTPException:
             await self.bot.say('Banning failed.')
         else:
