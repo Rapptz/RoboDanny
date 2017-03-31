@@ -69,13 +69,14 @@ class Emoji:
         e = discord.Embed(title='Blob Statistics', colour=0xf1c40f)
 
         common = blob_usage.most_common()
-        total_blob_usage = sum(blob_usage.values())
-        total_global_usage = sum(total_usage.values())
-        e.add_field(name='Total Usage', value=total_blob_usage)
-        e.add_field(name='Percentage', value=format(total_blob_usage / total_global_usage, '.2%'))
+        total_count = sum(blob_usage.values())
+        global_usage = sum(total_usage.values())
+        fmt = '{0} ({1:.2%} of all emoji usage)'
+
+        e.add_field(name='Total Usage', value=fmt.format(total_count, total_count / global_usage))
 
         def elem_to_string(key, count):
-            return '{0}: {1} times ({2:.2%})'.format(blob_ids.get(key), count, count / total_blob_usage)
+            return '{0}: {1} times ({2:.2%})'.format(blob_ids.get(key), count, count / total_count)
 
         top = [elem_to_string(key, count) for key, count in common[0:7]]
         bottom = [elem_to_string(key, count) for key, count in common[-7:]]
@@ -103,10 +104,9 @@ class Emoji:
                 rank = index + 1
                 break
 
-        e.description = str(emoji)
-        e.add_field(name='Usage', value=usage)
+        e.add_field(name='Emoji', value=emoji)
+        e.add_field(name='Usage', value='{0} ({1:.2%})'.format(usage, usage / total))
         e.add_field(name='Rank', value=rank)
-        e.add_field(name='Percentage', value=format(usage / total, '.2%'))
         return e
 
     @commands.command(hidden=True)
