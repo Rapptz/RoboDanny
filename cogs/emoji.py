@@ -46,7 +46,7 @@ class Emoji:
             return
 
         db = self.config.get(message.server.id, {})
-        for emoji_id in matches:
+        for emoji_id in set(matches):
             try:
                 count = db[emoji_id]
             except KeyError:
