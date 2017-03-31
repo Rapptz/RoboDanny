@@ -20,7 +20,7 @@ class BlobEmoji(commands.Converter):
         elif self.argument.isdigit():
             emoji = emojis.get(self.argument)
         else:
-            emoji = discord.utils.find(emojis.values(), lambda e: e.name == self.argument)
+            emoji = discord.utils.find(lambda e: e.name == self.argument, emojis.values())
 
         if emoji is None:
             raise commands.BadArgument('Not a valid blob emoji.')
