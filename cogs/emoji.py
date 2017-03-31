@@ -52,7 +52,7 @@ class Emoji:
 
         common = global_usage.most_common()
         top = ['%s: %s times' % (blob_ids.get(key), count) for key, count in common[0:7]]
-        bottom = top = ['%s: %s times' % (blob_ids.get(key), count) for key, count in common[:-7]]
+        bottom = ['%s: %s times' % (blob_ids.get(key), count) for key, count in common[-7:]]
         e.add_field(name='Most Common', value='\n'.join(top), inline=False)
         e.add_field(name='Least Common', value='\n'.join(bottom), inline=False)
         return e
