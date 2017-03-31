@@ -7,13 +7,30 @@ import discord
 import re
 
 BLOB_GUILD_ID = '272885620769161216'
+EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
+
+class BlobEmoji(commands.Converter):
+    def convert(self):
+        guild = self.ctx.bot.get_server(BLOB_GUILD_ID)
+        emojis = {e.id: e for e in guild.emojis}
+
+        m = EMOJI_REGEX.match(self.argument)
+        if m is not None:
+            emoji = emojis.get(m.group(1))
+        elif self.argument.isdigit():
+            emoji = emojis.get(self.argument)
+        else:
+            emoji = discord.utils.find(emojis.values(), lambda e: e.name == self.argument)
+
+        if emoji is None:
+            raise commands.BadArgument('Not a valid blob emoji.')
+        return emoji
 
 class Emoji:
     """Custom emoji tracking statistics for Wolfiri"""
 
     def __init__(self, bot):
         self.bot = bot
-        self.regex = re.compile(r'<:.+?:([0-9]{16,21})>')
 
         # guild_id: data
         # where data is
@@ -24,7 +41,7 @@ class Emoji:
         if message.server is None:
             return
 
-        matches = self.regex.findall(message.content)
+        matches = EMOJI_REGEX.findall(message.content)
         if not matches:
             return
 
@@ -71,11 +88,6 @@ class Emoji:
         blob_ids = {e.id: e for e in blob_guild.emojis}
 
         e = discord.Embed(colour=0xf1c40f, title='Statistics')
-        valid = blob_ids.get(emoji.id)
-        if valid is None:
-            e.description = 'Not a valid blob.'
-            return e
-
         total_usage = Counter()
         for data in self.config.all().values():
             total_usage.update(data)
@@ -98,7 +110,7 @@ class Emoji:
         return e
 
     @commands.command(hidden=True)
-    async def blobstats(self, *, emoji: discord.Emoji = None):
+    async def blobstats(self, *, emoji: BlobEmoji = None):
         """Usage statistics of blobs."""
         if emoji is None:
             e = self.get_all_blob_stats()
@@ -106,6 +118,11 @@ class Emoji:
             e = self.get_blob_stats_for(emoji)
 
         await self.bot.say(embed=e)
+
+    @blobstats.error
+    async def blobstats_error(self, error, ctx):
+        if isinstance(error, commands.BadArgument):
+            await self.bot.say(str(e))
 
 def setup(bot):
     bot.add_cog(Emoji(bot))
