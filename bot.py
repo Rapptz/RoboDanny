@@ -38,6 +38,7 @@ initial_extensions = [
     'cogs.pokemon',
     'cogs.permissions',
     'cogs.stats',
+    'cogs.emoji',
 ]
 
 discord_logger = logging.getLogger('discord')
