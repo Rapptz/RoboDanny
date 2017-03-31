@@ -42,17 +42,26 @@ class Emoji:
     def get_all_blob_stats(self):
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
         blob_ids = {e.id: e for e in blob_guild.emojis}
-        global_usage = Counter()
+        total_usage = Counter()
         for data in self.config.all().values():
-            global_usage.update(data)
+            total_usage.update(data)
 
-        global_usage = Counter(x for x in global_usage.elements() if x in blob_ids)
+        blob_usage = Counter({e: 0 for e in blob_ids})
+        blob_usage.update(x for x in total_usage.elements() if x in blob_ids)
 
         e = discord.Embed(title='Blob Statistics', colour=0xf1c40f)
 
-        common = global_usage.most_common()
-        top = ['%s: %s times' % (blob_ids.get(key), count) for key, count in common[0:7]]
-        bottom = ['%s: %s times' % (blob_ids.get(key), count) for key, count in common[-7:]]
+        common = blob_usage.most_common()
+        total_blob_usage = sum(blob_usage.values())
+        total_global_usage = sum(total_usage.values())
+        e.add_field(name='Total Usage', value=total_blob_usage)
+        e.add_field(name='Percentage', value=format(total_blob_usage / total_global_usage, '.2%'))
+
+        def elem_to_string(key, count):
+            return '{0}: {1} times ({2:.2%})'.format(blob_ids.get(key), count, count / total_blob_usage)
+
+        top = [elem_to_string(key, count) for key, count in common[0:7]]
+        bottom = [elem_to_string(key, count) for key, count in common[-7:]]
         e.add_field(name='Most Common', value='\n'.join(top), inline=False)
         e.add_field(name='Least Common', value='\n'.join(bottom), inline=False)
         return e
@@ -67,23 +76,25 @@ class Emoji:
             e.description = 'Not a valid blob.'
             return e
 
-        global_usage = Counter()
+        total_usage = Counter()
         for data in self.config.all().values():
-            global_usage.update(data)
+            total_usage.update(data)
 
-        global_usage = Counter(x for x in global_usage.elements() if x in blob_ids)
-        usage = global_usage.get(emoji.id)
+        blob_usage = Counter({e: 0 for e in blob_ids})
+        blob_usage.update(x for x in total_usage.elements() if x in blob_ids)
+        usage = blob_usage.get(emoji.id)
+        total = sum(blob_usage.values())
 
         rank = None
-        for (index, (x, _)) in enumerate(global_usage.most_common()):
+        for (index, (x, _)) in enumerate(blob_usage.most_common()):
             if x == emoji.id:
                 rank = index + 1
                 break
 
-
-        e.add_field(name='Emoji', value=str(emoji))
+        e.description = str(emoji)
         e.add_field(name='Usage', value=usage)
         e.add_field(name='Rank', value=rank)
+        e.add_field(name='Percentage', value=format(usage / total, '.2%'))
         return e
 
     @commands.command(hidden=True)
