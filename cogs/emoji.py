@@ -75,8 +75,8 @@ class Emoji:
         usage = global_usage.get(emoji.id)
 
         rank = None
-        for (index, (e, _)) in enumerate(global_usage.most_common()):
-            if e == emoji.id:
+        for (index, (x, _)) in enumerate(global_usage.most_common()):
+            if x == emoji.id:
                 rank = index + 1
                 break
 
