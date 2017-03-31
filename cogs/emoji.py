@@ -61,7 +61,7 @@ class Emoji:
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
         blob_ids = {e.id: e for e in blob_guild.emojis}
 
-        e = discord.Emoji(colour=0xf1c40f, title='Statistics for ' + emoji.name)
+        e = discord.Embed(colour=0xf1c40f, title='Statistics for ' + emoji.name)
         valid = blob_ids.get(emoji.id)
         if valid is None:
             e.description = 'Not a valid blob.'
