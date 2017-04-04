@@ -7,6 +7,7 @@ import copy
 import random
 import asyncio
 import logging
+import weakref
 from collections import Counter
 
 log = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ class Stars:
         # cache message objects to save Discord some HTTP requests.
         self._message_cache = {}
         self._cleaner = self.bot.loop.create_task(self.clean_message_cache())
+
+        self._locks = weakref.WeakValueDictionary()
 
         self.janitor_tasks = {
             guild_id: self.bot.loop.create_task(self.janitor(guild_id))
@@ -175,7 +178,7 @@ class Stars:
         e.colour = self.star_gradient_colour(starrers)
         return base, e
 
-    async def star_message(self, message, starrer_id, message_id, *, reaction=True):
+    async def _star_message(self, message, starrer_id, message_id, *, reaction=True):
         guild_id = message.server.id
         db = self.stars.get(guild_id, {})
         starboard = self.bot.get_channel(db.get('channel'))
@@ -278,7 +281,15 @@ class Stars:
         await self.stars.put(guild_id, db)
         await self.bot.edit_message(bot_msg, content, embed=embed)
 
-    async def unstar_message(self, message, starrer_id, message_id):
+    async def star_message(self, message, starrer_id, message_id, *, reaction=True):
+        lock = self._locks.get(message.server.id)
+        if lock is None:
+            self._locks[message.server.id] = lock = asyncio.Lock(loop=self.bot.loop)
+
+        async with lock:
+            await self._star_message(message, starrer_id, message_id, reaction=reaction)
+
+    async def _unstar_message(self, message, starrer_id, message_id):
         guild_id = message.server.id
         db = self.stars.get(guild_id, {})
         starboard = self.bot.get_channel(db.get('channel'))
@@ -318,6 +329,14 @@ class Stars:
                 content, e = self.emoji_message(msg, len(starrers))
                 await self.stars.put(guild_id, db)
                 await self.bot.edit_message(bot_msg, content, embed=e)
+
+    async def unstar_message(self, message, starrer_id, message_id):
+        lock = self._locks.get(message.server.id)
+        if lock is None:
+            self._locks[message.server.id] = lock = asyncio.Lock(loop=self.bot.loop)
+
+        async with lock:
+            await self._unstar_message(message, starrer_id, message_id)
 
     @commands.command(pass_context=True, no_pm=True)
     @checks.admin_or_permissions(administrator=True)
