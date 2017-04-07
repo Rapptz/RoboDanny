@@ -89,6 +89,14 @@ class API:
         if message.channel.id != DISCORD_PY_ID:
             return
 
+        if message.author.status is discord.Status.offline:
+            fmt = '{0} (ID: {0.id}) has been automatically blocked for being invisible.'
+            overwrite = discord.PermissionOverwrite()
+            overwrite.read_messages = False
+            overwrite.send_messages = False
+            await self.bot.edit_channel_permissions(message.channel, message.author, overwrite)
+            return await self.bot.send_message(message.channel, fmt.format(message.author))
+
         m = self.issue.search(message.content)
         if m is not None:
             url = 'https://github.com/Rapptz/discord.py/issues/'
