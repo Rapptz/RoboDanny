@@ -156,7 +156,8 @@ class Mod:
             return
 
         # check if it meets the thresholds required
-        if len(message.mentions) < settings['count']:
+        mention_count = sum(not m.bot for m in message.mentions)
+        if mention_count < settings['count']:
             return
 
         if message.channel.id in settings.get('ignored', []):
