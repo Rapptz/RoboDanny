@@ -1,10 +1,11 @@
 from discord.ext import commands
-from .utils import config
+from .utils import config, checks
 
 from collections import Counter
 
 import discord
 import re
+import io
 
 BLOB_GUILD_ID = '272885620769161216'
 EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
@@ -123,6 +124,31 @@ class Emoji:
     async def blobstats_error(self, error, ctx):
         if isinstance(error, commands.BadArgument):
             await self.bot.say(str(e))
+
+    @commands.command()
+    async def blobs(self):
+        """Gives an invite for the blob server."""
+        await self.bot.say('https://discord.gg/s2Fbfhq')
+
+    @commands.command(pass_context=True, aliases=['blobpost'], hidden=True)
+    @checks.is_in_servers(BLOB_GUILD_ID)
+    @checks.admin_or_permissions(administrator=True)
+    async def blobsort(self, ctx):
+        """Sorts the blob post."""
+        paginator = commands.Paginator(prefix='', suffix='')
+        emojis = sorted(ctx.message.server.emojis, key=lambda e: e.name)
+
+        for emoji in emojis:
+            paginator.add_line('{0} = `:{0.name}:`'.format(emoji))
+
+        fp = io.BytesIO()
+        for post, page in enumerate(paginator.pages, 1):
+            fmt = 'Page %s\n\n' % post
+            fp.write(fmt.encode('utf-8'))
+            fp.write(page.encode('utf-8'))
+
+        fp.seek(0)
+        await self.bot.upload(fp, filename='blob_posts.txt')
 
 def setup(bot):
     bot.add_cog(Emoji(bot))
