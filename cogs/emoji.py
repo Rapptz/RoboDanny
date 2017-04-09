@@ -135,17 +135,16 @@ class Emoji:
     @checks.admin_or_permissions(administrator=True)
     async def blobsort(self, ctx):
         """Sorts the blob post."""
-        paginator = commands.Paginator(prefix='', suffix='')
         emojis = sorted(ctx.message.server.emojis, key=lambda e: e.name)
-
-        for emoji in emojis:
-            paginator.add_line('{0} = `:{0.name}:`'.format(emoji))
-
         fp = io.BytesIO()
-        for post, page in enumerate(paginator.pages, 1):
-            fmt = 'Page %s\n\n' % post
+        pages = [emojis[i:i + 30] for i in range(0, len(emojis), 30)]
+
+        for number, page in enumerate(pages, 1):
+            fmt = 'Page %s\n' % number
             fp.write(fmt.encode('utf-8'))
-            fp.write(page.encode('utf-8'))
+            for emoji in page:
+                fmt = '{0.name} = `:{0.name}:`\n'.format(emoji)
+                fp.write(fmt.encode('utf-8'))
 
         fp.seek(0)
         await self.bot.upload(fp, filename='blob_posts.txt')
