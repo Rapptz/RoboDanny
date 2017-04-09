@@ -143,8 +143,10 @@ class Emoji:
             fmt = 'Page %s\n' % number
             fp.write(fmt.encode('utf-8'))
             for emoji in page:
-                fmt = '{0.name} = `:{0.name}:`\n'.format(emoji)
+                fmt = ':{0.name}: = `:{0.name}:`\n'.format(emoji)
                 fp.write(fmt.encode('utf-8'))
+
+            fp.write(b'\n')
 
         fp.seek(0)
         await self.bot.upload(fp, filename='blob_posts.txt')
