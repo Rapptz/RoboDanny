@@ -38,6 +38,12 @@ class Emoji:
         # emoji_id: count
         self.config = config.Config('emoji_statistics.json')
 
+    def __check(self, ctx):
+        server = ctx.message.server
+        if server is not None and server.id == BLOB_GUILD_ID:
+            return ctx.prefix == '?'
+        return True
+
     async def on_message(self, message):
         if message.server is None:
             return
