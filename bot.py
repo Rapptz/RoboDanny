@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-from cogs.utils import checks
+from cogs.utils import checks, context
 import datetime, re
 import json, asyncio
 import copy
@@ -8,6 +8,8 @@ import logging
 import traceback
 import sys
 from collections import Counter
+
+import config
 
 description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
@@ -20,113 +22,100 @@ except ImportError:
 else:
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-initial_extensions = [
-    'cogs.meta',
-    'cogs.splatoon',
-    'cogs.rng',
-    'cogs.mod',
-    'cogs.profile',
-    'cogs.tags',
-    'cogs.lounge',
-    'cogs.repl',
-    'cogs.carbonitex',
-    'cogs.mentions',
-    'cogs.api',
-    'cogs.stars',
-    'cogs.admin',
-    'cogs.buttons',
-    'cogs.pokemon',
-    'cogs.permissions',
-    'cogs.stats',
-    'cogs.emoji',
-    'cogs.poll',
-]
+logging.getLogger('discord').setLevel(logging.INFO)
+logging.getLogger('discord.http').setLevel(logging.DEBUG)
 
-discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.CRITICAL)
 log = logging.getLogger()
 log.setLevel(logging.INFO)
 handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
 log.addHandler(handler)
 
-help_attrs = dict(hidden=True)
+class RoboDanny(commands.AutoShardedBot):
+    def __init__(self):
+        super().__init__(command_prefix=commands.when_mentioned_or('?', '!'), description=description,
+                         pm_help=None, help_attrs=dict(hidden=True))
 
-prefix = ['?', '!', '\N{HEAVY EXCLAMATION MARK SYMBOL}']
-bot = commands.Bot(command_prefix=prefix, description=description, pm_help=None, help_attrs=help_attrs)
+        initial_extensions = (
+            'cogs.meta',
+            # 'cogs.splatoon',
+            # 'cogs.rng',
+            # 'cogs.mod',
+            # 'cogs.profile',
+            # 'cogs.tags',
+            # 'cogs.lounge',
+            # 'cogs.repl',
+            # 'cogs.carbonitex',
+            # 'cogs.mentions',
+            # 'cogs.api',
+            # 'cogs.stars',
+            'cogs.admin',
+            # 'cogs.buttons',
+            # 'cogs.pokemon',
+            # 'cogs.permissions',
+            # 'cogs.stats',
+            # 'cogs.emoji',
+        )
 
-@bot.event
-async def on_command_error(error, ctx):
-    if isinstance(error, commands.NoPrivateMessage):
-        await bot.send_message(ctx.message.author, 'This command cannot be used in private messages.')
-    elif isinstance(error, commands.DisabledCommand):
-        await bot.send_message(ctx.message.author, 'Sorry. This command is disabled and cannot be used.')
-    elif isinstance(error, commands.CommandInvokeError):
-        print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
-        traceback.print_tb(error.original.__traceback__)
-        print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
+        self.client_id = config.client_id
+        self.carbon_key = config.carbon_key
+        self.bots_key = config.bots_key
 
-@bot.event
-async def on_ready():
-    print('Logged in as:')
-    print('Username: ' + bot.user.name)
-    print('ID: ' + bot.user.id)
-    print('------')
-    if not hasattr(bot, 'uptime'):
-        bot.uptime = datetime.datetime.utcnow()
+        self.add_command(self.do)
+        self.add_check(self.only_me_for_rewrite)
 
-@bot.event
-async def on_resumed():
-    print('resumed...')
+        for extension in initial_extensions:
+            try:
+                self.load_extension(extension)
+            except Exception as e:
+                print('Failed to load extension %s' % extension, file=sys.stderr)
+                traceback.print_exc()
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
+    def __del__(self):
+        handlers = log.handlers[:]
+        for hdlr in handlers:
+            hdlr.close()
+            log.removeHandler(hdlr)
 
-    await bot.process_commands(message)
+    async def on_command_error(self, error, ctx):
+        if isinstance(error, commands.NoPrivateMessage):
+            await ctx.author.send('This command cannot be used in private messages.')
+        elif isinstance(error, commands.DisabledCommand):
+            await ctx.author.send('Sorry. This command is disabled and cannot be used.')
+        elif isinstance(error, commands.CommandInvokeError):
+            print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
+            traceback.print_tb(error.original.__traceback__)
+            print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
 
-@bot.command(pass_context=True, hidden=True)
-@checks.is_owner()
-async def do(ctx, times : int, *, command):
-    """Repeats a command a specified number of times."""
-    msg = copy.copy(ctx.message)
-    msg.content = command
-    for i in range(times):
-        await bot.process_commands(msg)
+    async def on_ready(self):
+        print('Ready: {0} (ID: {0.id})'.format(self.user))
+        if not hasattr(self, 'uptime'):
+            self.uptime = datetime.datetime.utcnow()
 
-@bot.command()
-async def changelog():
-    """Gives a URL to the current bot changelog."""
-    await bot.say('https://discord.gg/0118rJdtd1rVJJfuI')
+    async def on_resumed(self):
+        print('resumed...')
 
-def load_credentials():
-    with open('credentials.json') as f:
-        return json.load(f)
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+
+        ctx = await self.get_context(message, cls=context.Context)
+        await self.invoke(ctx)
+
+    def only_me_for_rewrite(self, ctx):
+        return ctx.author.id == 80088516616269824
+
+    def run(self):
+        super().run(config.token, reconnect=True)
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def do(self, ctx, times: int, *, command):
+        """Repeats a command a specified number of times."""
+        msg = copy.copy(ctx.message)
+        msg.content = command
+        for i in range(times):
+            await self.process_commands(msg)
 
 if __name__ == '__main__':
-    credentials = load_credentials()
-    debug = any('debug' in arg.lower() for arg in sys.argv)
-    if debug:
-        bot.command_prefix = '$'
-        token = credentials.get('debug_token', credentials['token'])
-    else:
-        token = credentials['token']
-
-    bot.client_id = credentials['client_id']
-    bot.carbon_key = credentials['carbon_key']
-    bot.bots_key = credentials['bots_key']
-
-    if debug:
-        initial_extensions.remove('cogs.carbonitex')
-
-    for extension in initial_extensions:
-        try:
-            bot.load_extension(extension)
-        except Exception as e:
-            print('Failed to load extension {}\n{}: {}'.format(extension, type(e).__name__, e))
-
-    bot.run(token)
-    handlers = log.handlers[:]
-    for hdlr in handlers:
-        hdlr.close()
-        log.removeHandler(hdlr)
+    bot = RoboDanny()
+    bot.run()

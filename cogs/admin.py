@@ -1,7 +1,7 @@
 from discord.ext import commands
-from .utils import checks
 import discord
 import inspect
+import traceback
 
 # to expose to the eval command
 import datetime
@@ -14,45 +14,42 @@ class Admin:
         self.bot = bot
 
     @commands.command(hidden=True)
-    @checks.is_owner()
-    async def load(self, *, module : str):
+    @commands.is_owner()
+    async def load(self, ctx, *, module):
         """Loads a module."""
         try:
             self.bot.load_extension(module)
         except Exception as e:
-            await self.bot.say('\N{PISTOL}')
-            await self.bot.say('{}: {}'.format(type(e).__name__, e))
+            await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
         else:
-            await self.bot.say('\N{OK HAND SIGN}')
+            await ctx.send('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
-    @checks.is_owner()
-    async def unload(self, *, module : str):
+    @commands.is_owner()
+    async def unload(self, ctx, *, module):
         """Unloads a module."""
         try:
             self.bot.unload_extension(module)
         except Exception as e:
-            await self.bot.say('\N{PISTOL}')
-            await self.bot.say('{}: {}'.format(type(e).__name__, e))
+            await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
         else:
-            await self.bot.say('\N{OK HAND SIGN}')
+            await ctx.send('\N{OK HAND SIGN}')
 
     @commands.command(name='reload', hidden=True)
-    @checks.is_owner()
-    async def _reload(self, *, module : str):
+    @commands.is_owner()
+    async def _reload(self, ctx, *, module):
         """Reloads a module."""
         try:
             self.bot.unload_extension(module)
             self.bot.load_extension(module)
         except Exception as e:
-            await self.bot.say('\N{PISTOL}')
-            await self.bot.say('{}: {}'.format(type(e).__name__, e))
+            await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
         else:
-            await self.bot.say('\N{OK HAND SIGN}')
+            await ctx.send('\N{OK HAND SIGN}')
 
-    @commands.command(pass_context=True, hidden=True)
-    @checks.is_owner()
-    async def debug(self, ctx, *, code : str):
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def debug(self, ctx, *, code):
         """Evaluates code."""
         code = code.strip('` ')
         python = '```py\n{}\n```'
@@ -62,9 +59,9 @@ class Admin:
             'bot': self.bot,
             'ctx': ctx,
             'message': ctx.message,
-            'server': ctx.message.server,
-            'channel': ctx.message.channel,
-            'author': ctx.message.author
+            'guild': ctx.guild,
+            'channel': ctx.channel,
+            'author': ctx.author
         }
 
         env.update(globals())
@@ -74,10 +71,9 @@ class Admin:
             if inspect.isawaitable(result):
                 result = await result
         except Exception as e:
-            await self.bot.say(python.format(type(e).__name__ + ': ' + str(e)))
-            return
-
-        await self.bot.say(python.format(result))
+            await ctx.send(python.format(traceback.format_exc()))
+        else:
+            await ctx.send(python.format(result))
 
 def setup(bot):
     bot.add_cog(Admin(bot))

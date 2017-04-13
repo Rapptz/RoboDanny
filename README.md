@@ -6,62 +6,46 @@ A personal bot that runs on Discord.
 
 I would prefer if you don't run an instance of my bot. Just call the join command with an invite URL to have it on your server. The source here is provided for educational purposes for discord.py.
 
-However...
+Nevertheless, the installation steps are as follows:
 
-You should only need two main configuration files while the rest will be created automatically.
+1. **Make sure to get Python 3.5 or higher**
 
-First is a credentials.json file with the credentials:
+This is required to actually run the bot.
 
-```js
-{
-    "token": "your bot token",
-    "client_id": "your client_id",
-    "carbon_key": "the key for carbonitex"
-}
+2. **Set up venv**
+
+Just do `python3.5 -m venv venv`
+
+3. **Install dependencies**
+
+This is `pip install -U -r requirements.txt`
+
+4. **Create the database in PostgreSQL**
+
+You will need PostgreSQL 9.1 or higher and type the following
+in the `psql` tool:
+
+```sql
+CREATE ROLE rdanny WITH LOGIN PASSWORD 'yourpw';
+CREATE DATABASE rdanny OWNER rdanny;
 ```
 
-Second is a splatoon.json file with your Nintendo Network credentials and Splatoon-related data.
+5. **Setup configuration**
 
-```js
-{
-    "username": "nnid",
-    "password": "nnid password",
-    "maps": [
-        "Urchin Underpass",
-        ...
-    ],
-    "abilities": [
-        "Bomb Range Up",
-        ...
-    ],
-    "weapons": [
-        {
-            "special": "Kraken",
-            "sub": "Burst Bomb",
-            "name": "L-3 Nozzlenose D"
-        },
-        ...
-    ],
-    "brands": [
-        {
-            "nerfed": null,
-            "buffed": null,
-            "name": "Famitsu"
-        },
-        {
-            "nerfed": "Ink Recovery Up",
-            "buffed": "Ink Saver (Sub)",
-            "name": "Firefin"
-        },
-        ...
-    ]
-}
+The next step is just to create a `config.py` file in the root directory where
+the bot is with the following template:
+
+```py
+client_id   = '' # your bot's client ID
+token = '' # your bot's token
+carbon_key = '' # your bot's key on carbon's site
+bots_key = '' # your key on bots.discord.pw
+postgres = 'postgres://user:password@host/database' # your postgres info from above
 ```
-
-After you do the setup required just edit the `cogs/utils/checks.py` file with your owner ID.
 
 ## Requirements
 
 - Python 3.5+
-- Async version of discord.py
+- v1.0.0 of discord.py
 - lxml
+- psutil
