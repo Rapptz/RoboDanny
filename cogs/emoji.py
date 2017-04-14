@@ -4,6 +4,7 @@ from .utils import config, checks
 from collections import Counter
 
 import discord
+import datetime
 import re
 import io
 
@@ -26,6 +27,17 @@ class BlobEmoji(commands.Converter):
         if emoji is None:
             raise commands.BadArgument('Not a valid blob emoji.')
         return emoji
+
+def usage_per_day(emoji, usages):
+    tracking_started = datetime.datetime(2017, 3, 31)
+    now = datetime.datetime.utcnow()
+    if emoji.created_at < tracking_started:
+        base = tracking_started
+    else:
+        base = emoji.created_at
+
+    days = (now - base).total_seconds() / 86400 # 86400 seconds in a day
+    return usages / days
 
 class Emoji:
     """Custom emoji tracking statistics for Wolfiri"""
@@ -83,7 +95,9 @@ class Emoji:
         e.add_field(name='Total Usage', value=fmt.format(total_count, total_count / global_usage))
 
         def elem_to_string(key, count):
-            return '{0}: {1} times ({2:.2%})'.format(blob_ids.get(key), count, count / total_count)
+            elem = blob_ids.get(key)
+            per_day = usage_per_day(elem, count)
+            return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total_count, per_day)
 
         top = [elem_to_string(key, count) for key, count in common[0:7]]
         bottom = [elem_to_string(key, count) for key, count in common[-7:]]
@@ -112,7 +126,8 @@ class Emoji:
                 break
 
         e.add_field(name='Emoji', value=emoji)
-        e.add_field(name='Usage', value='{0} ({1:.2%})'.format(usage, usage / total))
+        e.add_field(name='Usage', value='{0}, {2:.2f}/day ({1:.2%})'.format(usage, usage / total,
+                                                                            usage_per_day(emoji, usage)))
         e.add_field(name='Rank', value=rank)
         return e
 
