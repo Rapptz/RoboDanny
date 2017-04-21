@@ -191,7 +191,7 @@ class Emoji:
             percent = count / total_usage
             if guild is None:
                 return '- <BAD:{0}>: {1} ({2:.2%})'.format(tup[0], count, percent)
-            return '- {0}: {1}, {2:.2f}/day ({3:.2%})'.format(guild, count, percent, usage_per_day(guild.me.joined_at, count))
+            return '- {0}: {1}, {2:.2f}/day ({3:.2%})'.format(guild, count, usage_per_day(guild.me.joined_at, count), percent)
 
         e.description = '\n'.join(map(formatter, top_ten))
         await self.bot.say(embed=e)
