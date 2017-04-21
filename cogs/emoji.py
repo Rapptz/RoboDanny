@@ -196,6 +196,17 @@ class Emoji:
         e.description = '\n'.join(map(formatter, top_ten))
         await self.bot.say(embed=e)
 
+    @commands.command(hidden=True)
+    @checks.is_owner()
+    async def clear_emoji_data(self, *, server_id):
+        """Deletes a server's emoji data."""
+
+        if self.config.get(server_id) is not None:
+            await self.config.remove(server_id)
+            await self.bot.say('Deleted.')
+        else:
+            await self.bot.say('No data found.')
+
     @commands.command(pass_context=True, aliases=['blobpost'], hidden=True)
     @checks.is_in_servers(BLOB_GUILD_ID)
     @checks.admin_or_permissions(administrator=True)
