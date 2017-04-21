@@ -28,13 +28,13 @@ class BlobEmoji(commands.Converter):
             raise commands.BadArgument('Not a valid blob emoji.')
         return emoji
 
-def usage_per_day(emoji, usages):
+def usage_per_day(dt, usages):
     tracking_started = datetime.datetime(2017, 3, 31)
     now = datetime.datetime.utcnow()
-    if emoji.created_at < tracking_started:
+    if dt < tracking_started:
         base = tracking_started
     else:
-        base = emoji.created_at
+        base = dt
 
     days = (now - base).total_seconds() / 86400 # 86400 seconds in a day
     if int(days) == 0:
@@ -101,7 +101,7 @@ class Emoji:
 
         def elem_to_string(key, count):
             elem = blob_ids.get(key)
-            per_day = usage_per_day(elem, count)
+            per_day = usage_per_day(elem.created_at, count)
             return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total_count, per_day)
 
         top = [elem_to_string(key, count) for key, count in common[0:7]]
@@ -132,11 +132,11 @@ class Emoji:
 
         e.add_field(name='Emoji', value=emoji)
         e.add_field(name='Usage', value='{0}, {2:.2f}/day ({1:.2%})'.format(usage, usage / total,
-                                                                            usage_per_day(emoji, usage)))
+                                                                            usage_per_day(emoji.created_at, usage)))
         e.add_field(name='Rank', value=rank)
         return e
 
-    @commands.command(hidden=True)
+    @commands.group(hidden=True, invoke_without_command=True)
     async def blobstats(self, *, emoji: BlobEmoji = None):
         """Usage statistics of blobs."""
         if emoji is None:
@@ -150,6 +150,51 @@ class Emoji:
     async def blobstats_error(self, error, ctx):
         if isinstance(error, commands.BadArgument):
             await self.bot.say(str(error))
+
+    @blobstats.command(hidden=True, name='server')
+    async def blobstats_server(self, *, server_id: str = None):
+        """What server uses blobs the most?
+
+        Useful for detecting abuse as well.
+        """
+        blob_guild = self.bot.get_server(BLOB_GUILD_ID)
+        blob_ids = {e.id: e for e in blob_guild.emojis}
+
+        per_guild = Counter()
+
+        # RIP
+        for guild_id, data in self.config.all().items():
+            for key in blob_ids:
+                per_guild[guild_id] += data.get(key, 0)
+
+        total_usage = sum(per_guild.values())
+
+        e = discord.Embed(colour=0xf1c40f, title='Server Statistics')
+
+        if server_id is not None:
+            guild = self.bot.get_server(server_id)
+            count = per_guild[server_id]
+            e.title = guild.name if guild else 'Unknown Guild?'
+            e.add_field(name='Usage', value='{0} ({1:.2%})'.format(count, count / total_usage))
+            if guild and guild.me:
+                e.add_field(name='Per Day', value=usage_per_day(guild.me.joined_at, count))
+                e.set_footer(text='Joined on')
+                e.timestamp = guild.me.joined_at
+
+            return await self.bot.say(embed=e)
+
+        top_ten = per_guild.most_common(10)
+
+        def formatter(tup):
+            guild = self.bot.get_server(tup[0])
+            count = tup[1]
+            percent = count / total_usage
+            if guild is None:
+                return '- <BAD:{0}>: {1} ({2:.2%})'.format(tup[0], count, percent)
+            return '- {0}: {1}, {2:.2f}/day ({3:.2%})'.format(guild, count, percent, usage_per_day(guild.me.joined_at, count))
+
+        e.description = '\n'.join(map(formatter, top_ten))
+        await self.bot.say(embed=e)
 
     @commands.command(pass_context=True, aliases=['blobpost'], hidden=True)
     @checks.is_in_servers(BLOB_GUILD_ID)
