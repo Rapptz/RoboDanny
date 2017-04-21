@@ -146,7 +146,7 @@ class Emoji:
     @blobstats.error
     async def blobstats_error(self, error, ctx):
         if isinstance(error, commands.BadArgument):
-            await self.bot.say(str(e))
+            await self.bot.say(str(error))
 
     @commands.command()
     async def blobs(self):
