@@ -195,7 +195,6 @@ class Meta:
             elif not is_text and (not perms.connect or not perms.speak):
                 secret_voice += 1
 
-        regular_channels = len(server.channels) - secret_channels
         voice_channels = len(server.channels) - text_channels
         member_by_status = Counter(str(m.status) for m in server.members)
 
@@ -209,7 +208,7 @@ class Meta:
         if server.splash:
             e.set_image(url=server.splash_url)
 
-        e.add_field(name='Partnered?', value='Yes' if server.features else 'No')
+        e.add_field(name='Partnered?', value='Yes' if len(server.features) >= 3 else 'No')
 
         fmt = 'Text %s (%s secret)\nVoice %s (%s locked)'
         e.add_field(name='Channels', value=fmt % (text_channels, secret_channels, voice_channels, secret_voice))
