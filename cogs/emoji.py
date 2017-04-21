@@ -151,11 +151,6 @@ class Emoji:
         if isinstance(error, commands.BadArgument):
             await self.bot.say(str(error))
 
-    @commands.command()
-    async def blobs(self):
-        """Gives an invite for the blob server."""
-        await self.bot.say('https://discord.gg/s2Fbfhq')
-
     @commands.command(pass_context=True, aliases=['blobpost'], hidden=True)
     @checks.is_in_servers(BLOB_GUILD_ID)
     @checks.admin_or_permissions(administrator=True)
