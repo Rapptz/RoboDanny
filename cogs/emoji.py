@@ -62,6 +62,9 @@ class Emoji:
         if message.server is None:
             return
 
+        if message.author.bot:
+            return # no bots.
+
         matches = EMOJI_REGEX.findall(message.content)
         if not matches:
             return
