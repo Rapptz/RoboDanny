@@ -37,6 +37,8 @@ def usage_per_day(emoji, usages):
         base = emoji.created_at
 
     days = (now - base).total_seconds() / 86400 # 86400 seconds in a day
+    if int(days) == 0:
+        return usages
     return usages / days
 
 class Emoji:
