@@ -268,7 +268,7 @@ class Emoji:
             return await self.bot.say('Do not have permissions to react.')
 
         for emoji in emojis:
-            await self.bot.add_reaction(message, emoji)
+            await self.bot.add_reaction(message, emoji.strip('<:>'))
 
         await self.bot.say('<:blobokhand:304461480802123777>')
 
