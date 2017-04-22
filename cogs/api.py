@@ -95,6 +95,17 @@ class API:
             overwrite.read_messages = False
             await self.bot.edit_channel_permissions(message.channel, message.author, overwrite)
             await self.bot.send_message(message.channel, fmt.format(message.author))
+
+            try:
+                msg = 'Heya. You have been automatically blocked from <#%s> for 5 minutes for being invisible.\n' \
+                      'Try chatting again in 5 minutes when you change your status. If you\'re curious why invisible ' \
+                      'users are blocked, it is because they tend to break the client and cause them to be hard to ' \
+                      'mention. Since we want to help you usually, we expect mentions to work without headaches.\n\n' \
+                      'Sorry for the trouble.'
+                await self.bot.send_message(message.author, msg % DISCORD_PY_ID)
+            except discord.HTTPException:
+                pass
+
             await asyncio.sleep(300)
             overwrite.read_messages = None
             await self.bot.edit_channel_permissions(message.channel, message.author, overwrite)
