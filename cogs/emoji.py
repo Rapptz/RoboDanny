@@ -249,7 +249,7 @@ class Emoji:
         # check if it's in the message cache
         message = discord.utils.find(lambda m: m.id == message_id, self.bot.messages)
         if message is None:
-            possible_channels = ('289847856033169409', '294924110130184193', '294928568532729856', BLOB_GUILD_ID)
+            possible_channels = ('294924110130184193', '289847856033169409', '294928568532729856', BLOB_GUILD_ID)
                                  # blob-council-queue   #approval-queue       #blob-council-chat   #general
             for channel_id in possible_channels:
                 try:
