@@ -9,6 +9,7 @@ import re
 import io
 
 BLOB_GUILD_ID = '272885620769161216'
+COUNCIL_LITE_ID = '300509002520068097'
 EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
 
 class BlobEmoji(commands.Converter):
@@ -27,6 +28,16 @@ class BlobEmoji(commands.Converter):
         if emoji is None:
             raise commands.BadArgument('Not a valid blob emoji.')
         return emoji
+
+def is_council_lite_or_higher():
+    def pred(ctx):
+        server = ctx.message.server
+        if server is None or server.id != BLOB_GUILD_ID:
+            return False
+
+        council_lite = discord.utils.find(lambda r: r.id == COUNCIL_LITE_ID, server.roles)
+        return ctx.message.author.top_role >= council_lite
+    return commands.check(pred)
 
 def usage_per_day(dt, usages):
     tracking_started = datetime.datetime(2017, 3, 31)
@@ -227,6 +238,39 @@ class Emoji:
 
         fp.seek(0)
         await self.bot.upload(fp, filename='blob_posts.txt')
+
+    @commands.command(pass_context=True, hidden=True)
+    @is_council_lite_or_higher()
+    async def blobpoll(self, ctx, message_id: str, *emojis: str):
+        """React to a post with the emojis given."""
+
+        # disambiguate the message ID...
+
+        # check if it's in the message cache
+        message = discord.utils.find(lambda m: m.id == message_id, self.bot.messages)
+        if message is None:
+            possible_channels = ('289847856033169409', '294924110130184193', '294928568532729856', BLOB_GUILD_ID)
+                                 # blob-council-queue   #approval-queue       #blob-council-chat   #general
+            for channel_id in possible_channels:
+                try:
+                    ch = self.bot.get_channel(channel_id)
+                    message = await self.bot.get_message(ch, message_id)
+                except Exception:
+                    continue
+                else:
+                    break
+            else:
+                return await self.bot.say('Could not find message, sorry.')
+        elif message.server is None or message.server.id != BLOB_GUILD_ID:
+            return await self.bot.say('This message does not belong in the blob guild...')
+
+        if not message.channel.permissions_for(message.server.me).add_reactions:
+            return await self.bot.say('Do not have permissions to react.')
+
+        for emoji in emojis:
+            await self.bot.add_reaction(message, emoji)
+
+        await self.bot.say('<:blobokhand:304461480802123777>')
 
 def setup(bot):
     bot.add_cog(Emoji(bot))
