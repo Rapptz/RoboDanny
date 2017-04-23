@@ -81,7 +81,7 @@ class Emoji:
 
         fmt = 'Suggestion from {0.author}: {0.clean_content}'.format(message)
         ch = self.bot.get_channel('305838206119575552')
-        await self.bot.send_file(ch, file=io.BytesIO(data), filename='unknown.png', content=fmt)
+        await self.bot.send_file(ch, io.BytesIO(data), filename='unknown.png', content=fmt)
 
     async def on_message(self, message):
         if message.server is None:
