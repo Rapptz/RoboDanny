@@ -69,12 +69,30 @@ class Emoji:
             return ctx.prefix == '?'
         return True
 
+    async def do_redirect(self, message):
+        if len(message.attachments) == 0:
+            return
+
+        async with self.bot.http.session.get(message.attachments[0]['url']) as resp:
+            if resp.status != 200:
+                return
+
+            data = await resp.read()
+
+        fmt = 'Suggestion from {0.author}: {0.clean_content}'.format(message)
+        ch = self.bot.get_channel('305838206119575552')
+        await self.bot.send_file(ch, file=io.BytesIO(data), filename='unknown.png', content=fmt)
+
     async def on_message(self, message):
         if message.server is None:
             return
 
         if message.author.bot:
             return # no bots.
+
+        # handle the redirection from #suggestions
+        if message.channel.id == '295012914564169728':
+            await self.do_redirect(message)
 
         matches = EMOJI_REGEX.findall(message.content)
         if not matches:
