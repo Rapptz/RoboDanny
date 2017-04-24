@@ -251,12 +251,13 @@ class Emoji:
                 e.set_footer(text='Joined on')
                 e.timestamp = guild.me.joined_at
 
-            def elem_to_string(key, count):
-                elem = blob_ids.get(key)
-                per_day = usage_per_day(elem.created_at, count)
-                return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total_usage, per_day)
+                def elem_to_string(key, count):
+                    elem = blob_ids.get(key)
+                    per_day = usage_per_day(guild.me.joined_at, count)
+                    return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total, per_day)
 
-            e.description = '\n'.join(elem_to_string(k, v) for k, v in top)
+                e.description = '\n'.join(elem_to_string(k, v) for k, v in top)
+
             return await self.bot.say(embed=e)
 
         top_ten = per_guild.most_common(10)
