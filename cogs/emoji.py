@@ -150,7 +150,7 @@ class Emoji:
 
     def get_all_blob_stats(self):
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
-        blob_ids = {e.id: e for e in blob_guild.emojis}
+        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
         total_usage = Counter()
         for data in self.config.all().values():
             total_usage.update(data)
@@ -180,7 +180,7 @@ class Emoji:
 
     def get_blob_stats_for(self, emoji):
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
-        blob_ids = {e.id: e for e in blob_guild.emojis}
+        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
 
         e = discord.Embed(colour=0xf1c40f, title='Statistics')
         total_usage = Counter()
@@ -226,7 +226,7 @@ class Emoji:
         Useful for detecting abuse as well.
         """
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
-        blob_ids = {e.id: e for e in blob_guild.emojis}
+        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
 
         per_guild = Counter()
 
