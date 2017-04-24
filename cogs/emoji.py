@@ -241,14 +241,22 @@ class Emoji:
 
         if server_id is not None:
             guild = self.bot.get_server(server_id)
-            count = per_guild[server_id]
+            total = per_guild[server_id]
+            counter = Counter({k: v for k, v in self.config.get(server_id, {}).items() if k in blob_ids})
+            top = counter.most_common(10)
             e.title = guild.name if guild else 'Unknown Guild?'
-            e.add_field(name='Usage', value='{0} ({1:.2%})'.format(count, count / total_usage))
+            e.add_field(name='Usage', value='{0} ({1:.2%})'.format(total, total / total_usage))
             if guild and guild.me:
-                e.add_field(name='Per Day', value=usage_per_day(guild.me.joined_at, count))
+                e.add_field(name='Per Day', value=usage_per_day(guild.me.joined_at, total))
                 e.set_footer(text='Joined on')
                 e.timestamp = guild.me.joined_at
 
+            def elem_to_string(key, count):
+                elem = blob_ids.get(key)
+                per_day = usage_per_day(elem.created_at, count)
+                return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total_usage, per_day)
+
+            e.description = '\n'.join(elem_to_string(k, v) for k, v in top)
             return await self.bot.say(embed=e)
 
         top_ten = per_guild.most_common(10)
