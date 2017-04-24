@@ -5,8 +5,11 @@ from collections import Counter
 
 import discord
 import datetime
+import logging
 import re
 import io
+
+log = logging.getLogger(__name__)
 
 BLOB_GUILD_ID = '272885620769161216'
 COUNCIL_LITE_ID = '300509002520068097'
@@ -117,11 +120,11 @@ class Emoji:
         # we only care when an emoji is added
         lookup = { e.id for e in before }
         added = [e for e in after if e.id not in lookup]
-
         if len(added) == 0:
             return
 
         server = added[0].server
+        log.info('Server %s has added %s emojis.', server, len(added))
         if server.id != BLOB_GUILD_ID:
             return # not the server we care about
 
