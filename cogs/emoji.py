@@ -260,16 +260,17 @@ class Emoji:
             return await self.bot.say(embed=e)
 
         top_ten = per_guild.most_common(10)
-
-        def formatter(tup):
-            guild = self.bot.get_server(tup[0])
-            count = tup[1]
+        for top, count in top_ten:
+            guild = self.bot.get_server(top)
             percent = count / total_usage
             if guild is None:
-                return '- <BAD:{0}>: {1} ({2:.2%})'.format(tup[0], count, percent)
-            return '- {0}: {1}, {2:.2f}/day ({3:.2%})'.format(guild, count, usage_per_day(guild.me.joined_at, count), percent)
+                name = 'Unknown Guild: ' + top
+                value = '{0} ({1:.2%})'.format(count, percent)
+            else:
+                name = '{0} (ID: {0.id})'.format(guild)
+                value = '{0}, {1:.2f}/day ({2:.2%})'.format(count, usage_per_day(guild.me.joined_at, count), percent)
+            e.add_field(name=name, value=value, inline=False)
 
-        e.description = '\n'.join(map(formatter, top_ten))
         await self.bot.say(embed=e)
 
     @commands.command(hidden=True)
