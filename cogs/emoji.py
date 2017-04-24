@@ -109,6 +109,36 @@ class Emoji:
 
         await self.config.put(message.server.id, db)
 
+    async def on_server_emojis_update(self, before, after):
+        # I designed this event and I god damn hate it.
+        # First, an exhibit on how annoying it is to fetch
+        # the server:
+
+        # we only care when an emoji is added
+        if len(after) <= len(before):
+            return
+
+        lookup = { e.id for e in before }
+        added = [e for e in after if e.id not in lookup]
+
+        server = added[0].server
+        if server.id != BLOB_GUILD_ID:
+            return # not the server we care about
+
+        # this is the backup channel
+        channel = self.bot.get_channel('305841865293430795')
+        if channel is None:
+            return
+
+        for emoji in added:
+            async with self.bot.http.session(emoji.url) as resp:
+                if resp.status != 200:
+                    continue
+
+                data = await resp.read()
+                await self.bot.send_file(channel, io.BytesIO(data), filename=emoji.name + '.png', content=emoji.name)
+                await asyncio.sleep(1)
+
     def get_all_blob_stats(self):
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
         blob_ids = {e.id: e for e in blob_guild.emojis}
