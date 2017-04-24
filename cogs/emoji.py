@@ -112,6 +112,12 @@ class Emoji:
 
         await self.config.put(message.server.id, db)
 
+    async def on_server_update(self, before, after):
+        if before.id != BLOB_GUILD_ID:
+            return
+
+        await self.on_server_emojis_update(before.emojis, after.emojis)
+
     async def on_server_emojis_update(self, before, after):
         # I designed this event and I god damn hate it.
         # First, an exhibit on how annoying it is to fetch
