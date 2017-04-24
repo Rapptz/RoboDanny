@@ -115,11 +115,11 @@ class Emoji:
         # the server:
 
         # we only care when an emoji is added
-        if len(after) <= len(before):
-            return
-
         lookup = { e.id for e in before }
         added = [e for e in after if e.id not in lookup]
+
+        if len(added) == 0:
+            return
 
         server = added[0].server
         if server.id != BLOB_GUILD_ID:
