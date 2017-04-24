@@ -125,7 +125,7 @@ class Emoji:
 
         # we only care when an emoji is added
         lookup = { e.id for e in before }
-        added = [e for e in after if e.id not in lookup]
+        added = [e for e in after if e.id not in lookup and len(e.roles) == 0]
         if len(added) == 0:
             return
 
