@@ -232,7 +232,7 @@ class Stars:
                 raise StarError('\N{BLACK QUESTION MARK ORNAMENT} This message could not be found.')
 
             # god bless recursion
-            return await self.star_message(msg, starrer_id, msg.id, reaction=True)
+            return await self._star_message(msg, starrer_id, msg.id, reaction=True)
 
         if (len(msg.content) == 0 and len(msg.attachments) == 0) or msg.type is not discord.MessageType.default:
             raise StarError('\N{NO ENTRY SIGN} This message cannot be starred.')
