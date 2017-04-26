@@ -140,7 +140,7 @@ class Emoji:
             return
 
         for emoji in added:
-            async with self.bot.http.session(emoji.url) as resp:
+            async with self.bot.http.session.get(emoji.url) as resp:
                 if resp.status != 200:
                     continue
 
