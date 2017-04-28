@@ -223,7 +223,9 @@ class Buttons:
     async def get_google_entries(self, query):
         params = {
             'q': query,
-            'safe': 'on'
+            'safe': 'on',
+            'lr': 'lang_en',
+            'hl': 'en'
         }
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; Win64; x64)'
