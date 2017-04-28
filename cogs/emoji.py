@@ -311,6 +311,8 @@ class Emoji:
     async def blobprune(self, ctx):
         """Good candidates to prune."""
 
+        await self.bot.type()
+
         blob_guild = self.bot.get_server(BLOB_GUILD_ID)
         seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
         blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
@@ -324,7 +326,7 @@ class Emoji:
         common = blob_usage.most_common()
         total_count = sum(blob_usage.values())
 
-        data = [(blob_ids.get(k), v) for k, v in common if blob_ids.get(k).created_at > seven_days_ago]
+        data = [(blob_ids.get(k), v) for k, v in common if blob_ids.get(k).created_at < seven_days_ago]
 
         def elem_to_string(elem, count):
             per_day = usage_per_day(elem.created_at, count)
