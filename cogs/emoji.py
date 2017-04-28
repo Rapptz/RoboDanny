@@ -290,7 +290,7 @@ class Emoji:
     @checks.admin_or_permissions(administrator=True)
     async def blobsort(self, ctx):
         """Sorts the blob post."""
-        emojis = sorted(ctx.message.server.emojis, key=lambda e: e.name)
+        emojis = sorted([e.name for e in ctx.message.server.emojis if len(e.roles) == 0])
         fp = io.BytesIO()
         pages = [emojis[i:i + 30] for i in range(0, len(emojis), 30)]
 
