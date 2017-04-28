@@ -307,6 +307,41 @@ class Emoji:
         await self.bot.upload(fp, filename='blob_posts.txt')
 
     @commands.command(pass_context=True, hidden=True)
+    @commands.cooldown(3, 60.0, commands.BucketType.server)
+    async def blobprune(self, ctx):
+        """Good candidates to prune."""
+
+        blob_guild = self.bot.get_server(BLOB_GUILD_ID)
+        seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
+        total_usage = Counter()
+        for data in self.config.all().values():
+            total_usage.update(data)
+
+        blob_usage = Counter({e: 0 for e in blob_ids})
+        blob_usage.update(x for x in total_usage.elements() if x in blob_ids)
+
+        common = blob_usage.most_common()
+        total_count = sum(blob_usage.values())
+
+        data = [(blob_ids.get(k), v) for k, v in common if blob_ids.get(k).created_at > seven_days_ago]
+
+        def elem_to_string(elem, count):
+            per_day = usage_per_day(elem.created_at, count)
+            fmt = '{0.created_at} -- {0.name} -- {1} times -- {2:.2f}/day -- {3:.2%} blob usage'
+            return fmt.format(elem, count, per_day, count / total_count)
+
+        data = '\n'.join(elem_to_string(k, v) for k, v in data).encode('utf-8')
+
+        # post to hastebin
+        async with self.bot.http.session.post('https://hastebin.com/documents', data=data) as resp:
+            if resp.status != 200:
+                return await self.bot.say('Could not post to hastebin, sorry.')
+
+            key = (await resp.json())['key']
+            await self.bot.say('https://hastebin.com/' + key)
+
+    @commands.command(pass_context=True, hidden=True)
     @is_council_lite_or_higher()
     async def blobpoll(self, ctx, message_id: str, *emojis: str):
         """React to a post with the emojis given."""
