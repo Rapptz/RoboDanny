@@ -11,6 +11,8 @@ import os
 
 log = logging.getLogger()
 
+LOGGING_CHANNEL = '309632009427222529'
+
 class Stats:
     """Bot usage statistics."""
 
@@ -127,6 +129,35 @@ class Stats:
         embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
 
         await self.bot.say(embed=embed)
+
+    async def send_server_stat(self, e, server):
+        e.add_field(name='Name', value=server.name)
+        e.add_field(name='ID', value=server.id)
+        e.add_field(name='Owner', value='{0} (ID: {0.id})'.format(server.owner))
+
+        bots = sum(m.bot for m in server.members)
+        total = server.member_count
+        online = sum(m.status is discord.Status.online for m in server.members)
+        e.add_field(name='Members', value=str(total))
+        e.add_field(name='Bots', value='{} ({:.2%})'.format(bots, bots / total))
+        e.add_field(name='Online', value='{} ({:.2%})'.format(online, online / total))
+        if server.icon:
+            e.add_thumbnail(url=server.icon_url)
+        e.timestamp = server.me.joined_at
+
+        ch = self.bot.get_channel(LOGGING_CHANNEL)
+        await self.bot.send_message(ch, embed=e)
+
+    async def on_server_join(self, server):
+        if not self.bot.is_ready:
+            return
+
+        e = discord.Embed(colour=0x53dda4, title='New Server') # green colour
+        await self.send_server_stat(e, server)
+
+    async def on_server_remove(self, server):
+        e = discord.Embed(colour=0xdd5f53, title='Left Server') # red colour
+        await self.send_server_stat(e, server)
 
 def setup(bot):
     if not hasattr(bot, 'commands_used'):
