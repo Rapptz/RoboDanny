@@ -16,6 +16,7 @@ class Stats:
 
     def __init__(self, bot):
         self.bot = bot
+        self.process = psutil.Process()
 
     async def on_command(self, command, ctx):
         self.bot.commands_used[ctx.command.qualified_name] += 1
@@ -115,15 +116,15 @@ class Stats:
         members = '%s total\n%s online\n%s unique\n%s unique online' % (total_members, total_online, len(unique_members), unique_online)
         embed.add_field(name='Members', value=members)
         embed.add_field(name='Channels', value='{} total\n{} text\n{} voice'.format(text + voice, text, voice))
-        embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
+        memory_usage = self.process.memory_full_info().uss / 1024**2
+        cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
+        embed.add_field(name='Process', value='{:.2f} MiB\n{:.2f}% CPU'.format(memory_usage, cpu_usage))
         embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
         embed.timestamp = self.bot.uptime
 
         embed.add_field(name='Servers', value=len(self.bot.servers))
         embed.add_field(name='Commands Run', value=sum(self.bot.commands_used.values()))
-
-        memory_usage = psutil.Process().memory_full_info().uss / 1024**2
-        embed.add_field(name='Memory Usage', value='{:.2f} MiB'.format(memory_usage))
+        embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
 
         await self.bot.say(embed=embed)
 
