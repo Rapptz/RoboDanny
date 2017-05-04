@@ -149,9 +149,6 @@ class Stats:
         await self.bot.send_message(ch, embed=e)
 
     async def on_server_join(self, server):
-        if not self.bot.is_ready:
-            return
-
         e = discord.Embed(colour=0x53dda4, title='New Server') # green colour
         await self.send_server_stat(e, server)
 
