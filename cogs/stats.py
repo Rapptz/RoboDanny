@@ -142,7 +142,7 @@ class Stats:
         e.add_field(name='Bots', value='{} ({:.2%})'.format(bots, bots / total))
         e.add_field(name='Online', value='{} ({:.2%})'.format(online, online / total))
         if server.icon:
-            e.add_thumbnail(url=server.icon_url)
+            e.set_thumbnail(url=server.icon_url)
         e.timestamp = server.me.joined_at
 
         ch = self.bot.get_channel(LOGGING_CHANNEL)
