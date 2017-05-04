@@ -128,6 +128,10 @@ class Stats:
         await self.bot.say(embed=embed)
 
 def setup(bot):
-    bot.commands_used = Counter()
-    bot.socket_stats = Counter()
+    if not hasattr(bot, 'commands_used'):
+        bot.commands_used = Counter()
+
+    if not hasattr(bot, 'socket_stats'):
+        bot.socket_stats = Counter()
+
     bot.add_cog(Stats(bot))
