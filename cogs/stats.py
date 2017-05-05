@@ -178,7 +178,8 @@ class Stats:
 
         e.add_field(name='Location', value=fmt.format(ctx.message.channel, ctx.message.server), inline=False)
 
-        e.description = '```py\n%s\n```' % traceback.format_exc(chain=False)
+        exc = traceback.format_exception(type(error), error, error.__traceback__, chain=False)
+        e.description = '```py\n%s\n```' % ''.join(exc)
         e.timestamp = datetime.datetime.utcnow()
         ch = self.bot.get_channel(LOGGING_CHANNEL)
         await self.bot.send_message(ch, embed=e)
