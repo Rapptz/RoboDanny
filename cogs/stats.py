@@ -143,7 +143,9 @@ class Stats:
         e.add_field(name='Online', value='{} ({:.2%})'.format(online, online / total))
         if server.icon:
             e.set_thumbnail(url=server.icon_url)
-        e.timestamp = server.me.joined_at
+
+        if server.me:
+            e.timestamp = server.me.joined_at
 
         ch = self.bot.get_channel(LOGGING_CHANNEL)
         await self.bot.send_message(ch, embed=e)
