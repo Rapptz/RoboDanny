@@ -4,6 +4,7 @@ from .utils import config, checks
 from collections import Counter
 
 import discord
+import asyncio
 import datetime
 import logging
 import re
