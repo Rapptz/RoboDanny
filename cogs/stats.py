@@ -6,6 +6,7 @@ from .utils import checks
 import logging
 import discord
 import datetime
+import traceback
 import psutil
 import os
 
@@ -158,6 +159,43 @@ class Stats:
         e = discord.Embed(colour=0xdd5f53, title='Left Server') # red colour
         await self.send_server_stat(e, server)
 
+    async def on_command_error(self, error, ctx):
+        ignored = (commands.NoPrivateMessage, commands.DisabledCommand, commands.CheckFailure,
+                   commands.CommandNotFound, discord.HTTPException)
+        error = getattr(error, 'original', error)
+
+        if isinstance(error, ignored):
+            return
+
+        e = discord.Embed(title='Command Error', colour=0xcc3366)
+        e.add_field(name='Name', value=ctx.command.qualified_name)
+        e.add_field(name='Author', value='{0} (ID: {0.id})'.format(ctx.message.author))
+
+        if ctx.message.server:
+            fmt = 'Channel: {0} (ID: {0.id})\nGuild: {1} (ID: {1.id})'
+        else:
+            fmt = 'Channel: {0} (ID: {0.id})'
+
+        e.add_field(name='Location', value=fmt.format(ctx.message.channel, ctx.message.server), inline=False)
+
+        e.description = '```py\n%s\n```' % traceback.format_exc(chain=False)
+        e.timestamp = datetime.datetime.utcnow()
+        ch = self.bot.get_channel(LOGGING_CHANNEL)
+        await self.bot.send_message(ch, embed=e)
+
+old_on_error = commands.Bot.on_error
+
+async def on_error(self, event, *args, **kwargs):
+    e = discord.Embed(title='Event Error', colour=0xa32952)
+    e.add_field(name='Event', value=event)
+    e.description = '```py\n%s\n```' % traceback.format_exc()
+    e.timestamp = datetime.datetime.utcnow()
+    ch = self.get_channel(LOGGING_CHANNEL)
+    try:
+        await self.send_message(ch, embed=e)
+    except:
+        pass
+
 def setup(bot):
     if not hasattr(bot, 'commands_used'):
         bot.commands_used = Counter()
@@ -166,3 +204,7 @@ def setup(bot):
         bot.socket_stats = Counter()
 
     bot.add_cog(Stats(bot))
+    commands.Bot.on_error = on_error
+
+def teardown(bot):
+    commands.Bot.on_error = old_on_error
