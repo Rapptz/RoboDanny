@@ -39,6 +39,7 @@ initial_extensions = [
     'cogs.permissions',
     'cogs.stats',
     'cogs.emoji',
+    'cogs.poll',
 ]
 
 discord_logger = logging.getLogger('discord')
