@@ -807,7 +807,13 @@ class Mod:
             await self.bot.say('Invalid criteria passed "{0.subcommand_passed}"'.format(ctx))
 
     async def do_removal(self, message, limit, predicate):
-        deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
+        try:
+            deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
+        except discord.Forbidden as e:
+            return await self.bot.send_message(message.channel, 'I do not have permissions to delete messages.')
+        except discord.HTTPException as e:
+            return await self.bot.send_message(message.channel, 'Error: {} (try a smaller search?)'.format(e))
+
         spammers = Counter(m.author.display_name for m in deleted)
         messages = ['%s %s removed.' % (len(deleted), 'message was' if len(deleted) == 1 else 'messages were')]
         if len(deleted):
