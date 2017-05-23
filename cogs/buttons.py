@@ -359,7 +359,8 @@ class Buttons:
     async def pm(self, user_id: str, *, content: str):
         user = await self.bot.get_user_info(user_id)
 
-        fmt = content + '\n\n*This is a DM sent because you had previously requested feedback, I do not monitor this DM.*'
+        fmt = content + '\n\n*This is a DM sent because you had previously requested feedback or I found a bug' \
+                        ' in a common you used, I do not monitor this DM.*'
 
         try:
             await self.bot.send_message(user, fmt)
