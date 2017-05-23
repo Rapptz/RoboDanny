@@ -43,7 +43,6 @@ class RoboDanny(commands.AutoShardedBot):
             # 'cogs.profile',
             # 'cogs.tags',
             # 'cogs.lounge',
-            # 'cogs.repl',
             # 'cogs.carbonitex',
             # 'cogs.mentions',
             # 'cogs.api',
