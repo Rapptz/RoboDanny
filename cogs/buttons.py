@@ -359,8 +359,10 @@ class Buttons:
     async def pm(self, user_id: str, *, content: str):
         user = await self.bot.get_user_info(user_id)
 
+        fmt = content + '\n\n*This is a DM sent because you had previously requested feedback, I do not monitor this DM.*'
+
         try:
-            await self.bot.send_message(user, content)
+            await self.bot.send_message(user, fmt)
         except:
             await self.bot.say('Could not PM user by ID ' + user_id)
         else:
