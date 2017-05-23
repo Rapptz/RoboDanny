@@ -713,9 +713,14 @@ class Stars:
 
         c = Counter(author for x, _ in all_starrers for author in x)
         common = c.most_common(3)
-        e.add_field(name='\U0001f947 Starrer', value='<@!%s> with %s stars' % common[0])
-        e.add_field(name='\U0001f948 Starrer', value='<@!%s> with %s stars' % common[1])
-        e.add_field(name='\U0001f949 Starrer', value='<@!%s> with %s stars' % common[2])
+
+        if len(common) >= 1:
+            e.add_field(name='\U0001f947 Starrer', value='<@!%s> with %s stars' % common[0])
+        if len(common) >= 2:
+            e.add_field(name='\U0001f948 Starrer', value='<@!%s> with %s stars' % common[1])
+        if len(common) >= 3:
+            e.add_field(name='\U0001f949 Starrer', value='<@!%s> with %s stars' % common[2])
+
         await self.bot.say(embed=e)
 
     @star.command(pass_context=True, no_pm=True, name='random')
