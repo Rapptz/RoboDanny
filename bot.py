@@ -91,6 +91,13 @@ class RoboDanny(commands.AutoShardedBot):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
 
+        if not hasattr(self, 'pool'):
+            try:
+                self.pool = await asyncpg.create_pool(config.postgres, ssl=True, command_timeout=60)
+            except Exception as e:
+                log.exception('Could not set up PostgreSQL. Exiting.')
+                await self.close()
+
     async def on_resumed(self):
         print('resumed...')
 
