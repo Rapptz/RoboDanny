@@ -531,8 +531,9 @@ class Stars:
         Admin role.
         """
         def cleanup_task():
-            task = self.janitor_tasks.pop(ctx.guild_id)
-            task.cancel()
+            task = self.janitor_tasks.pop(ctx.guild_id, None)
+            if task:
+                task.cancel()
             ctx.db.pop('janitor', None)
 
         if minutes <= 0.0:
