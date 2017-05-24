@@ -203,5 +203,49 @@ class Admin:
             except discord.HTTPException as e:
                 await ctx.send('Unexpected error: `{}`'.format(e))
 
+
+    @commands.command(hidden=True)
+    async def sql(self, ctx, *, query: str):
+        """Run some SQL."""
+        # the imports are here because I imagine some people would want to use
+        # this cog as a base for their other cog, and since this one is kinda
+        # odd and unnecessary for most people, I will make it easy to remove
+        # for those people.
+        from .utils.formats import TabularData, Plural
+        import time
+
+        query = self.cleanup_code(query)
+
+        is_multistatement = query.count(';') > 1
+        if is_multistatement:
+            # fetch does not support multiple statements
+            strategy = self.bot.pool.execute
+        else:
+            strategy = self.bot.pool.fetch
+
+        try:
+            start = time.time()
+            results = await strategy(query)
+            dt = time.time() - start
+        except Exception:
+            return await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
+
+        rows = len(results)
+        if is_multistatement or rows == 0:
+            return await ctx.send('*Returned 0 rows in {:.2f}ms*'.format(dt))
+
+        headers = list(results[0].keys())
+        table = TabularData()
+        table.set_columns(headers)
+        table.add_rows(list(r.values()) for r in results)
+        render = table.render()
+
+        fmt = '```\n{0}\n```\n*Returned {1} in {2:.2f}ms*'.format(render, Plural(row=rows), dt)
+        if len(fmt) > 2000:
+            fp = io.BytesIO(fmt.encode('utf-8'))
+            await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
+        else:
+            await ctx.send(fmt)
+
 def setup(bot):
     bot.add_cog(Admin(bot))

@@ -38,8 +38,9 @@ def human_timedelta(dt):
         return '%s ago' % Plural(minute=minutes)
     return '%s ago' % Plural(second=seconds)
 
+
 def to_checkmark(opt):
-    return '<:vpGreenTick:257437292820561920>' if opt else '<:vpRedTick:257437215615877129>'
+    return '<:check:316583761540022272>' if opt else '<:xmark:316583761699536896>'
 
 class Checkmark:
     def __init__(self, opt, label):
@@ -48,3 +49,54 @@ class Checkmark:
 
     def __str__(self):
         return '%s: %s' % (to_checkmark(self.opt), self.label)
+
+class TabularData:
+    def __init__(self):
+        self._widths = []
+        self._columns = []
+        self._rows = []
+
+    def set_columns(self, columns):
+        self._columns = columns
+        self._widths = [len(c) + 2 for c in columns]
+
+    def add_row(self, row):
+        rows = [str(r) for r in row]
+        self._rows.append(rows)
+        for index, element in enumerate(rows):
+            width = len(element) + 2
+            if width > self._widths[index]:
+                self._widths[index] = width
+
+    def add_rows(self, rows):
+        for row in rows:
+            self.add_row(row)
+
+    def render(self):
+        """Renders a table in rST format.
+
+        Example:
+
+        +-------+-----+
+        | Name  | Age |
+        +-------+-----+
+        | Alice | 24  |
+        |  Bob  | 19  |
+        +-------+-----+
+        """
+
+        sep = '+' + '+'.join('-' * w for w in self._widths) + '+'
+
+        to_draw = [sep]
+
+        def get_entry(d):
+            return '|' + '|'.join('{0:^{width}}'.format(e, width=self._widths[i]) for i, e in enumerate(d)) + '|'
+
+        to_draw.append(get_entry(self._columns))
+        to_draw.append(sep)
+
+        for row in self._rows:
+            to_draw.append(get_entry(row))
+
+        to_draw.append(sep)
+        return '\n'.join(to_draw)
