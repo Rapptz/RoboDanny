@@ -10,6 +10,7 @@ import sys
 from collections import Counter
 
 import config
+import asyncpg
 
 description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
@@ -75,7 +76,7 @@ class RoboDanny(commands.AutoShardedBot):
             hdlr.close()
             log.removeHandler(hdlr)
 
-    async def on_command_error(self, error, ctx):
+    async def on_command_error(self, ctx, error):
         if isinstance(error, commands.NoPrivateMessage):
             await ctx.author.send('This command cannot be used in private messages.')
         elif isinstance(error, commands.DisabledCommand):
@@ -86,16 +87,18 @@ class RoboDanny(commands.AutoShardedBot):
             print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
 
     async def on_ready(self):
-        print('Ready: {0} (ID: {0.id})'.format(self.user))
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
 
         if not hasattr(self, 'pool'):
             try:
-                self.pool = await asyncpg.create_pool(config.postgres, ssl=True, command_timeout=60)
+                self.pool = await asyncpg.create_pool(config.postgres, command_timeout=60)
             except Exception as e:
+                print('Could not set up PostgreSQL. Exiting.')
                 log.exception('Could not set up PostgreSQL. Exiting.')
                 await self.close()
+
+        print('Ready: {0} (ID: {0.id})'.format(self.user))
 
     async def on_resumed(self):
         print('resumed...')
