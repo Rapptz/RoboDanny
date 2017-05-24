@@ -154,7 +154,7 @@ class Meta:
             e.set_image(url=guild.splash_url)
 
         info = []
-        info.append(formats.Checkmark(guild.features, 'Partnered'))
+        info.append(formats.Checkmark(len(guild.features) >= 3, 'Partnered'))
 
         sfw = guild.explicit_content_filter is not discord.ContentFilter.disabled
         info.append(formats.Checkmark(sfw, 'Scanning Images'))
@@ -165,11 +165,10 @@ class Meta:
         fmt = 'Text %s (%s secret)\nVoice %s (%s locked)'
         e.add_field(name='Channels', value=fmt % (text_channels, secret_channels, voice_channels, secret_voice))
 
-
-        fmt = '<:vpOnline:212789758110334977> {1[online]} ' \
-              '<:vpAway:212789859071426561> {1[idle]} ' \
-              '<:vpDnD:236744731088912384> {1[dnd]} ' \
-              '<:vpOffline:212790005943369728> {1[offline]}\n' \
+        fmt = '<:online:316856575413321728> {1[online]} ' \
+              '<:idle:316856575098880002> {1[idle]} ' \
+              '<:dnd:316856574868193281> {1[dnd]} ' \
+              '<:offline:316856575501402112> {1[offline]}\n' \
               'Total: {0}'
 
         e.add_field(name='Members', value=fmt.format(guild.member_count, member_by_status))
