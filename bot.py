@@ -16,20 +16,7 @@ description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
 """
 
-try:
-    import uvloop
-except ImportError:
-    pass
-else:
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
-logging.getLogger('discord').setLevel(logging.INFO)
-logging.getLogger('discord.http').setLevel(logging.DEBUG)
-
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
-log.addHandler(handler)
+log = logging.getLogger(__name__)
 
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
@@ -69,12 +56,6 @@ class RoboDanny(commands.AutoShardedBot):
             except Exception as e:
                 print('Failed to load extension %s' % extension, file=sys.stderr)
                 traceback.print_exc()
-
-    def __del__(self):
-        handlers = log.handlers[:]
-        for hdlr in handlers:
-            hdlr.close()
-            log.removeHandler(hdlr)
 
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.NoPrivateMessage):
@@ -124,7 +105,3 @@ class RoboDanny(commands.AutoShardedBot):
         msg.content = command
         for i in range(times):
             await self.process_commands(msg)
-
-if __name__ == '__main__':
-    bot = RoboDanny()
-    bot.run()

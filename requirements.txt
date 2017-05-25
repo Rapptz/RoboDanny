@@ -2,3 +2,4 @@ git+https://github.com/Rapptz/discord.py@rewrite#egg=discord.py[voice]
 lxml
 psutil
 asyncpg>=0.11.0
+click
