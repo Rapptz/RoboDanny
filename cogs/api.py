@@ -449,7 +449,7 @@ class API:
     async def refresh_faq_cache(self):
         self.faq_entries = {}
         async with aiohttp.get('http://discordpy.readthedocs.io/en/latest/faq.html') as resp:
-            text = await resp.text()
+            text = await resp.text(encoding='utf-8')
 
             root = etree.fromstring(text, etree.HTMLParser())
             nodes = root.findall(".//div[@id='questions']/ul[@class='simple']//ul/li/a")
