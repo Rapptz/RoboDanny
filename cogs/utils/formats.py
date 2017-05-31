@@ -39,17 +39,6 @@ def human_timedelta(dt):
     return '%s ago' % Plural(second=seconds)
 
 
-def to_checkmark(opt):
-    return '<:check:316583761540022272>' if opt else '<:xmark:316583761699536896>'
-
-class Checkmark:
-    def __init__(self, opt, label):
-        self.opt = opt
-        self.label = label
-
-    def __str__(self):
-        return '%s: %s' % (to_checkmark(self.opt), self.label)
-
 class TabularData:
     def __init__(self):
         self._widths = []

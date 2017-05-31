@@ -154,11 +154,11 @@ class Meta:
             e.set_image(url=guild.splash_url)
 
         info = []
-        info.append(formats.Checkmark(len(guild.features) >= 3, 'Partnered'))
+        info.append(ctx.tick(len(guild.features) >= 3, 'Partnered'))
 
         sfw = guild.explicit_content_filter is not discord.ContentFilter.disabled
-        info.append(formats.Checkmark(sfw, 'Scanning Images'))
-        info.append(formats.Checkmark(guild.member_count > 100, 'Large'))
+        info.append(ctx.tick(sfw, 'Scanning Images'))
+        info.append(ctx.tick(guild.member_count > 100, 'Large'))
 
         e.add_field(name='Info', value='\n'.join(map(str, info)))
 

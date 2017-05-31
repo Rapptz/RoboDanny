@@ -24,6 +24,10 @@ class Context(commands.Context):
     def session(self):
         return self.bot.session
 
+    @property
+    def db(self):
+        return self.bot.pool
+
     async def too_many_matches(self, matches, entry):
         await self.send('There are too many matches... Which one did you mean? **Only say the number**.')
         await self.send('\n'.join(map(entry, enumerate(matches, 1))))
@@ -45,3 +49,9 @@ class Context(commands.Context):
                 await self.send('Please give me a valid number. {} tries remaining...'.format(2 - i))
 
         raise ValueError('Too many tries. Goodbye.')
+
+    def tick(self, opt, label=None):
+        emoji = '<:check:316583761540022272>' if opt else '<:xmark:316583761699536896>'
+        if label is not None:
+            return '%s: %s' % (emoji, label)
+        return emoji
