@@ -6,6 +6,7 @@ import json, asyncio
 import copy
 import logging
 import traceback
+import aiohttp
 import sys
 from collections import Counter
 
@@ -46,6 +47,7 @@ class RoboDanny(commands.AutoShardedBot):
         self.client_id = config.client_id
         self.carbon_key = config.carbon_key
         self.bots_key = config.bots_key
+        self.session = aiohttp.ClientSession(loop=self.loop)
 
         self.add_command(self.do)
         self.add_check(self.only_me_for_rewrite)
