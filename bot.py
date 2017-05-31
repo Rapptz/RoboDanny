@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-from cogs.utils import checks, context
+from cogs.utils import checks, context, db
 import datetime, re
 import json, asyncio
 import copy
@@ -18,30 +18,30 @@ Hello! I am a bot written by Danny to provide some nice utilities.
 
 log = logging.getLogger(__name__)
 
+initial_extensions = (
+    'cogs.meta',
+    # 'cogs.splatoon',
+    # 'cogs.rng',
+    # 'cogs.mod',
+    # 'cogs.profile',
+    # 'cogs.tags',
+    # 'cogs.lounge',
+    # 'cogs.carbonitex',
+    # 'cogs.mentions',
+    # 'cogs.api',
+    # 'cogs.stars',
+    'cogs.admin',
+    # 'cogs.buttons',
+    # 'cogs.pokemon',
+    # 'cogs.permissions',
+    # 'cogs.stats',
+    # 'cogs.emoji',
+)
+
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
         super().__init__(command_prefix=commands.when_mentioned_or('?', '!'), description=description,
                          pm_help=None, help_attrs=dict(hidden=True))
-
-        initial_extensions = (
-            'cogs.meta',
-            # 'cogs.splatoon',
-            # 'cogs.rng',
-            # 'cogs.mod',
-            # 'cogs.profile',
-            # 'cogs.tags',
-            # 'cogs.lounge',
-            # 'cogs.carbonitex',
-            # 'cogs.mentions',
-            # 'cogs.api',
-            # 'cogs.stars',
-            'cogs.admin',
-            # 'cogs.buttons',
-            # 'cogs.pokemon',
-            # 'cogs.permissions',
-            # 'cogs.stats',
-            # 'cogs.emoji',
-        )
 
         self.client_id = config.client_id
         self.carbon_key = config.carbon_key
@@ -70,14 +70,6 @@ class RoboDanny(commands.AutoShardedBot):
     async def on_ready(self):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
-
-        if not hasattr(self, 'pool'):
-            try:
-                self.pool = await asyncpg.create_pool(config.postgres, command_timeout=60)
-            except Exception as e:
-                print('Could not set up PostgreSQL. Exiting.')
-                log.exception('Could not set up PostgreSQL. Exiting.')
-                await self.close()
 
         print('Ready: {0} (ID: {0.id})'.format(self.user))
 
