@@ -49,12 +49,8 @@ class Lounge:
 
     def __init__(self, bot):
         self.bot = bot
-        self.session = aiohttp.ClientSession(loop=bot.loop)
 
-    def __unload(self):
-        self.session.close()
-
-    @commands.command(pass_context=True)
+    @commands.command()
     async def coliru(self, ctx, *, code: CodeBlock):
         """Compiles code via Coliru.
 
@@ -80,35 +76,36 @@ class Lounge:
 
         data = json.dumps(payload)
 
-        await self.bot.type()
-        async with self.session.post('http://coliru.stacked-crooked.com/compile', data=data) as resp:
-            if resp.status != 200:
-                await self.bot.say('Coliru did not respond in time.')
-                return
-            output = await resp.text()
-
-            if len(output) < 1992:
-                fmt = '```\n{}\n```'.format(output)
-                await self.bot.say(fmt)
-                return
-
-            # output is too big so post it in gist
-            async with self.session.post('http://coliru.stacked-crooked.com/share', data=data) as resp:
+        async with ctx.typing():
+            async with ctx.session.post('http://coliru.stacked-crooked.com/compile', data=data) as resp:
                 if resp.status != 200:
-                    await self.bot.say('Could not create coliru shared link')
-                else:
-                    shared_id = await resp.text()
-                    await self.bot.say('Output too big. Coliru link: http://coliru.stacked-crooked.com/a/' + shared_id)
+                    await ctx.send('Coliru did not respond in time.')
+                    return
+
+                output = await resp.text(encoding='utf-8')
+
+                if len(output) < 1992:
+                    fmt = '```\n{}\n```'.format(output)
+                    await ctx.send(fmt)
+                    return
+
+                # output is too big so post it in gist
+                async with ctx.session.post('http://coliru.stacked-crooked.com/share', data=data) as r:
+                    if r.status != 200:
+                        await ctx.send('Could not create coliru shared link')
+                    else:
+                        shared_id = await r.text()
+                        await ctx.send('Output too big. Coliru link: http://coliru.stacked-crooked.com/a/' + shared_id)
 
     @coliru.error
-    async def coliru_error(self, error, ctx):
+    async def coliru_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
-            await self.bot.say(error)
+            await ctx.send(error)
         if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say(CodeBlock.missing_error)
+            await ctx.send(CodeBlock.missing_error)
 
     @commands.command()
-    async def cpp(self, *, query: str):
+    async def cpp(self, ctx, *, query: str):
         """Search something on cppreference"""
 
         url = 'http://en.cppreference.com/w/cpp/index.php'
@@ -117,12 +114,12 @@ class Lounge:
             'search': query
         }
 
-        async with self.session.get(url, params=params) as resp:
+        async with ctx.session.get(url, params=params) as resp:
             if resp.status != 200:
-                return await self.bot.say('An error occurred (status code: {0.status}). Retry later.'.format(resp))
+                return await ctx.send('An error occurred (status code: {0.status}). Retry later.'.format(resp))
 
             if len(resp.history) > 0:
-                return await self.bot.say(resp.url)
+                return await ctx.send(resp.url)
 
             e = discord.Embed()
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
@@ -150,12 +147,12 @@ class Lounge:
                     e.add_field(name='Library Results', value='\n'.join(description[:10]), inline=False)
             else:
                 if not len(description):
-                    return await self.bot.say('No results found.')
+                    return await ctx.send('No results found.')
 
                 e.title = 'Search Results'
                 e.description = '\n'.join(description[:15])
 
-            await self.bot.say(embed=e)
+            await ctx.send(embed=e)
 
 def setup(bot):
     bot.add_cog(Lounge(bot))
