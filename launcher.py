@@ -145,5 +145,57 @@ def dropdb(name, quiet):
 
     click.echo('successfully removed %s database' % name)
 
+@main.command(short_help='migrates from JSON files')
+@click.argument('name')
+@click.pass_context
+def convertjson(ctx, name):
+    """This migrates our older JSON files to PostgreSQL
+
+    You can pass "all" as the name to migrate everything
+    instead of a single migration.
+
+    Note, this deletes all previous entries in the table
+    so you can consider this to be a destructive decision.
+
+    The point of this is just to do some migration of the
+    data from v3 -> v4 once and call it a day.
+    """
+
+    import data_migrators
+
+    run = asyncio.get_event_loop().run_until_complete
+
+    if name == 'all':
+        to_run = [(getattr(data_migrators, attr), attr.replace('migrate_', ''))
+                  for attr in dir(data_migrators) if attr.startswith('migrate_')]
+    else:
+        try:
+            to_run = getattr(data_migrators, 'migrate_' + name)
+        except AttributeError:
+            click.echo('invalid cog name given, %s.' % name, err=True)
+            return
+        to_run = [(to_run, name)]
+
+    async def create_pool():
+        return await asyncpg.create_pool(config.postgres)
+
+    try:
+        pool = run(create_pool())
+    except Exception:
+        click.echo('Could not create PostgreSQL connection pool.\n' + traceback.format_exc(), err=True)
+        return
+
+    extensions = ['cog.' + name for _, name in to_run]
+    ctx.invoke(initdb, extension=extensions)
+
+    for migrator, _ in to_run:
+        try:
+            run(migrator(pool))
+        except Exception:
+            click.echo('migrator %s has failed, terminating\n%s' % (migrator.__name__, traceback.format_exc()), err=True)
+            return
+        else:
+            click.echo('migrator %s completed successfully' % migrator.__name__)
+
 if __name__ == '__main__':
     main()

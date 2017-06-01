@@ -38,6 +38,10 @@ import datetime
 import inspect
 import decimal
 import asyncpg
+import logging
+import asyncio
+
+log = logging.getLogger(__name__)
 
 class SchemaError(Exception):
     pass
@@ -299,7 +303,7 @@ class Column:
         builder.append(self.column_type.to_sql())
 
         default = self.default
-        if default:
+        if default is not None:
             builder.append('DEFAULT')
             if isinstance(default, str):
                 builder.append("'%s'" % default)
@@ -722,3 +726,16 @@ class Table(metaclass=TableMeta):
             downgrade.setdefault('add_columns', []).extend(removed)
 
         return SchemaDiff(self, upgrade, downgrade)
+
+async def _table_creator(table, *, verbose=True):
+    try:
+        await table.create(verbose=verbose)
+    except:
+        log.error('Failed to create table %s.', table.__tablename__)
+
+def create_tables(*tables, verbose=True, loop=None):
+    if loop is None:
+        loop = asyncio.get_event_loop()
+
+    for table in tables:
+        loop.create_task(_table_creator(table, verbose=verbose))
