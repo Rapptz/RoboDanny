@@ -88,6 +88,10 @@ class RoboDanny(commands.AutoShardedBot):
     def only_me_for_rewrite(self, ctx):
         return ctx.author.id == 80088516616269824
 
+    async def close(self):
+        await super().close()
+        await self.session.close()
+
     def run(self):
         super().run(config.token, reconnect=True)
 
