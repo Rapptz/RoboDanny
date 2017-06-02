@@ -67,10 +67,13 @@ class Emoji:
         # emoji_id: count
         self.config = config.Config('emoji_statistics.json')
 
+    # gonna lazily re-use this for disabling all ! prefixes people request lol
     def __check(self, ctx):
         server = ctx.message.server
-        if server is not None and server.id == BLOB_GUILD_ID:
-            return ctx.prefix == '?'
+        if server is not None:
+            if server.id in (BLOB_GUILD_ID, '234463897829113856'):
+                #                            ^ 187428134998507521
+                return ctx.prefix == '?'
         return True
 
     async def do_redirect(self, message):
