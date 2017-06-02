@@ -31,7 +31,7 @@ initial_extensions = (
     'cogs.api',
     # 'cogs.stars',
     'cogs.admin',
-    # 'cogs.buttons',
+    'cogs.buttons',
     # 'cogs.pokemon',
     # 'cogs.permissions',
     # 'cogs.stats',
@@ -40,7 +40,7 @@ initial_extensions = (
 
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
-        super().__init__(command_prefix=commands.when_mentioned_or('$#?'), description=description,
+        super().__init__(command_prefix=commands.when_mentioned_or('?'), description=description,
                          pm_help=None, help_attrs=dict(hidden=True))
 
         self.client_id = config.client_id
@@ -49,7 +49,7 @@ class RoboDanny(commands.AutoShardedBot):
         self.session = aiohttp.ClientSession(loop=self.loop)
 
         self.add_command(self.do)
-        # self.add_check(self.only_me_for_rewrite)
+        self.add_check(self.only_me_for_rewrite)
 
         for extension in initial_extensions:
             try:
