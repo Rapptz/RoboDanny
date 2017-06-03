@@ -339,8 +339,8 @@ class Stars:
             await self._unstar_message(message, starrer_id, message_id)
 
     @commands.command(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(administrator=True)
-    async def starboard(self, ctx, *, name: str = 'starboard'):
+    @checks.admin_or_permissions(manage_server=True)
+    async def starboard(self, ctx, *, name='starboard'):
         """Sets up the starboard for this server.
 
         This creates a new channel with the specified name
@@ -349,7 +349,7 @@ class Stars:
         If the channel is deleted then the starboard is
         deleted as well.
 
-        You must have Administrator permissions to use this
+        You must have Manage Server permissions to use this
         command or the Bot Admin role.
         """
 
@@ -516,7 +516,7 @@ class Stars:
             await self.bot.delete_message(ctx.message)
 
     @star.command(name='janitor', pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(administrator=True)
+    @checks.admin_or_permissions(manage_server=True)
     @requires_starboard()
     async def star_janitor(self, ctx, minutes: float = 0.0):
         """Set the starboard's janitor clean rate.
@@ -527,7 +527,7 @@ class Stars:
 
         Setting the janitor's clean rate to 0 (or below) disables it.
 
-        This command requires the Administrator permission or the Bot
+        This command requires the Manage Server permission or the Bot
         Admin role.
         """
         def cleanup_task():
@@ -570,7 +570,7 @@ class Stars:
         await self.bot.say('\N{PUT LITTER IN ITS PLACE SYMBOL}')
 
     @star.command(name='update', no_pm=True, pass_context=True, hidden=True)
-    @checks.admin_or_permissions(administrator=True)
+    @checks.admin_or_permissions(manage_server=True)
     @requires_starboard()
     @commands.cooldown(rate=1, per=5.0*60, type=commands.BucketType.server)
     async def star_update(self, ctx):
@@ -582,7 +582,7 @@ class Stars:
         To prevent abuse, only the last 100 messages are updated.
 
         Warning: This operation takes a long time. As a consequence,
-        only those with Administrator permission can use this command
+        only those with Manage Server permission can use this command
         and it has a cooldown of one use per 5 minutes.
         """
         reconfigured_cache = {
