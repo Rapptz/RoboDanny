@@ -6,38 +6,8 @@ class Plural:
     def __str__(self):
         v = self.value
         if v > 1:
-            return f'{v} {self.name}s' % (v, self.name)
+            return f'{v} {self.name}s'
         return f'{v} {self.name}'
-
-def human_timedelta(dt):
-    now = datetime.datetime.utcnow()
-    delta = now - dt
-    hours, remainder = divmod(int(delta.total_seconds()), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    days, hours = divmod(hours, 24)
-    years, days = divmod(days, 365)
-
-    if years:
-        if days:
-            return f'{Plural(year=years)} and {Plural(day=days)} ago'
-        return f'{Plural(year=years)} ago'
-
-    if days:
-        if hours:
-            return f'{Plural(day=days)} and {Plural(hour=hours)} ago'
-        return f'{Plural(day=days)} ago'
-
-    if hours:
-        if minutes:
-            return f'{Plural(hour=hours)} and {Plural(minute=minutes)} ago'
-        return f'{Plural(hour=hours)} ago'
-
-    if minutes:
-        if seconds:
-            return f'{Plural(minute=minutes)} and {Plural(second=seconds)} ago'
-        return f'{Plural(minute=minutes)} ago'
-    return f'{Plural(second=seconds)} ago'
-
 
 class TabularData:
     def __init__(self):

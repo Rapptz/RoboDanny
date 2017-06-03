@@ -554,6 +554,30 @@ class Table(metaclass=TableMeta):
         return '\n'.join(statements)
 
     @classmethod
+    async def insert(cls, **kwargs):
+        """Inserts an element to the table."""
+
+        # verify column names:
+        verified = {}
+        for column in cls.columns:
+            try:
+                value = kwargs[column.name]
+            except KeyError:
+                continue
+
+            check = column.column_type.python
+            if not check or not isinstance(value, check):
+                fmt = 'column {0.name} expected {1.__name__}, received {2.__class__.__name__}'
+                raise TypeError(fmt.format(column, check, value))
+
+            verified[column.name] = value
+
+        sql = 'INSERT INTO {0} ({1}) VALUES ({2});'.format(cls.__tablename__, ', '.join(verified),
+                                                           ', '.join('$' + str(i) for i, _ in enumerate(verified, 1)))
+
+        await cls._pool.execute(sql, *verified.values())
+
+    @classmethod
     def to_dict(cls):
         x = {}
         x['name'] = cls.__tablename__
