@@ -14,7 +14,7 @@ This is required to actually run the bot.
 
 2. **Set up venv**
 
-Just do `python3.5 -m venv venv`
+Just do `python3.6 -m venv venv`
 
 3. **Install dependencies**
 
@@ -45,7 +45,7 @@ postgres = 'postgres://user:password@host/database' # your postgres info from ab
 
 ## Requirements
 
-- Python 3.5+
+- Python 3.6+
 - v1.0.0 of discord.py
 - lxml
 - psutil

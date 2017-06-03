@@ -20,7 +20,7 @@ class Carbonitex:
         }
 
         async with self.bot.session.post(CARBONITEX_API_BOTDATA, data=carbon_payload) as resp:
-            log.info('Carbon statistics returned {0.status} for {1}'.format(resp, carbon_payload))
+            log.info(f'Carbon statistics returned {resp.status} for {carbon_payload}')
 
         payload = json.dumps({
             'server_count': guild_count
@@ -31,9 +31,9 @@ class Carbonitex:
             'content-type': 'application/json'
         }
 
-        url = '{0}/bots/{1.user.id}/stats'.format(DISCORD_BOTS_API, self.bot)
+        url = f'{DISCORD_BOTS_API}/bots/{self.bot.user.id}/stats'
         async with self.bot.session.post(url, data=payload, headers=headers) as resp:
-            log.info('DBots statistics returned {0.status} for {1}'.format(resp, payload))
+            log.info(f'DBots statistics returned {resp.status} for {payload}')
 
     async def on_guild_join(self, guild):
         await self.update()

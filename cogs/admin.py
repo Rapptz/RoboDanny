@@ -33,8 +33,8 @@ class Admin:
 
     def get_syntax_error(self, e):
         if e.text is None:
-            return '```py\n{0.__class__.__name__}: {0}\n```'.format(e)
-        return '```py\n{0.text}{1:>{0.offset}}\n{2}: {0}```'.format(e, '^', type(e).__name__)
+            return f'```py\n{e.__class__.__name__}: {e}\n```'
+        return f'```py\n{e.text}{"^":>{e.offset}}\n{e.__class__.__name__}: {e}```'
 
     @commands.command(hidden=True)
     async def load(self, ctx, *, module):
@@ -42,7 +42,7 @@ class Admin:
         try:
             self.bot.load_extension(module)
         except Exception as e:
-            await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
+            await ctx.send(f'```py\n{traceback.format_exc()}\n```')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
@@ -52,7 +52,7 @@ class Admin:
         try:
             self.bot.unload_extension(module)
         except Exception as e:
-            await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
+            await ctx.send(f'```py\n{traceback.format_exc()}\n```')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
@@ -63,7 +63,7 @@ class Admin:
             self.bot.unload_extension(module)
             self.bot.load_extension(module)
         except Exception as e:
-            await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
+            await ctx.send(f'```py\n{traceback.format_exc()}\n```')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
@@ -86,12 +86,12 @@ class Admin:
         body = self.cleanup_code(body)
         stdout = io.StringIO()
 
-        to_compile = 'async def func():\n%s' % textwrap.indent(body, '  ')
+        to_compile = f'async def func():\n{textwrap.indent(body, "  ")}'
 
         try:
             exec(to_compile, env)
         except Exception as e:
-            return await ctx.send('```py\n{0.__class__.__name__}: {0}\n```'.format(e))
+            return await ctx.send(f'```py\n{e.__class__.__name__}: {e}\n```')
 
         func = env['func']
         try:
@@ -99,7 +99,7 @@ class Admin:
                 ret = await func()
         except Exception as e:
             value = stdout.getvalue()
-            await ctx.send('```py\n{}{}\n```'.format(value, traceback.format_exc()))
+            await ctx.send(f'```py\n{value}{traceback.format_exc()}\n```')
         else:
             value = stdout.getvalue()
             try:
@@ -109,10 +109,10 @@ class Admin:
 
             if ret is None:
                 if value:
-                    await ctx.send('```py\n%s\n```' % value)
+                    await ctx.send(f'```py\n{value}\n```')
             else:
                 self._last_result = ret
-                await ctx.send('```py\n%s%s\n```' % (value, ret))
+                await ctx.send(f'```py\n{value}{ret}\n```')
 
     @commands.command(pass_context=True, hidden=True)
     async def repl(self, ctx):
@@ -183,14 +183,14 @@ class Admin:
                         result = await result
             except Exception as e:
                 value = stdout.getvalue()
-                fmt = '```py\n{}{}\n```'.format(value, traceback.format_exc())
+                fmt = f'```py\n{value}{traceback.format_exc()}\n```'
             else:
                 value = stdout.getvalue()
                 if result is not None:
-                    fmt = '```py\n{}{}\n```'.format(value, result)
+                    fmt = f'```py\n{value}{result}\n```'
                     variables['_'] = result
                 elif value:
-                    fmt = '```py\n{}\n```'.format(value)
+                    fmt = f'```py\n{value}\n```'
 
             try:
                 if fmt is not None:
@@ -201,7 +201,7 @@ class Admin:
             except discord.Forbidden:
                 pass
             except discord.HTTPException as e:
-                await ctx.send('Unexpected error: `{}`'.format(e))
+                await ctx.send(f'Unexpected error: `{e}`')
 
 
     @commands.command(hidden=True)
@@ -228,11 +228,11 @@ class Admin:
             results = await strategy(query)
             dt = time.time() - start
         except Exception:
-            return await ctx.send('```py\n{}\n```'.format(traceback.format_exc()))
+            return await ctx.send(f'```py\n{traceback.format_exc()}\n```')
 
         rows = len(results)
         if is_multistatement or rows == 0:
-            return await ctx.send('*Returned 0 rows in {:.2f}ms*'.format(dt))
+            return await ctx.send(f'*Returned 0 rows in {dt:.2f}ms*')
 
         headers = list(results[0].keys())
         table = TabularData()
@@ -240,7 +240,7 @@ class Admin:
         table.add_rows(list(r.values()) for r in results)
         render = table.render()
 
-        fmt = '```\n{0}\n```\n*Returned {1} in {2:.2f}ms*'.format(render, Plural(row=rows), dt)
+        fmt = f'```\n{render}\n```\n*Returned {Plural(row=rows)} in {dt:.2f}ms*'
         if len(fmt) > 2000:
             fp = io.BytesIO(fmt.encode('utf-8'))
             await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))

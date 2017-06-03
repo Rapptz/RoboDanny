@@ -6,8 +6,8 @@ class Plural:
     def __str__(self):
         v = self.value
         if v > 1:
-            return '%s %ss' % (v, self.name)
-        return '%s %s' % (v, self.name)
+            return f'{v} {self.name}s' % (v, self.name)
+        return f'{v} {self.name}'
 
 def human_timedelta(dt):
     now = datetime.datetime.utcnow()
@@ -19,24 +19,24 @@ def human_timedelta(dt):
 
     if years:
         if days:
-            return '%s and %s ago' % (Plural(year=years), Plural(day=days))
-        return '%s ago' % Plural(year=years)
+            return f'{Plural(year=years)} and {Plural(day=days)} ago'
+        return f'{Plural(year=years)} ago'
 
     if days:
         if hours:
-            return '%s and %s ago' % (Plural(day=days), Plural(hour=hours))
-        return '%s ago' % Plural(day=days)
+            return f'{Plural(day=days)} and {Plural(hour=hours)} ago'
+        return f'{Plural(day=days)} ago'
 
     if hours:
         if minutes:
-            return '%s and %s ago' % (Plural(hour=hours), Plural(minute=minutes))
-        return '%s ago' % Plural(hour=hours)
+            return f'{Plural(hour=hours)} and {Plural(minute=minutes)} ago'
+        return f'{Plural(hour=hours)} ago'
 
     if minutes:
         if seconds:
-            return '%s and %s ago' % (Plural(minute=minutes), Plural(second=seconds))
-        return '%s ago' % Plural(minute=minutes)
-    return '%s ago' % Plural(second=seconds)
+            return f'{Plural(minute=minutes)} and {Plural(second=seconds)} ago'
+        return f'{Plural(minute=minutes)} ago'
+    return f'{Plural(second=seconds)} ago'
 
 
 class TabularData:
@@ -74,12 +74,14 @@ class TabularData:
         +-------+-----+
         """
 
-        sep = '+' + '+'.join('-' * w for w in self._widths) + '+'
+        sep = '+'.join('-' * w for w in self._widths)
+        sep = f'+{sep}+'
 
         to_draw = [sep]
 
         def get_entry(d):
-            return '|' + '|'.join('{0:^{width}}'.format(e, width=self._widths[i]) for i, e in enumerate(d)) + '|'
+            elem = '|'.join(f'{e:^{self._widths[i]}}' for i, e in enumerate(d))
+            return f'|{elem}|'
 
         to_draw.append(get_entry(self._columns))
         to_draw.append(sep)

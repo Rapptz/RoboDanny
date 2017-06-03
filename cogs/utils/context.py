@@ -3,20 +3,18 @@ import asyncio
 
 class Context(commands.Context):
     async def entry_to_code(self, entries):
-        width = max(map(lambda t: len(t[0]), entries))
+        width = max(len(a) for a, b in entries)
         output = ['```']
-        fmt = '{0:<{width}}: {1}'
         for name, entry in entries:
-            output.append(fmt.format(name, entry, width=width))
+            output.append(f'{name:<{width}}: {entry}')
         output.append('```')
         await self.send('\n'.join(output))
 
     async def indented_entry_to_code(self, entries):
-        width = max(map(lambda t: len(t[0]), entries))
+        width = max(len(a) for a, b in entries)
         output = ['```']
-        fmt = '\u200b{0:>{width}}: {1}'
         for name, entry in entries:
-            output.append(fmt.format(name, entry, width=width))
+            output.append(f'\u200b{name:>{width}}: {entry}')
         output.append('```')
         await self.send('\n'.join(output))
 
@@ -46,12 +44,12 @@ class Context(commands.Context):
             try:
                 return matches[index - 1]
             except:
-                await self.send('Please give me a valid number. {} tries remaining...'.format(2 - i))
+                await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
 
         raise ValueError('Too many tries. Goodbye.')
 
     def tick(self, opt, label=None):
         emoji = '<:check:316583761540022272>' if opt else '<:xmark:316583761699536896>'
         if label is not None:
-            return '%s: %s' % (emoji, label)
+            return f'{emoji}: {label}'
         return emoji

@@ -63,17 +63,17 @@ class API:
     #         return
 
     #     if author.status is discord.Status.offline:
-    #         fmt = '{0} (ID: {0.id}) has been automatically blocked for 5 minutes for being invisible'
+    #         fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible'
     #         await channel.set_permissions(author, read_messages=False, reason='invisible block')
-    #         await channel.send(fmt.format(author))
+    #         await channel.send(fmt)
 
     #         try:
-    #             msg = 'Heya. You have been automatically blocked from <#%s> for 5 minutes for being invisible.\n' \
-    #                   'Try chatting again in 5 minutes when you change your status. If you\'re curious why invisible ' \
-    #                   'users are blocked, it is because they tend to break the client and cause them to be hard to ' \
-    #                   'mention. Since we want to help you usually, we expect mentions to work without headaches.\n\n' \
-    #                   'Sorry for the trouble.'
-    #             await author.send(msg % DISCORD_PY_ID)
+    #             msg = f'Heya. You have been automatically blocked from <#{DISCORD_PY_ID}> for 5 minutes for being ' \
+    #                    'invisible.\nTry chatting again in 5 minutes when you change your status. If you\'re curious ' \
+    #                    'why invisible users are blocked, it is because they tend to break the client and cause them to ' \
+    #                    'be hard to mention. Since we want to help you usually, we expect mentions to work without ' \
+    #                    'headaches.\n\nSorry for the trouble.'
+    #             await author.send(msg)
     #         except discord.HTTPException:
     #             pass
 
@@ -140,7 +140,7 @@ class API:
         def replace(o):
             return pit_of_success_helpers.get(o.group(0), '')
 
-        pattern = re.compile('|'.join(r'\b%s\b' % k for k in pit_of_success_helpers.keys()))
+        pattern = re.compile('|'.join(fr'\b{k}\b' for k in pit_of_success_helpers.keys()))
         obj = pattern.sub(replace, obj)
         try:
             _, score, url = fuzzy.extract_one(obj, self._rtfm_cache, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
@@ -166,7 +166,7 @@ class API:
             count = record['count']
 
         e.add_field(name='Uses', value=count)
-        e.add_field(name='Percentage', value='{:.2%} out of {}'.format(count / total_uses, total_uses))
+        e.add_field(name='Percentage', value=f'{count/total_uses:.2%} out of {total_uses}')
         e.colour = discord.Colour.blurple()
         await ctx.send(embed=e)
 
@@ -184,18 +184,18 @@ class API:
         records = await ctx.db.fetch(query)
 
         output = []
-        output.append('**Total uses**: ' + str(total_uses))
+        output.append(f'**Total uses**: {total_uses}')
 
         # first we get the most used users
         if records:
-            output.append('**Top {} users**:'.format(len(records)))
+            output.append(f'**Top {len(records)} users**:')
 
             for rank, (user_id, count) in enumerate(records, 1):
                 user = self.bot.get_user(user_id)
                 if rank != 10:
-                    output.append('{}\u20e3 {}: {}'.format(rank, user, count))
+                    output.append(f'{rank}\u20e3 {user}: {count}')
                 else:
-                    output.append('\N{KEYCAP TEN} {}: {}'.format(user, count))
+                    output.append(f'\N{KEYCAP TEN} {user}: {count}')
 
         await ctx.send('\n'.join(output))
 
@@ -242,8 +242,8 @@ class API:
             await ctx.send('This channel has no feeds.')
             return
 
-        fmt = 'Found {} feeds.\n{}'
-        await ctx.send(fmt.format(len(feeds), '\n'.join('- ' + r for r in feeds)))
+        names = '\n'.join(f'- {r}' for r in feeds)
+        await ctx.send(f'Found {len(feeds)} feeds.\n{names}')
 
     @_feeds.command(name='create')
     @commands.has_permissions(manage_roles=True)
@@ -276,7 +276,7 @@ class API:
             role = await ctx.guild.create_role(name=role_name, permissions=discord.Permissions.none())
             query = 'INSERT INTO feeds (role_id, channel_id, name) VALUES ($1, $2, $3);'
             await con.execute(query, role.id, ctx.channel.id, name)
-            await ctx.send(ctx.tick(True) + ' Successfully created feed.')
+            await ctx.send(f'{ctx.tick(True)} Successfully created feed.')
 
     @_feeds.command(name='delete', aliases=['remove'])
     @commands.has_permissions(manage_roles=True)
@@ -302,7 +302,7 @@ class API:
                 except discord.HTTPException:
                     continue
 
-        await ctx.send(ctx.tick(True) + ' Removed feed.')
+        await ctx.send(f'{ctx.tick(True)} Removed feed.')
 
     async def do_subscription(self, ctx, feed, action):
         feeds = await self.get_feeds(ctx.channel.id)
@@ -311,7 +311,7 @@ class API:
             return
 
         if feed not in feeds:
-            await ctx.send('This feed does not exist.\nValid feeds: ' + ', '.join(feeds))
+            await ctx.send(f'This feed does not exist.\nValid feeds: {", ".join(feeds)}')
             return
 
         role_id = feeds[feed]
@@ -377,8 +377,7 @@ class API:
         await role.edit(mentionable=True)
 
         # then send the message..
-        msg = '{0.mention}: {1}'.format(role, content)[:2000]
-        await ctx.send(msg)
+        await ctx.send(f'{role.mention}: {content}'[:2000])
 
         # then make the role unmentionable
         await role.edit(mentionable=False)
@@ -407,7 +406,7 @@ class API:
         if len(matches) == 0:
             return await ctx.send('Nothing found...')
 
-        fmt = '\n'.join('**%s**\n%s' % (key, value) for key, _, value in matches)
+        fmt = '\n'.join(f'**{key}**\n{value}' for key, _, value in matches)
         await ctx.send(fmt)
 
 def setup(bot):

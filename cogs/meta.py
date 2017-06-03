@@ -23,18 +23,16 @@ class Meta:
     async def charinfo(self, ctx, *, characters: str):
         """Shows you information about a number of characters.
 
-        Only up to 15 characters at a time.
+        Only up to 25 characters at a time.
         """
 
-        if len(characters) > 15:
-            return await ctx.send('Too many characters ({}/15)'.format(len(characters)))
-
-        fmt = '`\\U{0:>08}`: {1} - {2} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{0}>'
+        if len(characters) > 25:
+            return await ctx.send(f'Too many characters ({len(characters)}/25)')
 
         def to_string(c):
-            digit = format(ord(c), 'x')
+            digit = f'{ord(c):x}'
             name = unicodedata.name(c, 'Name not found.')
-            return fmt.format(digit, name, c)
+            return f'`\\U{digit:>08}`: {name} - {c} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{digit}>'
 
         await ctx.send('\n'.join(map(to_string, characters)))
 
@@ -65,7 +63,7 @@ class Meta:
             location = obj.callback.__module__.replace('.', '/') + '.py'
             source_url = 'https://github.com/Rapptz/discord.py'
 
-        final_url = '<{}/blob/rewrite/{}#L{}-L{}>'.format(source_url, location, firstlineno, firstlineno + len(lines) - 1)
+        final_url = f'<{source_url}/blob/rewrite/{location}#L{firstlineno}-L{firstlineno + len(lines) - 1}>'
         await ctx.send(final_url)
 
     @commands.command(name='quit', hidden=True)
@@ -93,15 +91,14 @@ class Meta:
         if voice is not None:
             vc = voice.channel
             other_people = len(vc.members) - 1
-            voice_fmt = '{} with {} others' if other_people else '{} by themselves'
-            voice = voice_fmt.format(vc.name, other_people)
+            voice = f'{vc.name} with {other_people} others' if other_people else f'{vc.name} by themselves'
         else:
             voice = 'Not connected.'
 
         e.set_author(name=str(member))
         e.set_footer(text='Member since').timestamp = member.joined_at
         e.add_field(name='ID', value=member.id)
-        e.add_field(name='Servers', value='%s shared' % shared)
+        e.add_field(name='Servers', value=f'{shared} shared')
         e.add_field(name='Created', value=member.created_at)
         e.add_field(name='Voice', value=voice)
         e.add_field(name='Roles', value=', '.join(roles))
@@ -162,17 +159,17 @@ class Meta:
 
         e.add_field(name='Info', value='\n'.join(map(str, info)))
 
-        fmt = 'Text %s (%s secret)\nVoice %s (%s locked)'
-        e.add_field(name='Channels', value=fmt % (text_channels, secret_channels, voice_channels, secret_voice))
+        fmt = f'Text {text_channels} ({secret_channels} secret)\nVoice {voice_channels} ({secret_voice} locked)'
+        e.add_field(name='Channels', value=fmt)
 
-        fmt = '<:online:316856575413321728> {1[online]} ' \
-              '<:idle:316856575098880002> {1[idle]} ' \
-              '<:dnd:316856574868193281> {1[dnd]} ' \
-              '<:offline:316856575501402112> {1[offline]}\n' \
-              'Total: {0}'
+        fmt = f'<:online:316856575413321728> {member_by_status["online"]} ' \
+              f'<:idle:316856575098880002> {member_by_status["idle"]} ' \
+              f'<:dnd:316856574868193281> {member_by_status["dnd"]} ' \
+              f'<:offline:316856575501402112> {member_by_status["offline"]}\n' \
+              f'Total: {guild.member_count}'
 
-        e.add_field(name='Members', value=fmt.format(guild.member_count, member_by_status))
-        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else '%s roles' % len(roles))
+        e.add_field(name='Members', value=fmt)
+        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
         e.set_footer(text='Created').timestamp = guild.created_at
         await ctx.send(embed=e)
 

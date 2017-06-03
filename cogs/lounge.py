@@ -36,7 +36,7 @@ class CodeBlock:
             return cmds[language]
         except KeyError as e:
             if language:
-                fmt = 'Unknown language to compile for: {}'.format(language)
+                fmt = f'Unknown language to compile for: {language}'
             else:
                 fmt = 'Could not find a language to compile with.'
             raise commands.BadArgument(fmt) from e
@@ -85,8 +85,7 @@ class Lounge:
                 output = await resp.text(encoding='utf-8')
 
                 if len(output) < 1992:
-                    fmt = '```\n{}\n```'.format(output)
-                    await ctx.send(fmt)
+                    await ctx.send(f'```\n{output}\n```')
                     return
 
                 # output is too big so post it in gist
@@ -95,7 +94,7 @@ class Lounge:
                         await ctx.send('Could not create coliru shared link')
                     else:
                         shared_id = await r.text()
-                        await ctx.send('Output too big. Coliru link: http://coliru.stacked-crooked.com/a/' + shared_id)
+                        await ctx.send(f'Output too big. Coliru link: http://coliru.stacked-crooked.com/a/{shared_id}')
 
     @coliru.error
     async def coliru_error(self, ctx, error):
@@ -116,7 +115,7 @@ class Lounge:
 
         async with ctx.session.get(url, params=params) as resp:
             if resp.status != 200:
-                return await ctx.send('An error occurred (status code: {0.status}). Retry later.'.format(resp))
+                return await ctx.send(f'An error occurred (status code: {resp.status}). Retry later.')
 
             if len(resp.history) > 0:
                 return await ctx.send(resp.url)
@@ -128,8 +127,6 @@ class Lounge:
 
             description = []
             special_pages = []
-            fmt = '[`{0}`](http://en.cppreference.com{1})'
-            special_fmt = '[{}](http://en.cppreference.com{})'
             for node in nodes:
                 href = node.attrib['href']
                 if not href.startswith('/w/cpp'):
@@ -137,9 +134,9 @@ class Lounge:
 
                 if href.startswith(('/w/cpp/language', '/w/cpp/concept')):
                     # special page
-                    special_pages.append(special_fmt.format(node.text, href))
+                    special_pages.append(f'[{node.text}](http://en.cppreference.com{href})')
                 else:
-                    description.append(fmt.format(node.text, href))
+                    description.append(f'[`{node.text}`](http://en.cppreference.com{href})')
 
             if len(special_pages) > 0:
                 e.add_field(name='Language Results', value='\n'.join(special_pages), inline=False)

@@ -145,16 +145,14 @@ class Buttons:
                     values = (
                         str(first_value),
                         first_currency.text,
-                        '(%s)' % first_currency.get('value'),
+                        f'({first_currency.get("value")})',
                         '=',
                         str(second_value),
                         second_currency.text,
-                        '(%s)' % second_currency.get('value')
+                        f'({second_currency.get("value")})'
                     )
                     e.description = ' '.join(values)
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
+                except Exception:
                     return None
                 else:
                     return e
@@ -197,7 +195,7 @@ class Buttons:
             date = node.find("./div[@class='vk_gy vk_sh']")
             try:
                 e.title = node.find('span').text
-                e.description = '%s\n%s' % (time.text, ''.join(date.itertext()).strip())
+                e.description = f'{time.text}\n{"".join(date.itertext()).strip()}'
             except Exception:
                 return None
             else:
@@ -226,11 +224,11 @@ class Buttons:
                 for category in lexical_category:
                     definitions = xpath(category)
                     try:
-                        descrip = ['*%s*' % category.text]
+                        descrip = [f'*{category.text}*']
                         for index, value in enumerate(definitions, 1):
-                            descrip.append('%s. %s' % (index, value.text))
+                            descrip.append(f'{index}. {value.text}')
 
-                        e.add_field(name='{0.text} /{1.text}/'.format(word, pronunciation), value='\n'.join(descrip))
+                        e.add_field(name=f'{word.text} /{pronunciation.text}/', value='\n'.join(descrip))
                     except:
                         continue
 
@@ -349,7 +347,7 @@ class Buttons:
             await ctx.send(str(e))
         else:
             if card:
-                value = '\n'.join('[{}]({})'.format(title, url.replace(')', '%29')) for url, title in entries[:3])
+                value = '\n'.join(f'[{title}]({url.replace(")", "%29")})' for url, title in entries[:3])
                 if value:
                     card.add_field(name='Search Results', value=value, inline=False)
                 return await ctx.send(embed=card)
@@ -363,8 +361,8 @@ class Buttons:
                 first_entry = first_entry[:-1] + '%29'
 
             if next_two:
-                formatted = '\n'.join(map(lambda x: '<%s>' % x, next_two))
-                msg = '{}\n\n**See also:**\n{}'.format(first_entry, formatted)
+                formatted = '\n'.join(f'<{x}>' for x in next_two)
+                msg = f'{first_entry}\n\n**See also:**\n{formatted}'
             else:
                 msg = first_entry
 
@@ -394,13 +392,13 @@ class Buttons:
         e.timestamp = ctx.message.created_at
 
         if ctx.guild is not None:
-            e.add_field(name='Server', value='{0.name} (ID: {0.id})'.format(ctx.guild), inline=False)
+            e.add_field(name='Server', value=f'{ctx.guild.name} (ID: {ctx.guild.id})', inline=False)
 
-        e.add_field(name='Channel', value='{0} (ID: {0.id})'.format(ctx.channel), inline=False)
-        e.set_footer(text='Author ID: %s' % ctx.author.id)
+        e.add_field(name='Channel', value=f'{ctx.channel} (ID: {ctx.channel.id})', inline=False)
+        e.set_footer(text=f'Author ID: {ctx.author.id}')
 
         await channel.send(embed=e)
-        await ctx.send(ctx.tick(True) + ' Successfully sent feedback')
+        await ctx.send(f'{ctx.tick(True)} Successfully sent feedback')
 
     @commands.command()
     @commands.is_owner()
@@ -412,7 +410,7 @@ class Buttons:
         try:
             await user.send(fmt)
         except:
-            await ctx.send('Could not PM user by ID ' + user_id)
+            await ctx.send(f'Could not PM user by ID {user_id}.')
         else:
             await ctx.send('PM successfully sent.')
 
