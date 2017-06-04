@@ -32,9 +32,10 @@ initial_extensions = (
     # 'cogs.stars',
     'cogs.admin',
     'cogs.buttons',
+    'cogs.reminder',
     # 'cogs.pokemon',
     # 'cogs.permissions',
-    # 'cogs.stats',
+    'cogs.stats',
     # 'cogs.emoji',
 )
 
