@@ -201,6 +201,22 @@ class Buttons:
             else:
                 return e
 
+        # time in has an alternative form without spans
+        time = node.find("./div/div[@class='vk_bk vk_ans _nEd']")
+        if time is not None:
+            converted = "".join(time.itertext()).strip()
+            try:
+                # remove the in-between text
+                parent = time.getparent()
+                parent.remove(time)
+                original = "".join(parent.itertext()).strip()
+                e.title = 'Time Conversion'
+                e.description = f'{original}...\n{converted}'
+            except Exception:
+                return None
+            else:
+                return e
+
         # check for definition card
         words = node.xpath(".//span[@data-dobid='hdw']")
         if words:
@@ -300,14 +316,14 @@ class Buttons:
 
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
-            for bad in root.xpath('//style'):
-                bad.getparent().remove(bad)
+            # for bad in root.xpath('//style'):
+            #     bad.getparent().remove(bad)
 
-            for bad in root.xpath('//script'):
-                bad.getparent().remove(bad)
+            # for bad in root.xpath('//script'):
+            #     bad.getparent().remove(bad)
 
-            with open('google.html', 'w', encoding='utf-8') as f:
-                f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
+            # with open('google.html', 'w', encoding='utf-8') as f:
+            #     f.write(etree.tostring(root, pretty_print=True).decode('utf-8'))
 
             """
             Tree looks like this.. sort of..
