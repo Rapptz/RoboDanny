@@ -28,6 +28,17 @@ class Buttons:
         self.bot = bot
 
     @commands.command(hidden=True)
+    @commands.has_permissions(ban_members=True)
+    async def banrecchan(self):
+        """Bans @Recchan"""
+        recchan = discord.utils.get(ctx.server.members, id='163992386094104576')
+
+        if not recchan:
+            return # Recchan isn't in this server. Thank god.
+
+        await self.bot.ban(recchan, delete_message_days=0)
+
+    @commands.command(hidden=True)
     async def feelgood(self):
         """press"""
         await self.bot.say('*pressed*')
