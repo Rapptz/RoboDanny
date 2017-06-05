@@ -22,10 +22,6 @@ class Context(commands.Context):
     def session(self):
         return self.bot.session
 
-    @property
-    def db(self):
-        return self.bot.pool
-
     async def too_many_matches(self, matches, entry):
         await self.send('There are too many matches... Which one did you mean? **Only say the number**.')
         await self.send('\n'.join(map(entry, enumerate(matches, 1))))

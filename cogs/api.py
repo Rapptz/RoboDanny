@@ -261,22 +261,21 @@ class API:
 
         query = 'SELECT role_id FROM feeds WHERE channel_id=$1 AND name=$2;'
 
-        async with ctx.db.acquire() as con:
-            exists = await con.fetchrow(query, ctx.channel.id, name)
-            if exists is not None:
-                await ctx.send('This feed already exists.')
-                return
+        exists = await con.fetchrow(query, ctx.channel.id, name)
+        if exists is not None:
+            await ctx.send('This feed already exists.')
+            return
 
-            # create the role
-            if ctx.guild.id == DISCORD_API_ID:
-                role_name = self.library_name(ctx.channel) + ' ' + name
-            else:
-                role_name = name
+        # create the role
+        if ctx.guild.id == DISCORD_API_ID:
+            role_name = self.library_name(ctx.channel) + ' ' + name
+        else:
+            role_name = name
 
-            role = await ctx.guild.create_role(name=role_name, permissions=discord.Permissions.none())
-            query = 'INSERT INTO feeds (role_id, channel_id, name) VALUES ($1, $2, $3);'
-            await con.execute(query, role.id, ctx.channel.id, name)
-            await ctx.send(f'{ctx.tick(True)} Successfully created feed.')
+        role = await ctx.guild.create_role(name=role_name, permissions=discord.Permissions.none())
+        query = 'INSERT INTO feeds (role_id, channel_id, name) VALUES ($1, $2, $3);'
+        await con.execute(query, role.id, ctx.channel.id, name)
+        await ctx.send(f'{ctx.tick(True)} Successfully created feed.')
 
     @_feeds.command(name='delete', aliases=['remove'])
     @commands.has_permissions(manage_roles=True)

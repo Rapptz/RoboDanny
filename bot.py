@@ -83,7 +83,13 @@ class RoboDanny(commands.AutoShardedBot):
             return
 
         ctx = await self.get_context(message, cls=context.Context)
-        await self.invoke(ctx)
+
+        if ctx.command is None:
+            return
+
+        async with self.pool.acquire() as con:
+            ctx.db = con
+            await self.invoke(ctx)
 
     def only_me_for_rewrite(self, ctx):
         return ctx.author.id == 80088516616269824
