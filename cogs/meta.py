@@ -109,9 +109,11 @@ class Meta:
 
         await ctx.send(embed=e)
 
-    @info.command(name='guild', aliases=['server'])
+    @info.command(name='server', aliases=['guild'])
     @commands.guild_only()
-    async def guild_info(self, ctx):
+    async def server_info(self, ctx):
+        """Shows info about the current server."""
+
         guild = ctx.guild
         roles = [role.name.replace('@', '@\u200b') for role in guild.roles]
 
