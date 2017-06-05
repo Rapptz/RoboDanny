@@ -223,6 +223,7 @@ class Meta:
         """Joins a server."""
         perms = discord.Permissions.none()
         perms.read_messages = True
+        perms.external_emojis = True
         perms.send_messages = True
         perms.manage_roles = True
         perms.ban_members = True
@@ -232,7 +233,7 @@ class Meta:
         perms.read_message_history = True
         perms.attach_files = True
         perms.add_reactions = True
-        await ctx.send(discord.utils.oauth_url(self.bot.client_id, perms))
+        await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, perms)}>')
 
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()
