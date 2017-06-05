@@ -23,22 +23,26 @@ else:
 
 @contextlib.contextmanager
 def setup_logging():
-    # __enter__
-    logging.getLogger('discord').setLevel(logging.INFO)
-    logging.getLogger('discord.http').setLevel(logging.DEBUG)
+    try:
+        # __enter__
+        logging.getLogger('discord').setLevel(logging.INFO)
+        logging.getLogger('discord.http').setLevel(logging.DEBUG)
 
-    log = logging.getLogger()
-    log.setLevel(logging.INFO)
-    handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
-    dt_fmt = '%Y-%m-%d %H:%M:%S'
-    fmt = logging.Formatter('[{asctime}] [{levelname:<7}] {name}: {message}', dt_fmt, style='{')
-    handler.setFormatter(fmt)
-    log.addHandler(handler)
+        log = logging.getLogger()
+        log.setLevel(logging.INFO)
+        handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
+        dt_fmt = '%Y-%m-%d %H:%M:%S'
+        fmt = logging.Formatter('[{asctime}] [{levelname:<7}] {name}: {message}', dt_fmt, style='{')
+        handler.setFormatter(fmt)
+        log.addHandler(handler)
 
-    yield
-
-    # __exit__
-    logging.shutdown()
+        yield
+    finally:
+        # __exit__
+        handlers = log.handlers[:]
+        for hdlr in handlers:
+            hdlr.close()
+            log.removeHandler(hdlr)
 
 def run():
     loop = asyncio.get_event_loop()
