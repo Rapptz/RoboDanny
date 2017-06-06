@@ -1,6 +1,7 @@
 from discord.ext import commands
 import discord
 from cogs.utils import checks, context, db
+from cogs.utils.config import Config
 import datetime, re
 import json, asyncio
 import copy
@@ -39,9 +40,19 @@ initial_extensions = (
     # 'cogs.emoji',
 )
 
+def _prefix_callable(bot, msg):
+    user_id = bot.user.id
+    base = [f'<@!{user_id}> ', f'<@{user_id}> ']
+    if msg.guild is None:
+        base.append('!')
+        base.append('?')
+    else:
+        base.extend(bot.prefixes.get(msg.guild.id, ['?', '!']))
+    return base
+
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
-        super().__init__(command_prefix=commands.when_mentioned_or('?'), description=description,
+        super().__init__(command_prefix=_prefix_callable, description=description,
                          pm_help=None, help_attrs=dict(hidden=True))
 
         self.client_id = config.client_id
@@ -50,7 +61,9 @@ class RoboDanny(commands.AutoShardedBot):
         self.session = aiohttp.ClientSession(loop=self.loop)
 
         self.add_command(self.do)
-        self.add_check(self.only_me_for_rewrite)
+        # self.add_check(self.only_me_for_rewrite)
+        # guild_id: list
+        self.prefixes = Config('prefixes.json')
 
         for extension in initial_extensions:
             try:
@@ -68,6 +81,22 @@ class RoboDanny(commands.AutoShardedBot):
             print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
             traceback.print_tb(error.original.__traceback__)
             print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
+
+    def get_guild_prefixes(self, guild, *, local_inject=_prefix_callable):
+        proxy_msg = discord.Object(id=None)
+        proxy_msg.guild = guild
+        return local_inject(self, proxy_msg)
+
+    def get_raw_guild_prefixes(self, guild_id):
+        return self.prefixes.get(guild_id, ['?', '!'])
+
+    async def set_guild_prefixes(self, guild, prefixes):
+        if len(prefixes) == 0:
+            await self.prefixes.put(guild.id, [])
+        elif len(prefixes) > 10:
+            raise RuntimeError('Cannot have more than 10 custom prefixes.')
+        else:
+            await self.prefixes.put(guild.id, sorted(set(prefixes), reverse=True))
 
     async def on_ready(self):
         if not hasattr(self, 'uptime'):
