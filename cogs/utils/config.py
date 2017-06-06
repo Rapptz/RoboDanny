@@ -59,23 +59,23 @@ class Config:
 
     def get(self, key, *args):
         """Retrieves a config entry."""
-        return self._db.get(key, *args)
+        return self._db.get(str(key), *args)
 
     async def put(self, key, value, *args):
         """Edits a config entry."""
-        self._db[key] = value
+        self._db[str(key)] = value
         await self.save()
 
     async def remove(self, key):
         """Removes a config entry."""
-        del self._db[key]
+        del self._db[str(key)]
         await self.save()
 
     def __contains__(self, item):
-        return item in self._db
+        return str(item) in self._db
 
     def __getitem__(self, item):
-        return self._db[item]
+        return self._db[str(item)]
 
     def __len__(self):
         return len(self._db)
