@@ -148,7 +148,7 @@ class API:
 
         await ctx.send('\n'.join(url for _, __, url in matches))
 
-        if ctx.guild.id == DISCORD_API_ID:
+        if ctx.guild and ctx.guild.id == DISCORD_API_ID:
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
 
