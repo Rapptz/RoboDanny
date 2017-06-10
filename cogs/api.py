@@ -142,12 +142,11 @@ class API:
 
         pattern = re.compile('|'.join(fr'\b{k}\b' for k in pit_of_success_helpers.keys()))
         obj = pattern.sub(replace, obj)
-        try:
-            _, score, url = fuzzy.extract_one(obj, self._rtfm_cache, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
-        except:
+        matches = fuzzy.extract_matches(obj, self._rtfm_cache, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
+        if len(matches) == 0:
             return await ctx.send('Could not find anything. Sorry.')
 
-        await ctx.send(url)
+        await ctx.send('\n'.join(url for _, __, url in matches))
 
         if ctx.guild.id == DISCORD_API_ID:
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
