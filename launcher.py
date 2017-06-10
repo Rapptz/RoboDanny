@@ -3,6 +3,7 @@ import click
 import logging
 import asyncio
 import asyncpg
+import discord
 import importlib
 import contextlib
 
@@ -91,15 +92,15 @@ def initdb(extension, quiet):
         try:
             importlib.import_module(ext)
         except Exception:
-            click.echo('Could not load %s.\n%s' % (ext, traceback.format_exc()), err=True)
+            click.echo(f'Could not load {ext}.\n{traceback.format_exc()}', err=True)
 
     for table in db.Table.all_tables():
         try:
             run(table.create(verbose=not quiet))
         except Exception:
-            click.echo('Could not create %s.\n%s' % (table.__tablename__, traceback.format_exc()), err=True)
+            click.echo(f'Could not create {table.__tablename__}.\n{traceback.format_exc()}', err=True)
         else:
-            click.echo('[{0.__module__}] Processing creation or migration for {0.__tablename__} complete.'.format(table))
+            click.echo(f'[{table.__module__}] Processing creation or migration for {table.__tablename__} complete.')
 
 async def remove_database(name):
     try:
@@ -108,7 +109,7 @@ async def remove_database(name):
         pass
     else:
         # I know that looks odd, but I can't use $1 with DROP TABLE.
-        await con.execute('DROP TABLE %s;' % name)
+        await con.execute(f'DROP TABLE {name};')
         await con.close()
 
 @main.command(short_help='removes a table')
@@ -131,7 +132,7 @@ def dropdb(name, quiet):
     try:
         run(remove_database(name))
     except Exception:
-        click.echo('could not delete the database\n' + traceback.format_exc(), err=True)
+        click.echo(f'could not delete the database\n{traceback.format_exc()}', err=True)
         return
 
     if not migration.exists() or not current.exists():
@@ -147,7 +148,7 @@ def dropdb(name, quiet):
     except:
         click.echo('warning: could not delete current migration file')
 
-    click.echo('successfully removed %s database' % name)
+    click.echo(f'successfully removed {name} database')
 
 @main.command(short_help='migrates from JSON files')
 @click.argument('name')
@@ -160,6 +161,9 @@ def convertjson(ctx, name):
 
     Note, this deletes all previous entries in the table
     so you can consider this to be a destructive decision.
+
+    This also connects us to Discord itself so we can
+    use the cache for our migrations.
 
     The point of this is just to do some migration of the
     data from v3 -> v4 once and call it a day.
@@ -176,7 +180,7 @@ def convertjson(ctx, name):
         try:
             to_run = getattr(data_migrators, 'migrate_' + name)
         except AttributeError:
-            click.echo('invalid cog name given, %s.' % name, err=True)
+            click.echo(f'invalid cog name given, {name}.', err=True)
             return
         to_run = [(to_run, name)]
 
@@ -186,20 +190,27 @@ def convertjson(ctx, name):
     try:
         pool = run(create_pool())
     except Exception:
-        click.echo('Could not create PostgreSQL connection pool.\n' + traceback.format_exc(), err=True)
+        click.echo(f'Could not create PostgreSQL connection pool.\n{traceback.format_exc()}', err=True)
         return
+
+    client = discord.AutoShardedClient()
+
+    @client.event
+    async def on_ready():
+        click.echo(f'successfully booted up bot {client.user} (ID: {client.user.id})')
+        await client.logout()
 
     extensions = ['cog.' + name for _, name in to_run]
     ctx.invoke(initdb, extension=extensions)
 
     for migrator, _ in to_run:
         try:
-            run(migrator(pool))
+            run(migrator(pool, client))
         except Exception:
-            click.echo('migrator %s has failed, terminating\n%s' % (migrator.__name__, traceback.format_exc()), err=True)
+            click.echo(f'migrator {migrator.__name__} has failed, terminating\n{traceback.format_exc()}', err=True)
             return
         else:
-            click.echo('migrator %s completed successfully' % migrator.__name__)
+            click.echo(f'migrator {migrator.__name__} completed successfully')
 
 if __name__ == '__main__':
     main()
