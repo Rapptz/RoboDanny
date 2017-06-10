@@ -243,6 +243,30 @@ class ForeignKey(SQLType):
             return '{0.sql_type} REFERENCES {0.table} ({0.column})'.format(self)
         return '{0.sql_type} REFERENCES {0.table}'.format(self)
 
+class Array(SQLType):
+    python = list
+
+    def __init__(self, sql_type):
+        if inspect.isclass(sql_type):
+            sql_type = sql_type()
+
+        if not isinstance(sql_type, SQLType):
+            raise TypeError('Cannot have non-SQLType derived sql_type')
+
+        if not sql_type.is_real_type():
+            raise SchemaError('sql_type must be a "real" type')
+
+        self.sql_type = sql_type.to_sql()
+
+    def to_sql(self):
+        return '{0.sql_type} ARRAY'.format(self)
+
+    def is_real_type(self):
+        # technically, it is a real type
+        # however, it doesn't play very well with migrations
+        # so we're going to pretend that it isn't
+        return False
+
 class Column:
     __slots__ = ( 'column_type', 'index', 'primary_key', 'nullable',
                   'default', 'unique', 'name', 'index_name' )

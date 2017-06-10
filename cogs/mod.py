@@ -1,6 +1,6 @@
 from discord.ext import commands
-from .utils import config, checks
-from .utils.formats import human_timedelta
+from .utils import checks, db, time, cache
+from .utils.paginator import Pages
 from collections import Counter, defaultdict
 from inspect import cleandoc
 
@@ -15,9 +15,37 @@ import logging
 
 log = logging.getLogger(__name__)
 
+## Misc utilities
+
 class Arguments(argparse.ArgumentParser):
     def error(self, message):
         raise RuntimeError(message)
+
+class LazyEntity:
+    """This is meant for use with the Paginator.
+
+    It lazily computes __str__ when requested and
+    caches it so it doesn't do the lookup again.
+    """
+    __slots__ = ('entity_id', 'guild', '_cache')
+
+    def __init__(self, guild, entity_id):
+        self.entity_id = entity_id
+        self.guild = guild
+        self._cache = None
+
+    def __str__(self):
+        if self._cache:
+            return self._cache
+
+        e = self.entity_id
+        g = self.guild
+        resolved = g.get_channel(e) or g.get_member(e)
+        if resolved is None:
+            self._cache = f'<Not Found: {e}>'
+        else:
+            self._cache = resolved.mention
+        return self._cache
 
 class RaidMode(enum.Enum):
     off = 0
@@ -27,70 +55,135 @@ class RaidMode(enum.Enum):
     def __str__(self):
         return self.name
 
-def object_hook(obj):
-    if '__raids__' in obj:
-        raids = obj['__raids__']
-        obj['__raids__'] = { k: (RaidMode(mode), v) for k, (mode, v) in raids.items() }
-        return obj
-    else:
-        return obj
+## Tables
 
-class RaidModeEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, RaidMode):
-            return o.value
+class GuildConfig(db.Table, table_name='guild_mod_config'):
+    id = db.Column(db.Integer(big=True), primary_key=True)
+    raid_mode = db.Column(db.Integer(small=True))
+    broadcast_channel = db.Column(db.Integer(big=True))
+    mention_count = db.Column(db.Integer(small=True))
+    safe_mention_channel_ids = db.Column(db.Array(db.Integer(big=True)))
 
-        super().default(o)
+class Plonks(db.Table):
+    id = db.PrimaryKeyColumn()
+    guild_id = db.Column(db.Integer(big=True), index=True)
+
+    # this can either be a channel_id or an author_id
+    entity_id = db.Column(db.Integer(big=True), index=True, unique=True)
+
+## Converters
+
+class ChannelOrMember(commands.Converter):
+    async def convert(self, ctx, argument):
+        try:
+            return await commands.TextChannelConverter().convert(ctx, argument)
+        except commands.BadArgument:
+            return await commands.MemberConverter().convert(ctx, argument)
+
+class MemberID(commands.Converter):
+    async def convert(self, ctx, argument):
+        try:
+            m = await commands.MemberConverter().convert(ctx, argument)
+            return m.id
+        except commands.BadArgument:
+            try:
+                return int(argument, base=10)
+            except ValueError:
+                raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
+
+class BannedMember(commands.Converter):
+    async def convert(self, ctx, argument):
+        ban_list = await ctx.guild.bans()
+        try:
+            member_id = int(argument, base=10)
+            entity = discord.utils.find(lambda u: u.user.id == member_id, ban_list)
+        except ValueError:
+            entity = discord.utils.find(lambda u: str(u.user) == argument, ban_list)
+
+        if entity is None:
+            raise commands.BadArgument("Not a valid previously-banned member.")
+        return entity
+
+class ActionReason(commands.Converter):
+    async def convert(self, ctx, argument):
+        ret = f'{ctx.author} (ID: {ctx.author.id}): {argument}'
+
+        if len(ret) > 256:
+            reason_max = 256 - len(ret) - len(argument)
+            raise commands.BadArgument(f'reason is too long ({len(argument)}/{reason_max})')
+        return ret
+
+## The actual cog
 
 class Mod:
     """Moderation related commands."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = config.Config('mod.json', loop=bot.loop, object_hook=object_hook, encoder=RaidModeEncoder)
+        db.create_tables(GuildConfig, Plonks, loop=bot.loop)
 
         # guild_id: set(user_id)
         self._recently_kicked = defaultdict(set)
 
-    def bot_user(self, message):
-        return message.server.me if message.channel.is_private else self.bot.user
+    def __repr__(self):
+        return '<cogs.Mod>'
 
-    def is_plonked(self, server, member):
-        db = self.config.get('plonks', {}).get(server.id, [])
-        bypass_ignore = member.server_permissions.manage_server
-        if not bypass_ignore and member.id in db:
-            return True
-        return False
-
-    def __check(self, ctx):
-        msg = ctx.message
-        if checks.is_owner_check(msg):
-            return True
-
-        # user is bot banned
-        if msg.server:
-            if self.is_plonked(msg.server, msg.author):
-                return False
-
-        # check if the channel is ignored
-        # but first, resolve their permissions
-
-        perms = msg.channel.permissions_for(msg.author)
-        bypass_ignore = perms.administrator
-
-        # now we can finally realise if we can actually bypass the ignore.
-
-        if not bypass_ignore and msg.channel.id in self.config.get('ignored', []):
+    async def is_plonked(self, guild, member, *, channel=None, connection=None, check_bypass=True):
+        if check_bypass and member.guild_permissions.manage_guild:
             return False
 
-        return True
+        if connection is None:
+            connection = self.bot.pool
 
-    async def check_raid(self, guild, member, timestamp):
-        if not isinstance(member, discord.Member):
-            return
+        if channel is None:
+            query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id=$2;"
+            row = await connection.fetchrow(query, guild.id, member.id)
+        else:
+            query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id IN ($2, $3);"
+            row = await connection.fetchrow(query, guild.id, member.id, channel.id)
 
-        raids = self.config.get('__raids__', {}).get(guild.id, (RaidMode.off, None))
-        if raids[0] is not RaidMode.strict:
+        print(row)
+        return row is not None
+
+    async def __global_check(self, ctx):
+        if ctx.guild is None:
+            return True
+
+        is_owner = await ctx.bot.is_owner(ctx.author)
+        if is_owner:
+            return True
+
+        # see if they can bypass:
+        bypass = ctx.author.guild_permissions.manage_guild
+        if bypass:
+            return True
+
+        # check if we're plonked
+        is_plonked = await self.is_plonked(ctx.guild, ctx.author, channel=ctx.channel,
+                                                                  connection=ctx.db, check_bypass=False)
+
+        return not is_plonked
+
+    async def __error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.send(error)
+        elif isinstance(error, commands.CommandInvokeError):
+            original = error.original
+            if isinstance(original, discord.Forbidden):
+                await ctx.send('I do not have permission to execute this action.')
+            elif isinstance(original, discord.NotFound):
+                await ctx.send(f'This entity does not exist: {original.text}')
+            elif isinstance(original, discord.HTTPException):
+                await ctx.send('Somehow, an unexpected error occurred. Try again later?')
+
+    @cache.lru_cache()
+    async def get_guild_settings(self, guild_id):
+        query = """SELECT * FROM guild_mod_config WHERE id=$1;"""
+        async with self.bot.pool.acquire() as con:
+            return await con.fetchrow(query, guild_id)
+
+    async def check_raid(self, settings, guild, member, timestamp):
+        if settings['raid_mode'] != RaidMode.strict.value:
             return
 
         delta  = (member.joined_at - member.created_at).total_seconds() // 60
@@ -105,82 +198,95 @@ class Mod:
         if delta > 30:
             return
 
-        fmt = """Howdy. The server {0.name} is currently in a raid mode lockdown.
-
-              A raid is when a server is being bombarded with trolls or low effort posts.
-              Unfortunately, what this means is that you have been automatically kicked for
-              meeting the suspicious thresholds currently set.
-
-              **Do not worry though, as you will be able to join again in the future!**
-
-              Please use this invite in an hour or so when things have cooled down! {1}
-              """
-
         try:
-            invite = await self.bot.create_invite(guild, max_uses=1, unique=True)
-            fmt = cleandoc(fmt).format(guild, invite)
-            await self.bot.send_message(member, fmt)
+            invite = await guild.create_invite(max_uses=1, unique=True)
+            fmt = f"""Howdy. The server {guild.name} is currently in a raid mode lockdown.
+
+                   A raid is when a server is being bombarded with trolls or low effort posts.
+                   Unfortunately, what this means is that you have been automatically kicked for
+                   meeting the suspicious thresholds currently set.
+
+                   **Do not worry though, as you will be able to join again in the future!**
+
+                   Please use this invite in an hour or so when things have cooled down! {invite}
+                   """
+
+            fmt = cleandoc(fmt)
+            await member.send(fmt)
         except discord.HTTPException:
             pass
 
         # kick anyway
-        channel = self.bot.get_channel(raids[1])
         try:
-            await self.bot.kick(member)
+            await member.kick(reason='Strict raid mode')
         except discord.HTTPException:
-            log.info('[Raid Mode] Failed to kick {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
-            await self.bot.send_message(channel, 'Failed to kick {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
+            log.info(f'[Raid Mode] Failed to kick {member} (ID: {member.id}) from server {member.guild} via strict mode.')
         else:
-            log.info('[Raid Mode] Kicked {0} (ID: {0.id}) from server {0.server} via strict mode.'.format(member))
-            await self.bot.send_message(channel, 'Kicked {0} (ID: {0.id}) from the server via strict raid mode.'.format(member))
+            log.info(f'[Raid Mode] Kicked {member} (ID: {member.id}) from server {member.guild} via strict mode.')
             self._recently_kicked[guild.id].add(member.id)
 
     async def on_message(self, message):
-        if message.author == self.bot.user or checks.is_owner_check(message):
+        author = message.author
+        if author.id in (self.bot.user.id, self.bot.owner_id):
             return
 
-        if message.server is None:
+        if message.guild is None:
+            return
+
+        if not isinstance(author, discord.Member):
+            return
+
+        # we're going to ignore members with roles
+        if len(author.roles) > 1:
+            return
+
+        guild_id = message.guild.id
+        settings = await self.get_guild_settings(guild_id)
+        if settings is None:
             return
 
         # check for raid mode stuff
-        await self.check_raid(message.server, message.author, message.timestamp)
+        await self.check_raid(settings, message.guild, author, message.created_at)
 
         # auto-ban tracking for mention spams begin here
-
         if len(message.mentions) <= 3:
             return
 
-        counts = self.config.get('mentions', {})
-        settings = counts.get(message.server.id)
-        if settings is None:
+        if not settings['mention_count']:
             return
 
         # check if it meets the thresholds required
         mention_count = sum(not m.bot for m in message.mentions)
-        if mention_count < settings['count']:
+        if mention_count < settings['mention_count']:
             return
 
-        if message.channel.id in settings.get('ignored', []):
+        ignored_channels = settings['safe_mention_channel_ids'] or []
+        if message.channel.id in ignored_channels:
             return
 
         try:
-            await self.bot.ban(message.author)
+            await author.ban(reason=f'Spamming mentions ({mention_count} mentions)')
         except Exception as e:
-            log.info('Failed to autoban member {0.author} (ID: {0.author.id}) in server {0.server}'.format(message))
+            log.info(f'Failed to autoban member {author} (ID: {author.id}) in guild ID {guild_id}')
         else:
-            fmt = '{0} (ID: {0.id}) has been banned for spamming mentions ({1} mentions).'
-            await self.bot.send_message(message.channel, fmt.format(message.author, len(message.mentions)))
-            log.info('Member {0.author} (ID: {0.author.id}) has been autobanned from server {0.server}'.format(message))
+            await message.channel.send(f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.')
+            log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
 
-    async def on_voice_state_update(self, before, after):
+    async def on_voice_state_update(self, user, before, after):
+        if not isinstance(user, discord.Member):
+            return
+
         # joined a voice channel
-        if before.voice_channel is None and after.voice_channel is not None:
-            await self.check_raid(after.server, after, datetime.datetime.utcnow())
+        if before.channel is None and after.channel is not None:
+            settings = await self.get_guild_settings(user.guild.id)
+            if settings is None:
+                return
+
+            await self.check_raid(settings, user.guild, after, datetime.datetime.utcnow())
 
     async def on_member_join(self, member):
-        raids = self.config.get('__raids__', {})
-        data = raids.get(member.server.id, (RaidMode.off, None))
-        if data[0] is RaidMode.off:
+        settings = await self.get_guild_settings(member.guild.id)
+        if settings is None or not settings['raid_mode']:
             return
 
         now = datetime.datetime.utcnow()
@@ -189,7 +295,7 @@ class Mod:
         created = (now - member.created_at).total_seconds() // 60
         was_kicked = False
 
-        if data[0] is RaidMode.strict:
+        if settings['raid_mode'] == RaidMode.strict.value:
             was_kicked = self._recently_kicked.get(member.server.id)
             if was_kicked is not None:
                 try:
@@ -211,16 +317,17 @@ class Mod:
                 colour = 0xdda453 # yellow
 
         e = discord.Embed(title=title, colour=colour)
-        e.timestamp = member.created_at
+        e.timestamp = now
         e.set_footer(text='Created')
-        e.set_author(name=str(member), icon_url=member.avatar_url or member.default_avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar_url)
         e.add_field(name='Created', value=human_timedelta(member.created_at))
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
-        channel = self.bot.get_channel(data[1])
-        await self.bot.send_message(channel, embed=e)
+        channel = self.bot.get_channel(settings['broadcast_channel'])
+        await channel.send(embed=e)
 
-    @commands.command(pass_context=True, no_pm=True, aliases=['newmembers'])
+    @commands.command(aliases=['newmembers'])
+    @commands.guild_only()
     async def newusers(self, ctx, *, count=5):
         """Tells you the newest members of the server.
 
@@ -229,43 +336,44 @@ class Mod:
 
         The count parameter can only be up to 25.
         """
-        guild = ctx.message.server
         count = max(min(count, 25), 5)
 
-        members = sorted(guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
+        members = sorted(ctx.guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
 
         e = discord.Embed(title='New Members', colour=discord.Colour.green())
 
         for member in members:
-            body = 'joined {0}, created {1}'.format(human_timedelta(member.joined_at),
-                                                    human_timedelta(member.created_at))
-            e.add_field(name='{0} (ID: {0.id})'.format(member), value=body, inline=False)
+            body = f'joined {time.human_timedelta(member.joined_at)}, created {time.human_timedelta(member.created_at)}'
+            e.add_field(name=f'{member} (ID: {member.id})', value=body, inline=False)
 
-        await self.bot.say(embed=e)
+        await ctx.send(embed=e)
 
-    @commands.group(aliases=['raids'], pass_context=True, invoke_without_command=True, no_pm=True)
-    @checks.admin_or_permissions(manage_server=True)
+    @commands.group(aliases=['raids'], invoke_without_command=True)
+    @checks.is_mod()
     async def raid(self, ctx):
         """Controls raid mode on the server.
 
         Calling this command with no arguments will show the current raid
         mode information.
 
-        You must have Manage Server permissions or have the Bot Admin role
-        to use this command or its subcommands.
+        You must have Manage Server permissions to use this command or
+        its subcommands.
         """
 
-        raids = self.config.get('__raids__', {})
-        # Raid data is [type, channel_id?], i.e. a tuple
-        data = raids.get(ctx.message.server.id, (RaidMode.off, None))
+        query = "SELECT raid_mode, broadcast_channel FROM guild_mod_config WHERE id=$1;"
 
-        fmt = 'Raid Mode: {}\nBroadcast Channel: {}'
-        ch = '<#%s>' % data[1] if data[1] else None
-        await self.bot.say(fmt.format(data[0], ch))
+        row = await ctx.db.fetchrow(query, ctx.guild.id)
+        if row is None:
+            fmt = 'Raid Mode: off\nBroadcast Channel: None'
+        else:
+            ch = f'<#{row[1]}>' if row[1] else None
+            fmt = f'Raid Mode: {RaidMode(row[0])}\nBroadcast Channel: {ch}'
 
-    @raid.command(name='on', aliases=['enable', 'enabled'], pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def raid_on(self, ctx, *, channel: discord.Channel = None):
+        await ctx.send(fmt)
+
+    @raid.command(name='on', aliases=['enable', 'enabled'])
+    @checks.is_mod()
+    async def raid_on(self, ctx, *, channel: discord.TextChannel = None):
         """Enables basic raid mode on the server.
 
         When enabled, server verification level is set to table flip
@@ -276,26 +384,25 @@ class Mod:
         messages on the channel this command was used in.
         """
 
-        if channel is None:
-            channel = ctx.message.channel
+        channel = channel or ctx.channel
 
-        if channel.type is not discord.ChannelType.text:
-            return await self.bot.say('That is not a text channel.')
-
-        guild = ctx.message.server
         try:
-            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.high)
+            await ctx.guild.edit(verification_level=discord.VerificationLevel.high)
         except discord.HTTPException:
-            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+            await ctx.send('\N{WARNING SIGN} Could not set verification level.')
 
-        raids = self.config.get('__raids__', {})
-        raids[guild.id] = (RaidMode.on, channel.id)
-        await self.config.put('__raids__', raids)
-        fmt = 'Raid mode enabled. Broadcasting join messages to %s.' % channel.mention
-        await self.bot.say(fmt)
+        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                   VALUES ($1, $2, $3) ON CONFLICT (id)
+                   DO UPDATE SET
+                        raid_mode = EXCLUDED.raid_mode,
+                        broadcast_channel = EXCLUDED.broadcast_channel;
+                """
 
-    @raid.command(name='off', aliases=['disable', 'disabled'], pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_server=True)
+        await ctx.db.execute(query, ctx.guild.id, RaidMode.on.value, channel.id)
+        await ctx.send(f'Raid mode enabled. Broadcasting join messages to {channel.mention}.')
+
+    @raid.command(name='off', aliases=['disable', 'disabled'])
+    @checks.is_mod()
     async def raid_off(self, ctx):
         """Disables raid mode on the server.
 
@@ -304,22 +411,25 @@ class Mod:
         join messages.
         """
 
-        guild = ctx.message.server
-
         try:
-            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.low)
+            await ctx.guild.edit(verification_level=discord.VerificationLevel.low)
         except discord.HTTPException:
-            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+            await ctx.send('\N{WARNING SIGN} Could not set verification level.')
 
-        raids = self.config.get('__raids__', {})
-        raids[guild.id] = (RaidMode.off, None)
-        self._recently_kicked.pop(guild.id, None)
-        await self.config.put('__raids__', raids)
-        await self.bot.say('Raid mode disabled. No longer broadcasting join messages.')
+        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                   VALUES ($1, $2, NULL) ON CONFLICT (id)
+                   DO UPDATE SET
+                        raid_mode = EXCLUDED.raid_mode,
+                        broadcast_channel = NULL;
+                """
 
-    @raid.command(name='strict', pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def raid_strict(self, ctx, *, channel: discord.Channel = None):
+        await ctx.db.execute(query, ctx.guild.id, RaidMode.off.value)
+        self._recently_kicked.pop(ctx.guild.id, None)
+        await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
+
+    @raid.command(name='strict')
+    @checks.is_mod()
+    async def raid_strict(self, ctx, *, channel: discord.TextChannel = None):
         """Enables strict raid mode on the server.
 
         Strict mode is similar to regular enabled raid mode, with the added
@@ -336,85 +446,90 @@ class Mod:
         If this is considered too strict, it is recommended to fall back to regular
         raid mode.
         """
-
-        if channel is None:
-            channel = ctx.message.channel
-
-        if channel.type is not discord.ChannelType.text:
-            return await self.bot.say('That is not a text channel.')
-
-        guild = ctx.message.server
-        my_permissions = guild.default_channel.permissions_for(guild.me)
+        channel = channel or ctx.channel
+        my_permissions = ctx.guild.default_channel.permissions_for(ctx.guild.me)
 
         if not (my_permissions.kick_members and my_permissions.create_instant_invite):
-            return await self.bot.say('\N{NO ENTRY SIGN} I do not have permissions to kick members or create invites.')
+            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick members or create invites.')
 
         try:
-            await self.bot.edit_server(guild, verification_level=discord.VerificationLevel.high)
+            await ctx.guild.edit(verification_level=discord.VerificationLevel.high)
         except discord.HTTPException:
-            await self.bot.say('\N{WARNING SIGN} Could not set verification level.')
+            await ctx.send('\N{WARNING SIGN} Could not set verification level.')
 
-        raids = self.config.get('__raids__', {})
-        raids[guild.id] = (RaidMode.strict, channel.id)
-        await self.config.put('__raids__', raids)
+        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                   VALUES ($1, $2, $3) ON CONFLICT (id)
+                   DO UPDATE SET
+                        raid_mode = EXCLUDED.raid_mode,
+                        broadcast_channel = EXCLUDED.broadcast_channel;
+                """
 
-        fmt = 'Raid mode enabled strictly. Broadcasting join messages to %s.' % channel.mention
-        await self.bot.say(fmt)
+        await ctx.db.execute(query, ctx.guild.id, RaidMode.strict.value, ctx.channel.id)
+        await ctx.send(f'Raid mode enabled strictly. Broadcasting join messages to {channel.mention}.')
 
-    @commands.group(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_channels=True)
-    async def ignore(self, ctx):
-        """Handles the bot's ignore lists.
+    async def _bulk_ignore_entries(self, ctx, entries):
+        async with ctx.db.transaction():
+            query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
+            records = await ctx.db.fetch(query, ctx.guild.id)
 
-        To use these commands, you must have the Bot Admin role or have
-        Manage Channels permissions. These commands are not allowed to be used
-        in a private message context.
+            # we do not want to insert duplicates
+            current_plonks = {r[0] for r in records}
+            guild_id = ctx.guild.id
+            to_insert = [(guild_id, e.id) for e in entries if e.id not in current_plonks]
 
-        Users with Manage Roles or Bot Admin role can still invoke the bot
-        in ignored channels.
+            # do a bulk COPY
+            await ctx.db.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
+
+    @commands.group(invoke_without_command=True, aliases=['plonk'])
+    @checks.is_mod()
+    async def ignore(self, ctx, *entities: ChannelOrMember):
+        """Ignores text channels or members from using the bot.
+
+        If no channel or member is specified, the current channel is ignored.
+
+        Users with Manage Server can still use the bot, regardless of ignore
+        status.
+
+        To use this command you must have Manage Server permissions.
         """
-        if ctx.invoked_subcommand is None:
-            await self.bot.say('Invalid subcommand passed: {0.subcommand_passed}'.format(ctx))
 
-    @ignore.command(name='list', pass_context=True)
-    async def ignore_list(self, ctx):
-        """Tells you what channels are currently ignored in this server."""
-
-        ignored = self.config.get('ignored', [])
-        channel_ids = set(c.id for c in ctx.message.server.channels)
-        result = []
-        for channel in ignored:
-            if channel in channel_ids:
-                result.append('<#{}>'.format(channel))
-
-        if result:
-            await self.bot.say('The following channels are ignored:\n\n{}'.format(', '.join(result)))
+        if len(entities) == 0:
+            # shortcut for a single insert
+            query = "INSERT INTO plonks (guild_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;"
+            await ctx.db.execute(query, ctx.guild.id, ctx.channel.id)
         else:
-            await self.bot.say('I am not ignoring any channels here.')
+            await self._bulk_ignore_entries(ctx, entities)
 
-    @ignore.command(name='channel', pass_context=True)
-    async def channel_cmd(self, ctx, *, channel : discord.Channel = None):
-        """Ignores a specific channel from being processed.
+        await ctx.send(ctx.tick(True))
 
-        If no channel is specified, the current channel is ignored.
-        If a channel is ignored then the bot does not process commands in that
-        channel until it is unignored.
+    @ignore.command(name='list')
+    @checks.is_mod()
+    @commands.cooldown(2.0, 60.0, commands.BucketType.guild)
+    async def ignore_list(self, ctx):
+        """Tells you what channels or members are currently ignored in this server.
+
+        To use this command you must have Manage Server permissions.
         """
 
-        if channel is None:
-            channel = ctx.message.channel
+        query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
 
-        ignored = self.config.get('ignored', [])
-        if channel.id in ignored:
-            await self.bot.say('That channel is already ignored.')
-            return
+        guild = ctx.guild
+        records = await ctx.db.fetch(query, guild.id)
 
-        ignored.append(channel.id)
-        await self.config.put('ignored', ignored)
-        await self.bot.say('\U0001f44c')
+        if len(records) == 0:
+            return await ctx.send('I am not ignoring anything here.')
 
-    @ignore.command(name='all', pass_context=True)
-    @checks.admin_or_permissions(manage_server=True)
+        entries = [LazyEntity(guild, r[0]) for r in records]
+
+        try:
+            p = Pages(self.bot, message=ctx.message, entries=entries, per_page=20)
+        except Exception as e:
+            await ctx.send(str(e))
+        else:
+            await p.paginate()
+
+    @ignore.command(name='all')
+    @checks.is_mod()
     async def _all(self, ctx):
         """Ignores every channel in the server from being processed.
 
@@ -422,263 +537,259 @@ class Mod:
         the ignore list. If more channels are added then they will have to be
         ignored by using the ignore command.
 
-        To use this command you must have Manage Server permissions along with
-        Manage Channels permissions. You could also have the Bot Admin role.
+        To use this command you must have Manage Server permissions.
+        """
+        await self._bulk_ignore_entries(ctx, ctx.guild.text_channels)
+        await ctx.send('Successfully blocking all channels here.')
+
+    @ignore.command(name='clear')
+    @checks.is_mod()
+    async def ignore_clear(self, ctx):
+        """Clears all the currently set ignores.
+
+        To use this command you must have Manage Server permissions.
         """
 
-        ignored = self.config.get('ignored', [])
-        channels = ctx.message.server.channels
-        ignored.extend(c.id for c in channels if c.type == discord.ChannelType.text)
-        await self.config.put('ignored', list(set(ignored))) # make unique
-        await self.bot.say('\U0001f44c')
+        query = "DELETE FROM plonks WHERE guild_id=$1;"
+        await ctx.db.execute(query, ctx.guild.id)
+        await ctx.send('Successfully cleared all ignores.')
 
-    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
-    @checks.admin_or_permissions(manage_channels=True)
-    async def unignore(self, ctx, *channels: discord.Channel):
-        """Unignores channels from being processed.
+    @commands.group(pass_context=True, invoke_without_command=True, aliases=['unplonk'])
+    @checks.is_mod()
+    async def unignore(self, ctx, *entities: ChannelOrMember):
+        """Allows channels or members to use the bot again.
 
-        If no channels are specified, it unignores the current channel.
+        If nothing is specified, it unignores the current channel.
 
-        To use this command you must have the Manage Channels permission or have the
-        Bot Admin role.
+        To use this command you must have the Manage Server permission.
         """
 
-        if len(channels) == 0:
-            channels = (ctx.message.channel,)
+        if len(entities) == 0:
+            query = "DELETE FROM plonks WHERE guild_id=$1 AND entity_id=$2;"
+            await ctx.db.execute(query, ctx.guild.id, ctx.channel.id)
+        else:
+            query = "DELETE FROM plonks WHERE guild_id=$1 AND entity_id = ANY($2::bigint[]);"
+            entities = [c.id for c in entities]
+            await ctx.db.execute(query, ctx.guild.id, entities)
 
-        # a set is the proper data type for the ignore list
-        # however, JSON only supports arrays and objects not sets.
-        ignored = self.config.get('ignored', [])
-        for channel in channels:
-            try:
-                ignored.remove(channel.id)
-            except ValueError:
-                pass
+        await ctx.send(ctx.tick(True))
 
-        await self.config.put('ignored', ignored)
-        await self.bot.say('\N{OK HAND SIGN}')
-
-    @unignore.command(name='all', pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_channels=True)
+    @unignore.command(name='all')
+    @checks.is_mod()
     async def unignore_all(self, ctx):
-        """Unignores all channels in this server from being processed.
+        """An alias for ignore clear command."""
+        await ctx.invoke(self.ignore_clear)
 
-        To use this command you must have the Manage Channels permission or have the
-        Bot Admin role.
-        """
-        channels = [c for c in ctx.message.server.channels if c.type is discord.ChannelType.text]
-        await ctx.invoke(self.unignore, *channels)
+    async def _basic_cleanup_strategy(self, ctx, search):
+        count = 0
+        async for msg in ctx.history(limit=search, before=ctx.message):
+            if msg.author == ctx.me:
+                await msg.delete()
+                count += 1
+        return { 'Bot': count }
 
-    @commands.command(pass_context=True, no_pm=True)
-    @checks.mod_or_permissions(manage_messages=True)
-    async def cleanup(self, ctx, search : int = 100):
+    async def _complex_cleanup_strategy(self, ctx, search):
+        prefixes = tuple(self.bot.get_guild_prefixes(ctx.guild)) # thanks startswith
+
+        def check(m):
+            return m.author == ctx.me or m.content.startswith(prefixes)
+
+        deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
+        return Counter(m.author.display_name for m in deleted)
+
+    @commands.command()
+    async def cleanup(self, ctx, search=100):
         """Cleans up the bot's messages from the channel.
 
         If a search number is specified, it searches that many messages to delete.
-        If the bot has Manage Messages permissions, then it will try to delete
-        messages that look like they invoked the bot as well.
+        If the bot has Manage Messages permissions and the invoker has Manage Messages
+        then it will try to delete messages that look like they invoked the bot as well.
 
         After the cleanup is completed, the bot will send you a message with
         which people got their messages deleted and their count. This is useful
         to see which users are spammers.
-
-        To use this command you must have Manage Messages permission or have the
-        Bot Mod role.
         """
 
-        spammers = Counter()
-        channel = ctx.message.channel
-        prefixes = self.bot.command_prefix
-        if callable(prefixes):
-            prefixes = prefixes(self.bot, ctx.message)
+        strategy = _basic_cleanup_strategy
+        if ctx.guild is not None:
+            invoker_permissions = ctx.author.permissions_in(ctx.channel)
+            my_permissions = ctx.me.permissions_in(ctx.channel)
 
-        def is_possible_command_invoke(entry):
-            valid_call = any(entry.content.startswith(prefix) for prefix in prefixes)
-            return valid_call and not entry.content[1:2].isspace()
+            if invoker_permissions.manage_messages and my_permissions.manage_messages:
+                strategy = _complex_cleanup_strategy
 
-        can_delete = channel.permissions_for(channel.server.me).manage_messages
-
-        if not can_delete:
-            api_calls = 0
-            async for entry in self.bot.logs_from(channel, limit=search, before=ctx.message):
-                if api_calls and api_calls % 5 == 0:
-                    await asyncio.sleep(1.1)
-
-                if entry.author == self.bot.user:
-                    await self.bot.delete_message(entry)
-                    spammers['Bot'] += 1
-                    api_calls += 1
-
-                if is_possible_command_invoke(entry):
-                    try:
-                        await self.bot.delete_message(entry)
-                    except discord.Forbidden:
-                        continue
-                    else:
-                        spammers[entry.author.display_name] += 1
-                        api_calls += 1
-        else:
-            predicate = lambda m: m.author == self.bot.user or is_possible_command_invoke(m)
-            deleted = await self.bot.purge_from(channel, limit=search, before=ctx.message, check=predicate)
-            spammers = Counter(m.author.display_name for m in deleted)
-
+        spammers = await strategy(ctx, search)
         deleted = sum(spammers.values())
-        messages = ['%s %s removed.' % (deleted, 'message was' if deleted == 1 else 'messages were')]
+        messages = [f'{deleted} message{" was" if deleted == 1 else "s were"} removed.']
         if deleted:
             messages.append('')
             spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
-            messages.extend(map(lambda t: '- **{0[0]}**: {0[1]}'.format(t), spammers))
+            messages.extend(f'- **{author}**: {count}' for author, count in spammers)
 
-        await self.bot.say('\n'.join(messages), delete_after=10)
+        await ctx.send('\n'.join(messages), delete_after=10)
 
-    @commands.command(no_pm=True)
-    @checks.admin_or_permissions(kick_members=True)
-    async def kick(self, *, member : discord.Member):
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(kick_members=True)
+    async def kick(self, ctx, member: discord.Member, *, reason: ActionReason = None):
         """Kicks a member from the server.
 
         In order for this to work, the bot must have Kick Member permissions.
 
-        To use this command you must have Kick Members permission or have the
-        Bot Admin role.
+        To use this command you must have Kick Members permission.
         """
 
-        try:
-            await self.bot.kick(member)
-        except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to kick this member.')
-        except discord.HTTPException:
-            await self.bot.say('Kicking failed.')
-        else:
-            await self.bot.say('\U0001f44c')
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
-    @commands.command(no_pm=True)
-    @checks.admin_or_permissions(ban_members=True)
-    async def ban(self, *, member : discord.Member):
+        await member.kick(reason=reason)
+        await ctx.send('\N{OK HAND SIGN}')
+
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
+    async def ban(self, ctx, member: MemberID, *, reason: ActionReason = None):
         """Bans a member from the server.
 
-        In order for this to work, the bot must have Ban Member permissions.
-
-        To use this command you must have Ban Members permission or have the
-        Bot Admin role.
-        """
-
-        try:
-            await self.bot.ban(member)
-        except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to ban this member.')
-        except discord.HTTPException:
-            await self.bot.say('Banning failed.')
-        else:
-            await self.bot.say('\U0001f44c')
-
-    @commands.command(no_pm=True, pass_context=True)
-    @checks.admin_or_permissions(ban_members=True)
-    async def hackban(self, ctx, *member_ids: int):
-        """Bans a member via their ID.
+        You can also ban from ID to ban regardless whether they're
+        in the server or not.
 
         In order for this to work, the bot must have Ban Member permissions.
 
-        To use this command you must have Ban Members permission or have the
-        Bot Admin role.
+        To use this command you must have Ban Members permission.
         """
 
-        if not ctx.message.server.me.server_permissions.ban_members:
-            return await self.bot.say('The bot does not have permissions to ban members.')
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
-        for member_id in member_ids:
-            try:
-                await self.bot.http.ban(member_id, ctx.message.server.id)
-            except discord.HTTPException:
-                pass
+        await ctx.guild.ban(discord.Object(id=member), reason=reason)
+        await ctx.send('\N{OK HAND SIGN}')
 
-        await self.bot.say('\U0001f44c')
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
+    async def massban(self, ctx, reason: ActionReason, *members: MemberID):
+        """Mass bans multiple members from the server.
 
-    @commands.command(no_pm=True)
-    @checks.admin_or_permissions(kick_members=True)
-    async def softban(self, *, member : discord.Member):
+        You can also ban from ID to ban regardless whether they're
+        in the server or not.
+
+        Note that unlike the ban command, the reason comes first
+        and is not optional.
+
+        In order for this to work, the bot must have Ban Member permissions.
+
+        To use this command you must have Ban Members permission.
+        """
+
+        for member_id in members:
+            await ctx.guild.ban(discord.Object(id=member_id), reason=reason)
+
+        await ctx.send('\N{OK HAND SIGN}')
+
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(kick_members=True)
+    async def softban(self, ctx, member: MemberID, *, reason: ActionReason = None):
         """Soft bans a member from the server.
 
         A softban is basically banning the member from the server but
         then unbanning the member as well. This allows you to essentially
         kick the member while removing their messages.
 
-        To use this command you must have Kick Members permissions or have
-        the Bot Admin role. Note that the bot must have the permission as well.
+        In order for this to work, the bot must have Ban Member permissions.
+
+        To use this command you must have Kick Members permissions.
         """
 
-        try:
-            await self.bot.ban(member)
-            await self.bot.unban(member.server, member)
-        except discord.Forbidden:
-            await self.bot.say('The bot does not have permissions to ban this member.')
-        except discord.HTTPException:
-            await self.bot.say('Banning failed.')
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        obj = discord.Object(id=member)
+        await ctx.guild.ban(obj, reason=reason)
+        await ctx.guild.unban(obj, reason=reason)
+        await ctx.send('\N{OK HAND SIGN}')
+
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
+    async def unban(self, ctx, member: BannedMember, *, reason: ActionReason = None):
+        """Unbans a member from the server.
+
+        You can pass either the ID of the banned member or the Name#Discrim
+        combination of the member. Typically the ID is easiest to use.
+
+        In order for this to work, the bot must have Ban Member permissions.
+
+        To use this command you must have Ban Members permissions.
+        """
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        await ctx.guild.unban(member.user, reason=reason)
+        if member.reason:
+            await ctx.send(f'Unbanned {member.user} (ID: {member.user.id}), previously banned for {member.reason}.')
         else:
-            await self.bot.say('\U0001f44c')
+            await ctx.send(f'Unbanned {member.user} (ID: {member.user.id}).')
 
-    @commands.command(no_pm=True, pass_context=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def plonk(self, ctx, *, member: discord.Member):
-        """Bans a user from using the bot.
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
+    async def tempban(self, ctx, duration: time.FutureTime, member: MemberID, *, reason: ActionReason = None):
+        """Temporarily bans a member for the specified duration.
 
-        This bans a person from using the bot in the current server.
-        There is no concept of a global ban. This ban can be bypassed
-        by having the Manage Server permission.
+        The duration can be a a short time form, e.g. 30d or a more human
+        duration such as "until thursday at 3PM" or a more concrete time
+        such as "2017-12-31".
 
-        To use this command you must have the Manage Server permission
-        or have a Bot Admin role.
+        Note that times are in UTC.
+
+        You can also ban from ID to ban regardless whether they're
+        in the server or not.
+
+        In order for this to work, the bot must have Ban Member permissions.
+
+        To use this command you must have Ban Members permission.
         """
 
-        plonks = self.config.get('plonks', {})
-        guild_id = ctx.message.server.id
-        db = plonks.get(guild_id, [])
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
-        if member.id in db:
-            await self.bot.say('That user is already bot banned in this server.')
+        reminder = self.bot.get_cog('Reminder')
+        if reminder is None:
+            return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
+
+        await ctx.guild.ban(discord.Object(id=member), reason=reason)
+        timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id, ctx.author.id, member)
+        await ctx.send(f'Banned ID {member} for {time.human_timedelta(duration.dt)}.')
+
+    async def on_tempban_timer_complete(self, timer):
+        guild_id, mod_id, member_id = timer.args
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            # RIP
             return
 
-        db.append(member.id)
-        plonks[guild_id] = db
-        await self.config.put('plonks', plonks)
-        await self.bot.say('%s has been banned from using the bot in this server.' % member)
-
-    @commands.command(no_pm=True, pass_context=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def plonks(self, ctx):
-        """Shows members banned from the bot."""
-        plonks = self.config.get('plonks', {})
-        guild = ctx.message.server
-        db = plonks.get(guild.id, [])
-        members = ', '.join(map(str, filter(None, map(guild.get_member, db))))
-        if members:
-            await self.bot.say(members)
+        moderator = guild.get_member(mod_id)
+        if moderator is None:
+            try:
+                moderator = await self.bot.get_user_info(mod_id)
+            except:
+                # request failed somehow
+                moderator = f'Mod ID {mod_id}'
+            else:
+                moderator = f'{moderator} (ID: {mod_id})'
         else:
-            await self.bot.say('No members are banned in this server.')
+            moderator = f'{moderator} (ID: {mod_id})'
 
-    @commands.command(no_pm=True, pass_context=True)
-    @checks.admin_or_permissions(manage_server=True)
-    async def unplonk(self, ctx, *, member: discord.Member):
-        """Unbans a user from using the bot.
+        reason = f'Automatic unban from timer made on {timer.created_at} by {moderator}.'
+        await guild.unban(discord.Object(id=member_id), reason=reason)
 
-        To use this command you must have the Manage Server permission
-        or have a Bot Admin role.
-        """
-
-        plonks = self.config.get('plonks', {})
-        guild_id = ctx.message.server.id
-        db = plonks.get(guild_id, [])
-
-        try:
-            db.remove(member.id)
-        except ValueError:
-            await self.bot.say('%s is not banned from using the bot in this server.' % member)
-        else:
-            plonks[guild_id] = db
-            await self.config.put('plonks', plonks)
-            await self.bot.say('%s has been unbanned from using the bot in this server.' % member)
-
-    @commands.group(pass_context=True, no_pm=True, invoke_without_command=True)
-    @checks.admin_or_permissions(ban_members=True)
+    @commands.group(invoke_without_command=True)
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
     async def mentionspam(self, ctx, count: int=None):
         """Enables auto-banning accounts that spam mentions.
 
@@ -690,188 +801,204 @@ class Mod:
         This only applies for user mentions. Everyone or Role
         mentions are not included.
 
-        To use this command you must have the Ban Members permission
-        or have a Bot Admin role.
+        To use this command you must have the Ban Members permission.
         """
 
-        counts = self.config.get('mentions', {})
-        settings = counts.get(ctx.message.server.id)
         if count is None:
-            if settings is None:
-                return await self.bot.say('This server has not set up mention spam banning.')
+            query = """SELECT mention_count, COALESCE(safe_mention_channel_ids, '{}') AS channel_ids
+                       FROM guild_mod_config
+                       WHERE id=$1;
+                    """
 
-            ignores = ', '.join('<#%s>' % e for e in settings.get('ignore', []))
-            ignores = ignores if ignores else 'None'
-            count = settings['count']
-            return await self.bot.say('- Threshold: %s mentions\n- Ignored Channels: %s' % (count, ignores))
+            row = await ctx.db.fetchrow(query, ctx.guild.id)
+            if row is None or not row['mention_count']:
+                return await ctx.send('This server has not set up mention spam banning.')
+
+            ignores = ', '.join(f'<#{e}>' for e in row['channel_ids']) or 'None'
+            return await ctx.send(f'- Threshold: {row["mention_count"]} mentions\n- Ignored Channels: {ignores}')
 
         if count == 0:
-            counts.pop(ctx.message.server.id, None)
-            await self.config.put('mentions', counts)
-            await self.bot.say('Auto-banning members has been disabled.')
-            return
+            query = """UPDATE guild_mod_config SET mention_count = NULL WHERE id=$1;"""
+            await ctx.db.execute(query, ctx.guild.id)
+            self.get_guild_settings.invalidate(self, ctx.guild.id)
+            return await ctx.send('Auto-banning members has been disabled.')
 
         if count <= 3:
-            await self.bot.say('\N{NO ENTRY SIGN} Auto-ban threshold must be greater than three.')
+            await ctx.send('\N{NO ENTRY SIGN} Auto-ban threshold must be greater than three.')
             return
 
-        if settings is None:
-            # new entry
-            settings = {
-                'ignore': []
-            }
+        query = """INSERT INTO guild_mod_config (id, mention_count, safe_mention_channel_ids)
+                   VALUES ($1, $2, '{}')
+                   ON CONFLICT (id) DO UPDATE SET
+                       mention_count = $2;
+                """
+        await ctx.db.execute(query, ctx.guild.id, count)
+        self.get_guild_settings.invalidate(self, ctx.guild.id)
+        await ctx.send(f'Now auto-banning members that mention more than {count} users.')
 
-        settings.update(count=count)
-        counts[ctx.message.server.id] = settings
-        await self.config.put('mentions', counts)
-        await self.bot.say('Now auto-banning members that mention more than %s users.' % count)
-
-    @mentionspam.command(name='ignore', pass_context=True, no_pm=True, aliases=['bypass'])
-    async def mentionspam_ignore(self, ctx, *channels: discord.Channel):
+    @mentionspam.command(name='ignore', aliases=['bypass'])
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
+    async def mentionspam_ignore(self, ctx, *channels: discord.TextChannel):
         """Specifies what channels ignore mentionspam auto-bans.
 
         If a channel is given then that channel will no longer be protected
-        by auto-banning from spammers.
+        by auto-banning from mention spammers.
+
+        To use this command you must have the Ban Members permission.
         """
-        counts = self.config.get('mentions', {})
-        settings = counts.get(ctx.message.server.id)
-        if settings is None:
-            return await self.bot.say('\N{WARNING SIGN} This server has not configured mentionspam.')
+
+        query = """UPDATE guild_mod_config
+                   SET safe_mention_channel_ids =
+                       ARRAY(SELECT DISTINCT * FROM unnest(COALESCE(safe_mention_channel_ids, '{}') || $2::bigint[]))
+                   WHERE id = $1;
+                """
 
         if len(channels) == 0:
-            return await self.bot.say('Missing channels to ignore.')
+            return await ctx.send('Missing channels to ignore.')
 
-        ignores = settings.get('ignore', [])
-        ignores.extend(c.id for c in channels)
-        settings['ignore'] = list(set(ignores)) # make it unique
-        await self.config.put('mentions', counts)
-        await self.bot.say('Mentions are now ignored on %s' % ', '.join('<#%s>' % c.id for c in channels))
+        channel_ids = [c.id for c in channels]
+        await ctx.db.execute(query, ctx.guild.id, channel_ids)
+        self.get_guild_settings.invalidate(self, ctx.guild.id)
+        await ctx.send(f'Mentions are now ignored on {", ".join(c.mention for c in channels)}.')
 
-    @mentionspam.command(name='protect', pass_context=True, no_pm=True, aliases=['unignore'])
-    async def mentionspam_protect(self, ctx, *channels: discord.Channel):
-        """Specifies what channels to take off the ignore list."""
+    @mentionspam.command(name='unignore', aliases=['protect'])
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
+    async def mentionspam_unignore(self, ctx, *channels: discord.TextChannel):
+        """Specifies what channels to take off the ignore list.
 
-        counts = self.config.get('mentions', {})
-        settings = counts.get(ctx.message.server.id)
-        if settings is None:
-            return await self.bot.say('\N{WARNING SIGN} This server has not configured mentionspam.')
+        To use this command you must have the Ban Members permission.
+        """
 
         if len(channels) == 0:
-            return await self.bot.say('Missing channels to protect.')
+            return await ctx.send('Missing channels to protect.')
 
-        ignores = settings.get('ignore', [])
-        unique = set(channels)
-        for c in unique:
-            try:
-                ignores.remove(c.id)
-            except ValueError:
-                pass
+        query = """UPDATE guild_mod_config
+                   SET safe_mention_channel_ids =
+                       ARRAY(SELECT element FROM unnest(safe_mention_channel_ids) AS element
+                             WHERE NOT(element = ANY($2::bigint[])))
+                   WHERE id = $1;
+                """
 
-        await self.config.put('mentions', counts)
-        await self.bot.say('Updated mentionspam ignore list.')
+        await ctx.db.execute(query, ctx.guild.id, [c.id for c in channels])
+        self.get_guild_settings.invalidate(self, ctx.guild.id)
+        await ctx.send('Updated mentionspam ignore list.')
 
-    @commands.command(pass_context=True, no_pm=True)
-    @checks.admin_or_permissions(manage_roles=True)
-    async def colour(self, ctx, colour : discord.Colour, *, role : discord.Role):
-        """Changes the colour of a role.
-
-        The colour must be a hexadecimal value, e.g. FF2AEF. Don't prefix it
-        with a pound (#) as it won't work. Colour names are also not supported.
-
-        To use this command you must have the Manage Roles permission or
-        have the Bot Admin role. The bot must also have Manage Roles permissions.
-
-        This command cannot be used in a private message.
-        """
-        try:
-            await self.bot.edit_role(ctx.message.server, role, colour=colour)
-        except discord.HTTPException:
-            await self.bot.say('The bot must have Manage Roles permissions to use this and its role must be higher.')
-        else:
-            await self.bot.say('\U0001f44c')
-
-    @commands.group(pass_context=True, no_pm=True, aliases=['purge'])
-    @checks.admin_or_permissions(manage_messages=True)
+    @commands.group(aliases=['purge'])
+    @commands.guild_only()
+    @checks.has_permissions(manage_messages=True)
     async def remove(self, ctx):
         """Removes messages that meet a criteria.
 
-        In order to use this command, you must have Manage Messages permissions
-        or have the Bot Admin role. Note that the bot needs Manage Messages as
-        well. These commands cannot be used in a private message.
+        In order to use this command, you must have Manage Messages permissions.
+        Note that the bot needs Manage Messages as well. These commands cannot
+        be used in a private message.
 
-        When the command is done doing its work, you will get a private message
+        When the command is done doing its work, you will get a message
         detailing which users got removed and how many messages got removed.
         """
 
         if ctx.invoked_subcommand is None:
-            await self.bot.say('Invalid criteria passed "{0.subcommand_passed}"'.format(ctx))
+            help_cmd = self.bot.get_command('help')
+            await ctx.invoke(help_cmd, 'remove')
 
-    async def do_removal(self, message, limit, predicate):
+    async def do_removal(self, ctx, limit, predicate):
+        if limit > 2000:
+            return await ctx.send(f'Too many messages to search given ({limit}/2000)')
+
         try:
-            deleted = await self.bot.purge_from(message.channel, limit=limit, before=message, check=predicate)
+            deleted = await ctx.channel.purge(limit=limit, before=ctx.message, check=predicate)
         except discord.Forbidden as e:
-            return await self.bot.send_message(message.channel, 'I do not have permissions to delete messages.')
+            return await ctx.send('I do not have permissions to delete messages.')
         except discord.HTTPException as e:
-            return await self.bot.send_message(message.channel, 'Error: {} (try a smaller search?)'.format(e))
+            return await ctx.send(f'Error: {e} (try a smaller search?)')
 
         spammers = Counter(m.author.display_name for m in deleted)
-        messages = ['%s %s removed.' % (len(deleted), 'message was' if len(deleted) == 1 else 'messages were')]
-        if len(deleted):
+        deleted = len(deleted)
+        messages = f'{deleted} message{" was" if deleted == 1 else "s were"} removed.'
+        if deleted:
             messages.append('')
             spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
-            messages.extend(map(lambda t: '**{0[0]}**: {0[1]}'.format(t), spammers))
+            messages.extend(f'**{name}**: {count}' for name, count in spammers)
 
-        await self.bot.say('\n'.join(messages), delete_after=10)
+        to_send = '\n'.join(messages)
 
-    @remove.command(pass_context=True)
+        if len(to_send) > 2000:
+            await ctx.send(f'Successfully removed {deleted} messages.', delete_after=10)
+        else:
+            await ctx.send(to_send, delete_after=10)
+
+    @remove.command()
     async def embeds(self, ctx, search=100):
         """Removes messages that have embeds in them."""
-        await self.do_removal(ctx.message, search, lambda e: len(e.embeds))
+        await self.do_removal(ctx, search, lambda e: len(e.embeds))
 
-    @remove.command(pass_context=True)
+    @remove.command()
     async def files(self, ctx, search=100):
         """Removes messages that have attachments in them."""
-        await self.do_removal(ctx.message, search, lambda e: len(e.attachments))
+        await self.do_removal(ctx, search, lambda e: len(e.attachments))
 
-    @remove.command(pass_context=True)
+    @remove.command()
     async def images(self, ctx, search=100):
         """Removes messages that have embeds or attachments."""
-        await self.do_removal(ctx.message, search, lambda e: len(e.embeds) or len(e.attachments))
+        await self.do_removal(ctx, search, lambda e: len(e.embeds) or len(e.attachments))
 
-    @remove.command(name='all', pass_context=True)
+    @remove.command(name='all')
     async def _remove_all(self, ctx, search=100):
         """Removes all messages."""
-        await self.do_removal(ctx.message, search, lambda e: True)
+        await self.do_removal(ctx, search, lambda e: True)
 
-    @remove.command(pass_context=True)
-    async def user(self, ctx, member : discord.Member, search=100):
+    @remove.command()
+    async def user(self, ctx, member: discord.Member, search=100):
         """Removes all messages by the member."""
-        await self.do_removal(ctx.message, search, lambda e: e.author == member)
+        await self.do_removal(ctx, search, lambda e: e.author == member)
 
-    @remove.command(pass_context=True)
-    async def contains(self, ctx, *, substr : str):
+    @remove.command()
+    async def contains(self, ctx, *, substr: str):
         """Removes all messages containing a substring.
 
         The substring must be at least 3 characters long.
         """
         if len(substr) < 3:
-            await self.bot.say('The substring length must be at least 3 characters.')
-            return
+            await ctx.send('The substring length must be at least 3 characters.')
+        else:
+            await self.do_removal(ctx, 100, lambda e: substr in e.content)
 
-        await self.do_removal(ctx.message, 100, lambda e: substr in e.content)
-
-    @remove.command(name='bot', pass_context=True)
-    async def _bot(self, ctx, prefix, *, member: discord.Member):
-        """Removes a bot user's messages and messages with their prefix.
-
-        The member doesn't have to have the [Bot] tag to qualify for removal.
-        """
+    @remove.command(name='bot')
+    async def _bot(self, ctx, prefix=None, search=100):
+        """Removes a bot user's messages and messages with their optional prefix."""
 
         def predicate(m):
-            return m.author == member or m.content.startswith(prefix)
-        await self.do_removal(ctx.message, 100, predicate)
+            return m.author.bot or (prefix and m.message.startswith(prefix))
 
-    @remove.command(pass_context=True)
+        await self.do_removal(ctx, search, predicate)
+
+    @remove.command(name='emoji')
+    async def _emoji(self, ctx, search=100):
+        """Removes all messages containing custom emoji."""
+        custom_emoji = re.compile(r'<:(\w+):(\d+)>')
+        def predicate(m):
+            return custom_emoji.search(m.content)
+
+        await self.do_removal(ctx, search, predicate)
+
+    @remove.command(name='reactions')
+    async def _reactions(self, ctx, search=100):
+        """Removes all reactions from messages that have them."""
+
+        if search > 2000:
+            return await ctx.send(f'Too many messages to search for ({search}/2000)')
+
+        total_reactions = 0
+        async for message in ctx.history(limit=search, before=ctx.message):
+            if len(message.reactions):
+                total_reactions += sum(r.count for r in message.reactions)
+                await message.clear_reactions()
+
+        await ctx.send(f'Successfully removed {total_reactions} reactions.')
+
+    @remove.command()
     async def custom(self, ctx, *, args: str):
         """A more advanced prune command.
 
@@ -913,7 +1040,7 @@ class Mod:
         try:
             args = parser.parse_args(shlex.split(args))
         except Exception as e:
-            await self.bot.say(str(e))
+            await ctx.send(str(e))
             return
 
         predicates = []
@@ -932,12 +1059,13 @@ class Mod:
 
         if args.user:
             users = []
+            converter = commands.MemberConverter()
             for u in args.user:
                 try:
-                    converter = commands.MemberConverter(ctx, u)
-                    users.append(converter.convert())
+                    user = await converter.convert(ctx, u)
+                    users.append(user)
                 except Exception as e:
-                    await self.bot.say(str(e))
+                    await ctx.send(str(e))
                     return
 
             predicates.append(lambda m: m.author in users)
@@ -959,7 +1087,7 @@ class Mod:
             return r
 
         args.search = max(0, min(2000, args.search)) # clamp from 0-2000
-        await self.do_removal(ctx.message, args.search, predicate)
+        await self.do_removal(ctx, args.search, predicate)
 
 def setup(bot):
     bot.add_cog(Mod(bot))
