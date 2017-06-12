@@ -219,9 +219,9 @@ class Admin:
         is_multistatement = query.count(';') > 1
         if is_multistatement:
             # fetch does not support multiple statements
-            strategy = self.bot.pool.execute
+            strategy = ctx.db.execute
         else:
-            strategy = self.bot.pool.fetch
+            strategy = ctx.db.fetch
 
         try:
             start = time.time()
