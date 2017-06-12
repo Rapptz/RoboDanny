@@ -200,7 +200,9 @@ def convertjson(ctx, name):
         click.echo(f'successfully booted up bot {client.user} (ID: {client.user.id})')
         await client.logout()
 
-    extensions = ['cog.' + name for _, name in to_run]
+    run(client.start(config.token))
+
+    extensions = ['cogs.' + name for _, name in to_run]
     ctx.invoke(initdb, extension=extensions)
 
     for migrator, _ in to_run:
