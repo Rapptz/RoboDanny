@@ -22,12 +22,13 @@ This is `pip install -U -r requirements.txt`
 
 4. **Create the database in PostgreSQL**
 
-You will need PostgreSQL 9.1 or higher and type the following
+You will need PostgreSQL 9.5 or higher and type the following
 in the `psql` tool:
 
 ```sql
 CREATE ROLE rdanny WITH LOGIN PASSWORD 'yourpw';
 CREATE DATABASE rdanny OWNER rdanny;
+CREATE EXTENSION pg_trgm;
 ```
 
 5. **Setup configuration**
@@ -40,7 +41,7 @@ client_id   = '' # your bot's client ID
 token = '' # your bot's token
 carbon_key = '' # your bot's key on carbon's site
 bots_key = '' # your key on bots.discord.pw
-postgres = 'postgres://user:password@host/database' # your postgres info from above
+postgresql = 'postgresql://user:password@host/database' # your postgresql info from above
 ```
 
 ## Requirements

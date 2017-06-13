@@ -50,7 +50,7 @@ def run():
     log = logging.getLogger()
 
     try:
-        pool = loop.run_until_complete(db.Table.create_pool(config.postgres, command_timeout=60))
+        pool = loop.run_until_complete(db.Table.create_pool(config.postgresql, command_timeout=60))
     except Exception as e:
         click.echo('Could not set up PostgreSQL. Exiting.', file=sys.stderr)
         log.exception('Could not set up PostgreSQL. Exiting.')
@@ -80,7 +80,7 @@ def initdb(extension, quiet):
     """
     run = asyncio.get_event_loop().run_until_complete
     try:
-        run(db.Table.create_pool(config.postgres))
+        run(db.Table.create_pool(config.postgresql))
     except Exception:
         click.echo('Could not create PostgreSQL connection pool.\n' + traceback.format_exc(), err=True)
         return
@@ -104,7 +104,7 @@ def initdb(extension, quiet):
 
 async def remove_database(name):
     try:
-        con = await asyncpg.connect(config.postgres)
+        con = await asyncpg.connect(config.postgresql)
     except:
         pass
     else:
@@ -185,7 +185,7 @@ def convertjson(ctx, name):
         to_run = [(to_run, name)]
 
     async def create_pool():
-        return await asyncpg.create_pool(config.postgres)
+        return await asyncpg.create_pool(config.postgresql)
 
     try:
         pool = run(create_pool())
