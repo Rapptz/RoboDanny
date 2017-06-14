@@ -329,10 +329,10 @@ class Column:
         default = self.default
         if default is not None:
             builder.append('DEFAULT')
-            if isinstance(default, str):
+            if isinstance(default, str) and isinstance(self.column_type, String):
                 builder.append("'%s'" % default)
             else:
-                builder.append(str(default))
+                builder.append("(%s)" % default)
         elif self.unique:
             builder.append('UNIQUE')
         elif self.primary_key:
@@ -421,6 +421,23 @@ class SchemaDiff:
 
         return '\n'.join(statements)
 
+class MaybeAcquire:
+    def __init__(self, connection, *, pool):
+        self.connection = connection
+        self.pool = pool
+        self._cleanup = False
+
+    async def __aenter__(self):
+        if self.connection is None:
+            self._cleanup = True
+            self._connection = c = await self.pool.acquire()
+            return c
+        return self.connection
+
+    async def __aexit__(self, *args):
+        if self._cleanup:
+            await self.pool.release(self._connection)
+
 class TableMeta(type):
     @classmethod
     def __prepare__(cls, name, bases, **kwargs):
@@ -473,7 +490,11 @@ class Table(metaclass=TableMeta):
         return pool
 
     @classmethod
-    async def create(cls, *, directory='migrations', verbose=False):
+    def acquire_connection(cls, connection):
+        return MaybeAcquire(connection, pool=cls._pool)
+
+    @classmethod
+    async def create(cls, *, directory='migrations', verbose=False, connection=None):
         """Creates the database and manages migrations, if any.
 
         Parameters
@@ -482,6 +503,9 @@ class Table(metaclass=TableMeta):
             The migrations directory.
         verbose: bool
             Whether to output some information to stdout.
+        connection: Optional[asyncpg.Connection]
+            The connection to use, if not provided will acquire one from
+            the internal pool.
 
         Returns
         --------
@@ -502,7 +526,7 @@ class Table(metaclass=TableMeta):
             # we're creating this table for the first time,
             # it's an uncommon case so let's get it out of the way
             # first, try to actually create the table
-            async with cls._pool.acquire() as con:
+            async with MaybeAcquire(connection, pool=cls._pool) as con:
                 sql = cls.create_table(exists_ok=True)
                 if verbose:
                     print(sql)
@@ -528,7 +552,7 @@ class Table(metaclass=TableMeta):
             return None
 
         # execute the upgrade SQL
-        async with cls._pool.acquire() as con:
+        async with MaybeAcquire(connection, pool=cls._pool) as con:
             sql = diff.to_sql()
             if verbose:
                 print(sql)
@@ -578,7 +602,7 @@ class Table(metaclass=TableMeta):
         return '\n'.join(statements)
 
     @classmethod
-    async def insert(cls, **kwargs):
+    async def insert(cls, connection=None, **kwargs):
         """Inserts an element to the table."""
 
         # verify column names:
@@ -599,7 +623,8 @@ class Table(metaclass=TableMeta):
         sql = 'INSERT INTO {0} ({1}) VALUES ({2});'.format(cls.__tablename__, ', '.join(verified),
                                                            ', '.join('$' + str(i) for i, _ in enumerate(verified, 1)))
 
-        await cls._pool.execute(sql, *verified.values())
+        async with MaybeAcquire(connection, pool=cls._pool) as con:
+            await con.execute(sql, *verified.values())
 
     @classmethod
     def to_dict(cls):
