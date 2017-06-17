@@ -214,12 +214,32 @@ class Time(SQLType):
         return 'TIME'
 
 class ForeignKey(SQLType):
-    def __init__(self, table, column=None, *, sql_type=None):
+    def __init__(self, table, column, *, sql_type=None, on_delete='CASCADE', on_update='NO ACTION'):
         if not table or not isinstance(table, str):
             raise SchemaError('missing table to reference (must be string)')
 
+        valid_actions = (
+            'NO ACTION',
+            'RESTRICT',
+            'CASCADE',
+            'SET NULL',
+            'SET DEFAULT',
+        )
+
+        on_delete = on_delete.upper()
+        on_update = on_update.upper()
+
+        if on_delete not in valid_actions:
+            raise TypeError('on_delete must be one of %s.' % valid_actions)
+
+        if on_update not in valid_actions:
+            raise TypeError('on_update must be one of %s.' % valid_actions)
+
+
         self.table = table
         self.column = column
+        self.on_update = on_update
+        self.on_delete = on_delete
 
         if sql_type is None:
             sql_type = Integer
@@ -239,9 +259,9 @@ class ForeignKey(SQLType):
         return False
 
     def to_sql(self):
-        if self.column:
-            return '{0.sql_type} REFERENCES {0.table} ({0.column})'.format(self)
-        return '{0.sql_type} REFERENCES {0.table}'.format(self)
+        fmt = '{0.sql_type} REFERENCES {0.table} ({0.column})' \
+              ' ON DELETE {0.on_delete} ON UPDATE {0.on_update}'
+        return fmt.format(self)
 
 class Array(SQLType):
     python = list
