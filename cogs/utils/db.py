@@ -614,7 +614,9 @@ class Table(metaclass=TableMeta):
                 continue
 
             check = column.column_type.python
-            if not check or not isinstance(value, check):
+            if value is None and not column.nullable:
+                raise TypeError('Cannot pass None to non-nullable column %s.' % column.name)
+            elif not check or not isinstance(value, check):
                 fmt = 'column {0.name} expected {1.__name__}, received {2.__class__.__name__}'
                 raise TypeError(fmt.format(column, check, value))
 
