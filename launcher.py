@@ -151,9 +151,9 @@ def dropdb(name, quiet):
     click.echo(f'successfully removed {name} database')
 
 @main.command(short_help='migrates from JSON files')
-@click.argument('name')
+@click.argument('cogs', nargs=-1)
 @click.pass_context
-def convertjson(ctx, name):
+def convertjson(ctx, cogs):
     """This migrates our older JSON files to PostgreSQL
 
     You can pass "all" as the name to migrate everything
@@ -173,16 +173,19 @@ def convertjson(ctx, name):
 
     run = asyncio.get_event_loop().run_until_complete
 
-    if name == 'all':
+    if any(n == 'all' for n in cogs):
         to_run = [(getattr(data_migrators, attr), attr.replace('migrate_', ''))
                   for attr in dir(data_migrators) if attr.startswith('migrate_')]
     else:
-        try:
-            to_run = getattr(data_migrators, 'migrate_' + name)
-        except AttributeError:
-            click.echo(f'invalid cog name given, {name}.', err=True)
-            return
-        to_run = [(to_run, name)]
+        to_run = []
+        for cog in cogs:
+            try:
+                elem = getattr(data_migrators, 'migrate_' + cog)
+            except AttributeError:
+                click.echo(f'invalid cog name given, {cog}.', err=True)
+                return
+
+            to_run.append((elem, cog))
 
     async def create_pool():
         return await asyncpg.create_pool(config.postgresql)
