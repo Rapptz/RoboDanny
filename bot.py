@@ -116,8 +116,7 @@ class RoboDanny(commands.AutoShardedBot):
         if ctx.command is None:
             return
 
-        async with self.pool.acquire() as con:
-            ctx.db = con
+        async with ctx.acquire():
             await self.invoke(ctx)
 
     def only_me_for_rewrite(self, ctx):
