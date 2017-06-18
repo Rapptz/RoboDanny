@@ -16,14 +16,9 @@ async def check_permissions(ctx, perms, *, check=all):
     resolved = ctx.channel.permissions_for(ctx.author)
     return check(getattr(resolved, name, None) == value for name, value in perms.items())
 
-def has_permissions(**perms):
+def has_permissions(*, check=all, **perms):
     async def pred(ctx):
-        return await check_permissions(ctx, perms)
-    return commands.check(pred)
-
-def has_any_permissions(**perms):
-    async def pred(ctx):
-        return await check_permissions(ctx, perms, check=any)
+        return await check_permissions(ctx, perms, check=check)
     return commands.check(pred)
 
 async def check_guild_permissions(ctx, perms, *, check=all):
@@ -37,9 +32,9 @@ async def check_guild_permissions(ctx, perms, *, check=all):
     resolved = ctx.author.guild_permissions
     return check(getattr(resolved, name, None) == value for name, value in perms.items())
 
-def has_guild_permissions(**perms):
+def has_guild_permissions(*, check=all, **perms):
     async def pred(ctx):
-        return await check_guild_permissions(ctx, perms)
+        return await check_guild_permissions(ctx, perms, check=check)
     return commands.check(pred)
 
 # These do not take channel overrides into account
