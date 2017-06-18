@@ -520,6 +520,7 @@ class Mod:
             return await ctx.send('I am not ignoring anything here.')
 
         entries = [LazyEntity(guild, r[0]) for r in records]
+        await ctx.release()
 
         try:
             p = Pages(self.bot, message=ctx.message, entries=entries, per_page=20)
