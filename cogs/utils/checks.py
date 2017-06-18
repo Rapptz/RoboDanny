@@ -37,6 +37,11 @@ async def check_guild_permissions(ctx, perms, *, check=all):
     resolved = ctx.author.guild_permissions
     return check(getattr(resolved, name, None) == value for name, value in perms.items())
 
+def has_guild_permissions(**perms):
+    async def pred(ctx):
+        return await check_guild_permissions(ctx, perms)
+    return commands.check(pred)
+
 # These do not take channel overrides into account
 
 def is_mod():
