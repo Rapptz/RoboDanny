@@ -1,5 +1,6 @@
 from discord.ext import commands
 from .utils import checks, formats
+from .utils.paginator import HelpPaginator
 import discord
 from collections import OrderedDict, deque, Counter
 import os, datetime
@@ -20,10 +21,34 @@ class Meta:
 
     def __init__(self, bot):
         self.bot = bot
+        bot.remove_command('help')
 
     async def __error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
+
+    @commands.command(name='help')
+    async def _help(self, ctx, *, command: str = None):
+        """Shows help about a command or the bot"""
+
+        try:
+
+            if command is None:
+                p = await HelpPaginator.from_bot(ctx)
+            else:
+                entity = self.bot.get_cog(command) or self.bot.get_command(command)
+
+                if entity is None:
+                    return await ctx.send(f'Command "{command}" not found.')
+                elif isinstance(entity, commands.Command):
+                    p = await HelpPaginator.from_command(ctx, entity)
+                else:
+                    p = await HelpPaginator.from_cog(ctx, entity)
+
+        except Exception as e:
+            await ctx.send(e)
+        else:
+            await p.paginate()
 
     @commands.command(hidden=True)
     async def hello(self, ctx):
@@ -168,7 +193,7 @@ class Meta:
 
     @commands.command(name='quit', hidden=True)
     @commands.is_owner()
-    async def _quit(self):
+    async def _quit(self, ctx):
         """Quits the bot."""
         await self.bot.logout()
 
@@ -321,7 +346,7 @@ class Meta:
         await self.say_permissions(member, channel)
 
     @commands.command(aliases=['invite'])
-    async def join(self):
+    async def join(self, ctx):
         """Joins a server."""
         perms = discord.Permissions.none()
         perms.read_messages = True
