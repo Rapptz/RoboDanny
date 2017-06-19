@@ -16,11 +16,12 @@ LOGGING_CHANNEL = 309632009427222529
 
 class Commands(db.Table):
     id = db.PrimaryKeyColumn()
-    guild_id = db.Column(db.Integer(big=True))
+    guild_id = db.Column(db.Integer(big=True), index=True)
     channel_id = db.Column(db.Integer(big=True))
+    author_id = db.Column(db.Integer(big=True), index=True)
     used = db.Column(db.Datetime)
     prefix = db.Column(db.String)
-    command = db.Column(db.String)
+    command = db.Column(db.String, index=True)
 
 class Stats:
     """Bot usage statistics."""
@@ -43,8 +44,8 @@ class Stats:
             guild_id = ctx.guild.id
 
         log.info(f'{message.created_at}: {message.author} in {destination}: {message.content}')
-        await Commands.insert(guild_id=guild_id, channel_id=ctx.channel.id, used=message.created_at,
-                              prefix=ctx.prefix, command=command)
+        await Commands.insert(guild_id=guild_id, channel_id=ctx.channel.id, author_id=ctx.author.id,
+                              used=message.created_at, prefix=ctx.prefix, command=command)
 
     async def on_socket_response(self, msg):
         self.bot.socket_stats[msg.get('t')] += 1
@@ -103,7 +104,7 @@ class Stats:
         await ctx.send(f'Uptime: **{self.get_bot_uptime()}**')
 
     @commands.command(aliases=['stats'])
-    async def about(self):
+    async def about(self, ctx):
         """Tells you information about the bot itself."""
         cmd = r'git show -s HEAD~3..HEAD --format="[{}](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"'
         if os.name == 'posix':
@@ -122,7 +123,7 @@ class Stats:
 
         # statistics
         total_members = sum(1 for _ in self.bot.get_all_members())
-        total_online = len({m.id for m in self.bot_all_members() if m.status is discord.Status.online})
+        total_online = len({m.id for m in self.bot.get_all_members() if m.status is discord.Status.online})
         total_unique = len(self.bot.users)
 
         voice_channels = []
@@ -143,7 +144,7 @@ class Stats:
 
 
         embed.add_field(name='Guilds', value=len(self.bot.guilds))
-        embed.add_field(name='Commands Run', value=sum(self.bot.commands_used.values()))
+        embed.add_field(name='Commands Run', value=sum(self.bot.command_stats.values()))
         embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
         embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
         await ctx.send(embed=embed)
