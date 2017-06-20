@@ -1,4 +1,4 @@
-from .utils import config, checks, formats
+from .utils import db, checks, formats, cache
 from .utils.paginator import Pages
 
 from discord.ext import commands
@@ -6,253 +6,237 @@ import json
 import re
 import datetime
 import discord
-import difflib
+import traceback
+import asyncpg
 
-class TagInfo:
-    __slots__ = ('name', 'content', 'owner_id', 'uses', 'location', 'created_at')
-
-    def __init__(self, name, content, owner_id, **kwargs):
-        self.name = name
-        self.content = content
-        self.owner_id = owner_id
-        self.uses = kwargs.pop('uses', 0)
-        self.location = kwargs.pop('location')
-        self.created_at = kwargs.pop('created_at', 0.0)
-
-    @property
-    def is_generic(self):
-        return self.location == 'generic'
-
+class UnavailableTagCommand(commands.CommandError):
     def __str__(self):
-        return self.content
+        return 'Sorry. This command is unavailable in private messages.\n' \
+               'Consider browsing or using the tag box instead.\nSee ?tag box for more info.'
 
-    async def embed(self, ctx, db):
-        e = discord.Embed(title=self.name)
-        e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
-        e.add_field(name='Uses', value=self.uses)
+def suggest_box():
+    """Custom commands.guild_only with different error checking."""
+    def pred(ctx):
+        if ctx.guild is None:
+            raise UnavailableTagCommand()
+        return True
+    return commands.check(pred)
 
-        popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
-        try:
-            e.add_field(name='Rank', value=popular.index(self) + 1)
-        except:
-            e.add_field(name='Rank', value='Unknown')
+def can_use_box():
+    def pred(ctx):
+        if ctx.guild is None:
+            return True
+        return ctx.author.id == ctx.bot.owner_id or ctx.channel.permissions_for(ctx.author).manage_messages
+    return commands.check(pred)
 
-        if self.created_at:
-            e.timestamp = datetime.datetime.fromtimestamp(self.created_at)
+# The tag data is heavily duplicated (denormalized) and heavily indexed to speed up
+# retrieval at the expense of making inserts a little bit slower. This is a fine trade-off
+# because tags are retrieved much more often than created.
 
-        owner = discord.utils.find(lambda m: m.id == self.owner_id, ctx.bot.get_all_members())
-        if owner is None:
-            owner = await ctx.bot.get_user_info(self.owner_id)
+class TagsTable(db.Table, table_name='tags'):
+    id = db.PrimaryKeyColumn()
 
-        e.set_author(name=str(owner), icon_url=owner.avatar_url or owner.default_avatar_url)
-        e.set_footer(text='Generic' if self.is_generic else 'Server-specific')
-        return e
+    # we will create more indexes manually
+    name = db.Column(db.String, index=True)
 
-class TagAlias:
-    __slots__ = ('name', 'original', 'owner_id', 'created_at')
+    content = db.Column(db.String)
+    owner_id = db.Column(db.Integer(big=True))
+    uses = db.Column(db.Integer, default=0)
+    location_id = db.Column(db.Integer(big=True), index=True)
+    created_at = db.Column(db.Datetime, default="now() at time zone 'utc'")
 
-    def __init__(self, **kwargs):
-        self.name = kwargs.pop('name')
-        self.original = kwargs.pop('original')
-        self.owner_id = kwargs.pop('owner_id')
-        self.created_at = kwargs.pop('created_at', 0.0)
+    @classmethod
+    async def create(cls, *, directory='migrations', verbose=False, connection=None):
+        created = await super().create(directory=directory, verbose=verbose, connection=connection)
+        if created:
+            async with cls.acquire_connection(connection) as con:
+                # create the indexes
+                sql = "CREATE INDEX IF NOT EXISTS tags_name_trgm_idx ON tags USING GIN (name gin_trgm_ops);\n" \
+                      "CREATE INDEX IF NOT EXISTS tags_name_lower_idx ON tags (LOWER(name));\n" \
+                      "CREATE UNIQUE INDEX IF NOT EXISTS tags_uniq_idx ON tags (LOWER(name), location_id);"
 
-    @property
-    def is_generic(self):
-        return False
+                if verbose:
+                    print(sql)
+                await con.execute(sql)
 
-    @property
-    def uses(self):
-        return 0 # compatibility with TagInfo
 
-    async def embed(self, ctx, db):
-        e = discord.Embed(title=self.name)
-        e.add_field(name='Owner', value='<@!%s>' % self.owner_id)
-        e.add_field(name='Original Tag', value=self.original)
+class TagLookup(db.Table, table_name='tag_lookup'):
+    id = db.PrimaryKeyColumn()
 
-        if self.created_at:
-            e.timestamp = datetime.datetime.fromtimestamp(self.created_at)
+    # we will create more indexes manually
+    name = db.Column(db.String, index=True)
+    location_id = db.Column(db.Integer(big=True), index=True)
 
-        owner = discord.utils.find(lambda m: m.id == self.owner_id, ctx.bot.get_all_members())
-        if owner is None:
-            owner = await ctx.bot.get_user_info(self.owner_id)
+    owner_id = db.Column(db.Integer(big=True))
+    created_at = db.Column(db.Datetime, default="now() at time zone 'utc'")
+    tag_id = db.Column(db.ForeignKey('tags', 'id'))
 
-        e.set_author(name=str(owner), icon_url=owner.avatar_url or owner.default_avatar_url)
-        return e
+    @classmethod
+    async def create(cls, *, directory='migrations', verbose=False, connection=None):
+        created = await super().create(directory=directory, verbose=verbose, connection=connection)
+        if created:
+            async with cls.acquire_connection(connection) as con:
+                # create the indexes
+                sql = "CREATE INDEX IF NOT EXISTS tag_lookup_name_trgm_idx ON tag_lookup USING GIN (name gin_trgm_ops);\n" \
+                      "CREATE INDEX IF NOT EXISTS tag_lookup_name_lower_idx ON tag_lookup (LOWER(name));\n" \
+                      "CREATE UNIQUE INDEX IF NOT EXISTS tag_lookup_uniq_idx ON tag_lookup (LOWER(name), location_id);"
 
-class TagEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, TagInfo):
-            payload = {
-                attr: getattr(obj, attr)
-                for attr in TagInfo.__slots__
-            }
-            payload['__tag__'] = True
-            return payload
-        if isinstance(obj, TagAlias):
-            payload = {
-                attr: getattr(obj, attr)
-                for attr in TagAlias.__slots__
-            }
-            payload['__tag_alias__'] = True
-            return payload
-        return json.JSONEncoder.default(self, obj)
+                if verbose:
+                    print(sql)
+                await con.execute(sql)
 
-def tag_decoder(obj):
-    if '__tag__' in obj:
-        return TagInfo(**obj)
-    if '__tag_alias__' in obj:
-        return TagAlias(**obj)
-    return obj
+class TagName(commands.clean_content):
+    def __init__(self, *, lower=False):
+        self.lower = lower
+        super().__init__()
+
+    async def convert(self, ctx, argument):
+        converted = await super().convert(ctx, argument)
+        lower = converted.lower()
+
+        if len(lower) > 100:
+            raise commands.BadArgument('Tag name is a maximum of 100 characters.')
+
+        first_word, _, _ = lower.partition(' ')
+
+        # get tag command.
+        root = ctx.bot.get_command('tag')
+        if first_word in root.all_commands:
+            raise commands.BadArgument('This tag name starts with a reserved word.')
+
+        return converted if not self.lower else lower
 
 class Tags:
     """The tag related commands."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = config.Config('tags.json', encoder=TagEncoder, object_hook=tag_decoder,
-                                                 loop=bot.loop, load_later=True)
+        db.create_tables(TagsTable, TagLookup, loop=bot.loop)
 
-    def get_database_location(self, message):
-        return 'generic' if message.channel.is_private else message.server.id
+    async def __error(self, ctx, error):
+        if isinstance(error, UnavailableTagCommand):
+            await ctx.send(error)
+        elif isinstance(error, commands.UserInputError):
+            if ctx.command.qualified_name == 'tag':
+                await ctx.acquire()
+                await ctx.invoke(self.bot.get_command('help'), cmd='tag')
+            else:
+                await ctx.send(error)
 
-    def clean_tag_content(self, content):
-        return content.replace('@everyone', '@\u200beveryone').replace('@here', '@\u200bhere')
+    # @cache.lru_cache()
+    # async def get_tag_config(self, guild_id, *, connection=None):
+    #     # tag config is stored as a special server-wide tag, 'config'
+    #     # this 'config' value is serialised as JSON in the content
 
-    def get_possible_tags(self, server):
-        """Returns a dict of possible tags that the server can execute.
+    #     query = """SELECT content FROM tags WHERE name = 'config' AND location_id = $1;"""
+    #     con = connection if connection else self.bot.pool
+    #     record = await con.fetchrow(query, guild_id)
+    #     if record is None:
+    #         return TagConfig({})
+    #     return TagConfig(json.loads(record['content']))
+
+    async def get_possible_tags(self, guild, *, connection=None):
+        """Returns a list of Records of possible tags that the guild can execute.
 
         If this is a private message then only the generic tags are possible.
         Server specific tags will override the generic tags.
         """
-        generic = self.config.get('generic', {}).copy()
-        if server is None:
-            return generic
 
-        generic.update(self.config.get(server.id, {}))
-        return generic
+        con = connection or self.bot.pool
+        if guild is None:
+            query = """SELECT name, content FROM tags WHERE location_id IS NULL;"""
+            return await con.fetch(query)
 
-    def get_tag(self, server, name, *, redirect=True):
-        # Basically, if we're in a PM then we will use the generic tag database
-        # if we aren't, we will check the server specific tag database.
-        # If we don't have a server specific database, fallback to generic.
-        # If it isn't found, fallback to generic.
-        all_tags = self.get_possible_tags(server)
-        try:
-            tag = all_tags[name]
-            if isinstance(tag, TagInfo):
-                return tag
-            elif redirect:
-                return all_tags[tag.original.lower()]
-            else:
-                return tag
-        except KeyError:
-            possible_matches = difflib.get_close_matches(name, tuple(all_tags.keys()))
-            if not possible_matches:
-                raise RuntimeError('Tag not found.')
-            raise RuntimeError('Tag not found. Did you mean...\n' + '\n'.join(possible_matches))
+        query = """SELECT name, content FROM tags WHERE location_id=$1;"""
+        return con.fetch(query, guild.id)
 
-    @commands.group(pass_context=True, invoke_without_command=True)
-    async def tag(self, ctx, *, name : str):
+    async def get_tag(self, guild_id, name, *, connection=None):
+        def disambiguate(rows, query):
+            if rows is None or len(rows) == 0:
+                raise RuntimeError('Tag not found. Maybe check the tag box?')
+
+            # check if we got an exact match
+            if rows[0]['name'].lower() == query:
+                return rows[0]
+
+            names = '\n'.join(r['name'] for r in rows)
+            raise RuntimeError(f'Tag not found. Did you mean...\n{names}')
+
+        async with db.MaybeAcquire(connection, pool=self.bot.pool) as con:
+            query = """SELECT     tag_lookup.name, tags.content
+                       FROM       tag_lookup
+                       INNER JOIN tags ON tags.id = tag_lookup.tag_id
+                       WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
+                       ORDER BY   similarity(tag_lookup.name, $2) DESC
+                       LIMIT 5;
+                    """
+
+            return disambiguate(await con.fetch(query, guild_id, name), name)
+
+    @commands.group(invoke_without_command=True)
+    @suggest_box()
+    async def tag(self, ctx, *, name: TagName(lower=True)):
         """Allows you to tag text for later retrieval.
 
         If a subcommand is not called, then this will search the tag database
         for the tag requested.
         """
-        lookup = name.lower()
-        server = ctx.message.server
+
         try:
-            tag = self.get_tag(server, lookup)
+            tag = await self.get_tag(ctx.guild.id, name, connection=ctx.db)
         except RuntimeError as e:
-            return await self.bot.say(e)
+            return await ctx.send(e)
 
-        tag.uses += 1
-        await self.bot.say(tag)
+        await ctx.send(tag['content'])
 
-        # update the database with the new tag reference
-        db = self.config.get(tag.location)
-        await self.config.put(tag.location, db)
+        # update the usage
+        query = "UPDATE tags SET uses = uses + 1 WHERE name = $1 AND (location_id=$2 OR location_id IS NULL);"
+        await ctx.db.execute(query, tag['name'], ctx.guild.id)
 
-    @tag.error
-    async def tag_error(self, error, ctx):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say('You need to pass in a tag name.')
-
-    def verify_lookup(self, lookup):
-        if '@everyone' in lookup or '@here' in lookup:
-            raise RuntimeError('That tag is using blocked words.')
-
-        if not lookup:
-            raise RuntimeError('You need to actually pass in a tag name.')
-
-        if len(lookup) > 100:
-            raise RuntimeError('Tag name is a maximum of 100 characters.')
-
-    @tag.command(pass_context=True, aliases=['add'])
-    async def create(self, ctx, name : str, *, content : str):
+    @tag.command(aliases=['add'])
+    @suggest_box()
+    async def create(self, ctx, name: TagName, *, content: commands.clean_content):
         """Creates a new tag owned by you.
 
-        If you create a tag via private message then the tag is a generic
-        tag that can be accessed in all servers. Otherwise the tag you
-        create can only be accessed in the server that it was created in.
+        This tag is server-specific and cannot be used in other servers.
+        For global tags that others can use, consider using the tag box.
+
+        Note that server moderators can delete your tag.
         """
-        content = self.clean_tag_content(content)
-        lookup = name.lower().strip()
+
+        # due to our denormalized design, I need to insert the tag in two different
+        # tables, make sure it's in a transaction so if one of the inserts fail I
+        # can act upon it
+        query = """WITH tag_insert AS (
+                        INSERT INTO tags (name, content, owner_id, location_id)
+                        VALUES ($1, $2, $3, $4)
+                        RETURNING id
+                    )
+                    INSERT INTO tag_lookup (name, owner_id, location_id, tag_id)
+                    VALUES ($1, $3, $4, (SELECT id FROM tag_insert));
+                """
+
+        # since I'm checking for the exception type and acting on it, I need
+        # to use the manual transaction blocks
+
+        tr = ctx.db.transaction()
+        await tr.start()
+
         try:
-            self.verify_lookup(lookup)
-        except RuntimeError as e:
-            return await self.bot.say(e)
+            await ctx.db.execute(query, name, content, ctx.author.id, ctx.guild.id)
+        except asyncpg.UniqueViolationError:
+            await tr.rollback()
+            await ctx.send('This tag already exists.')
+        except:
+            await tr.rollback()
+            await ctx.send('Could not create tag.')
+        else:
+            await tr.commit()
+            await ctx.send(f'Tag {name} successfully created.')
 
-        location = self.get_database_location(ctx.message)
-        db = self.config.get(location, {})
-        if lookup in db:
-            await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
-            return
-
-        db[lookup] = TagInfo(name, content, ctx.message.author.id,
-                             location=location,
-                             created_at=datetime.datetime.utcnow().timestamp())
-        await self.config.put(location, db)
-        await self.bot.say('Tag "{}" successfully created.'.format(name))
-
-    @create.error
-    async def create_error(self, error, ctx):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say('Tag ' + str(error))
-
-    @tag.command(pass_context=True)
-    async def generic(self, ctx, name : str, *, content : str):
-        """Creates a new generic tag owned by you.
-
-        Unlike the create tag subcommand,  this will always attempt to create
-        a generic tag and not a server-specific one.
-        """
-        content = self.clean_tag_content(content)
-        lookup = name.lower().strip()
-        try:
-            self.verify_lookup(lookup)
-        except RuntimeError as e:
-            await self.bot.say(str(e))
-            return
-
-        db = self.config.get('generic', {})
-        if lookup in db:
-            await self.bot.say('A tag with the name of "{}" already exists.'.format(name))
-            return
-
-        db[lookup] = TagInfo(name, content, ctx.message.author.id,
-                             location='generic',
-                             created_at=datetime.datetime.utcnow().timestamp())
-        await self.config.put('generic', db)
-        await self.bot.say('Tag "{}" successfully created.'.format(name))
-
-    @generic.error
-    async def generic_error(self, error, ctx):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say('Tag ' + str(error))
-
-    @tag.command(pass_context=True, no_pm=True)
-    async def alias(self, ctx, new_name: str, *, old_name: str):
+    @tag.command()
+    @suggest_box()
+    async def alias(self, ctx, new_name: TagName, *, old_name: TagName):
         """Creates an alias for a pre-existing tag.
 
         You own the tag alias. However, when the original
@@ -261,40 +245,27 @@ class Tags:
         Tag aliases cannot be edited. You must delete
         the alias and remake it to point it to another
         location.
-
-        You cannot have generic aliases.
         """
 
-        message = ctx.message
-        server = ctx.message.server
-        lookup = new_name.lower().strip()
-        old = old_name.lower()
-
-        tags = self.get_possible_tags(server)
-        db = self.config.get(server.id, {})
-        try:
-            original = tags[old]
-        except KeyError:
-            return await self.bot.say('Pointed to tag does not exist.')
-
-        if isinstance(original, TagAlias):
-            return await self.bot.say('Cannot make an alias to an alias.')
+        query = """INSERT INTO tag_lookup (name, owner_id, location_id, tag_id)
+                   SELECT $1, tag_lookup.owner_id, tag_lookup.location_id, tag_lookup.tag_id
+                   FROM tag_lookup
+                   WHERE tag_lookup.location_id=$3 AND LOWER(tag_lookup.name)=$2;
+                """
 
         try:
-            self.verify_lookup(lookup)
-        except RuntimeError as e:
-            return await self.bot.say(e)
+            status = await ctx.db.execute(query, new_name, old_name.lower(), ctx.guild.id)
+        except asyncpg.UniqueViolationError:
+            await ctx.send('A tag with this name already exists.')
+        else:
+            # The status returns INSERT N M, where M is the number of rows inserted.
+            if status[-1] == '0':
+                await ctx.send(f'A tag with the name of "{old_name}" does not exist.')
+            else:
+                await ctx.send(f'Tag alias "{new_name}" that points to "{old_name}" successfully created.')
 
-        if lookup in db:
-            return await self.bot.say('A tag with this name already exists.')
-
-        db[lookup] = TagAlias(name=new_name, original=old, owner_id=ctx.message.author.id,
-                              created_at=datetime.datetime.utcnow().timestamp())
-
-        await self.config.put(server.id, db)
-        await self.bot.say('Tag alias "{}" that points to "{.name}" successfully created.'.format(new_name, original))
-
-    @tag.command(pass_context=True, ignore_extra=False)
+    @tag.command(ignore_extra=False)
+    @suggest_box()
     async def make(self, ctx):
         """Interactive makes a tag for you.
 
@@ -302,202 +273,361 @@ class Tags:
         its name and its content. This works similar to the tag
         create command.
         """
-        message = ctx.message
-        location = self.get_database_location(message)
-        db = self.config.get(location, {})
 
-        await self.bot.say('Hello. What would you like the name tag to be?')
+        await ctx.send('Hello. What would you like the name tag to be?')
+
+        converter = TagName()
 
         def check(msg):
-            try:
-                self.verify_lookup(msg.content.lower())
-                return True
-            except:
-                return False
+            return msg.author == ctx.author and ctx.channel == msg.channel
 
-        name = await self.bot.wait_for_message(author=message.author, channel=message.channel, timeout=60.0, check=check)
-        if name is None:
-            await self.bot.say('You took too long. Goodbye.')
-            return
+        # release the connection back to the pool to wait for our user
+        await ctx.release()
 
-        lookup = name.content.lower()
-        if lookup in db:
-            fmt = 'Sorry. A tag with that name exists already. Redo the command {0.prefix}tag make.'
-            await self.bot.say(fmt.format(ctx))
-            return
+        try:
+            name = await self.bot.wait_for('message', timeout=30.0, check=check)
+        except asyncio.TimeoutError:
+            return await ctx.send('You took long. Goodbye.')
 
-        await self.bot.say('Alright. So the name is {0.content}. What about the tag\'s content?'.format(name))
-        content = await self.bot.wait_for_message(author=name.author, channel=name.channel, timeout=300.0)
-        if content is None:
-            await self.bot.say('You took too long. Goodbye.')
-            return
+        try:
+            name = await converter.convert(ctx, name.content)
+        except commands.BadArgument as e:
+            return await ctx.send(f'{e}. Redo the command "{ctx.prefix}tag make" to retry.')
 
-        if len(content.content) == 0 and len(content.attachments) > 0:
-            # we have an attachment
-            content = content.attachments[0].get('url', '*Could not get attachment data*')
+        # reacquire our connection since we need the query
+        await ctx.acquire()
+
+        # it's technically kind of expensive to do two queries like this
+        # i.e. one to check if it exists and then another that does the insert
+        # while also checking if it exists due to the constraints,
+        # however for UX reasons I might as well do it.
+
+        query = """SELECT 1 FROM tags WHERE location_id=$1 AND LOWER(name)=$2;"""
+        row = await ctx.db.fetchrow(query, ctx.guild.id, name.lower())
+        if row is not None:
+            return await ctx.send('Sorry. A tag with that name already exists. ' \
+                                 f'Redo the command "{ctx.prefix}tag make" to retry.')
+
+
+        await ctx.send(f'Neat. So the name is {name}. What about the tag\'s content?')
+
+        # release while we wait for response
+        await ctx.release()
+
+        try:
+            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+        except asyncio.TimeoutError:
+            return await ctx.send('You took too long. Goodbye.')
+
+        if msg.content:
+            cleaned_content = await commands.clean_content().convert(ctx, msg.content)
         else:
-            content = self.clean_tag_content(content.content)
+            # fast path I guess?
+            clean_content = msg.content
 
-        db[lookup] = TagInfo(name.content, content, name.author.id,
-                             location=location,
-                             created_at=datetime.datetime.utcnow().timestamp())
-        await self.config.put(location, db)
-        await self.bot.say('Cool. I\'ve made your {0.content} tag.'.format(name))
+        if msg.attachments:
+            clean_content = f'{clean_content}\n{msg.attachments[0].url}'
+
+        await ctx.acquire()
+        await ctx.invoke(self.create, name=name, content=cleaned_content)
 
     @make.error
-    async def tag_make_error(self, error, ctx):
+    async def tag_make_error(self, ctx, error):
         if isinstance(error, commands.TooManyArguments):
-            await self.bot.say('Please call just {0.prefix}tag make'.format(ctx))
+            await self.bot.say(f'Please call just {ctx.prefix}tag make')
 
-    def top_three_tags(self, db):
+    async def guild_tag_stats(self, ctx):
+        # I'm not sure on how to do this with a single query
+        # so I'm splitting it up into different queries
+
+        e = discord.Embed(colour=discord.Colour.blurple(), title='Tag Stats')
+        e.set_footer(text='These statistics are server-specific.')
+
+        # top 3 commands
+        query = """SELECT
+                       name,
+                       uses,
+                       COUNT(*) OVER () AS "Count",
+                       SUM(uses) OVER () AS "Total Uses"
+                   FROM tags
+                   WHERE location_id=$1
+                   ORDER BY uses DESC
+                   LIMIT 3;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id)
+        total = records[0]
+        e.description = f'{total["Count"]} tags, {total["Total Uses"]} tag uses'
+
+        if len(records) < 3:
+            # fill with data to ensure that we have a minimum of 3
+            records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
+
         emoji = 129351 # ord(':first_place:')
-        popular = sorted(db.values(), key=lambda t: t.uses, reverse=True)
-        for tag in popular[:3]:
-            yield (chr(emoji), tag)
-            emoji += 1
 
-    @tag.command(pass_context=True)
-    async def stats(self, ctx):
-        """Gives stats about the tag database."""
-        server = ctx.message.server
-        generic = self.config.get('generic', {})
-        e = discord.Embed()
-        e.add_field(name='Generic', value='%s tags\n%s uses' % (len(generic), sum(t.uses for t in generic.values())))
+        for (offset, (name, uses, _, _)) in enumerate(records):
+            if name:
+                value = f'{name} ({uses} uses)'
+            else:
+                value = 'Nothing!'
 
-        total_tags = sum(len(c) for c in self.config.all().values())
-        total_uses = sum(sum(t.uses for t in c.values()) for c in self.config.all().values())
-        e.add_field(name='Global', value='%s tags\n%s uses' % (total_tags, total_uses))
+            e.add_field(name=f'{chr(emoji + offset)} Tag', value=value)
 
-        if server is not None:
-            db = self.config.get(server.id, {})
-            e.add_field(name='Server-Specific', value='%s tags\n%s uses' % (len(db), sum(t.uses for t in db.values())))
+        # tag users
+        query = """SELECT
+                       COUNT(*) AS tag_uses,
+                       author_id
+                   FROM commands
+                   WHERE guild_id=$1 AND command='tag'
+                   GROUP BY author_id
+                   ORDER BY COUNT(*) DESC
+                   LIMIT 3;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id)
+
+        if len(records) < 3:
+            # fill with data to ensure that we have a minimum of 3
+            records.extend((None, None) for i in range(0, 3 - len(records)))
+
+        for (offset, (uses, author_id)) in enumerate(records):
+            if author_id is not None:
+                value = f'<@{author_id}> ({uses} times)'
+            else:
+                value = 'No one!'
+
+            e.add_field(name=f'{chr(emoji + offset)} Tag User', value=value)
+
+        # tag creators
+
+        query = """SELECT
+                       COUNT(*) AS "Tags",
+                       owner_id
+                   FROM tags
+                   WHERE location_id=$1
+                   GROUP BY owner_id
+                   ORDER BY COUNT(*) DESC
+                   LIMIT 3;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id)
+
+        if len(records) < 3:
+            # fill with data to ensure that we have a minimum of 3
+            records.extend((None, None) for i in range(0, 3 - len(records)))
+
+        for (offset, (count, owner_id)) in enumerate(records):
+            if owner_id is not None:
+                value = f'<@{owner_id}> ({count} tags)'
+            else:
+                value = 'No one!'
+
+            e.add_field(name=f'{chr(emoji + offset)} Tag Creator', value=value)
+
+        await ctx.send(embed=e)
+
+    async def member_tag_stats(self, ctx, member):
+        e = discord.Embed(colour=discord.Colour.blurple(), title=f'{member.display_name} Stats')
+        e.set_footer(text='These statistics are server-specific.')
+
+        query = """SELECT COUNT(*)
+                   FROM commands
+                   WHERE guild_id=$1 AND command='tag' AND author_id=$2
+                """
+
+        count = await ctx.db.fetchrow(query, ctx.guild.id, member.id)
+
+        # top 3 commands and total tags/uses
+        query = """SELECT
+                       name,
+                       uses,
+                       COUNT(*) OVER() AS "Count",
+                       SUM(uses) OVER () AS "Uses"
+                   FROM tags
+                   WHERE location_id=$1 AND owner_id=$2
+                   ORDER BY uses DESC
+                   LIMIT 3;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id, member.id)
+
+        e.add_field(name='Owned Tags', value=records[0]['Count'])
+        e.add_field(name='Owned Tag Uses', value=records[0]['Uses'])
+        e.add_field(name='Tag Command Uses', value=count[0])
+
+        if len(records) < 3:
+            # fill with data to ensure that we have a minimum of 3
+            records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
+
+        emoji = 129351 # ord(':first_place:')
+
+        for (offset, (name, uses, _, _)) in enumerate(records):
+            if name:
+                value = f'{name} ({uses} uses)'
+            else:
+                value = 'Nothing!'
+
+            e.add_field(name=f'{chr(emoji + offset)} Owned Tag', value=value)
+
+        await ctx.send(embed=e)
+
+    @tag.command()
+    @suggest_box()
+    async def stats(self, ctx, *, member: discord.Member = None):
+        """Gives tag statistics for a member or the server."""
+
+        if member is None:
+            await self.guild_tag_stats(ctx)
         else:
-            db = {}
-            e.add_field(name='Server-Specific', value='No Info')
+            await self.member_tag_stats(ctx, member)
 
-        fmt = '{0.name} ({0.uses} uses)'
-        for emoji, tag in self.top_three_tags(generic):
-            e.add_field(name=emoji + ' Generic Tag', value=fmt.format(tag))
-
-        for emoji, tag in self.top_three_tags(db):
-            e.add_field(name=emoji + ' Server Tag', value=fmt.format(tag))
-
-        await self.bot.say(embed=e)
-
-    @tag.command(pass_context=True)
-    async def edit(self, ctx, name : str, *, content : str):
+    @tag.command()
+    @suggest_box()
+    async def edit(self, ctx, name: TagName(lower=True), *, content: commands.clean_content):
         """Modifies an existing tag that you own.
 
-        This command completely replaces the original text. If you edit
-        a tag via private message then the tag is looked up in the generic
-        tag database. Otherwise it looks at the server-specific database.
+        This command completely replaces the original text. If
+        you want to get the old text back, consider using the
+        tag raw command.
         """
 
-        content = self.clean_tag_content(content)
-        lookup = name.lower()
-        server = ctx.message.server
-        try:
-            tag = self.get_tag(server, lookup, redirect=False)
-        except RuntimeError as e:
-            return await self.bot.say(e)
+        query = "UPDATE tags SET content=$1 WHERE LOWER(name)=$2 AND location_id=$3 AND owner_id=$4;"
+        status = await ctx.db.execute(query, content, name, ctx.guild.id, ctx.author.id)
 
-        if isinstance(tag, TagAlias):
-            return await self.bot.say('Cannot edit tag aliases. Remake it if you want to re-point it.')
+        # the status returns UPDATE <count>
+        # if the <count> is 0, then nothing got updated
+        # probably due to the WHERE clause failing
 
-        if tag.owner_id != ctx.message.author.id:
-            await self.bot.say('Only the tag owner can edit this tag.')
-            return
+        if status[-1] == '0':
+            await ctx.send('Could not edit that tag. Are you sure it exists and you own it?')
+        else:
+            await ctx.send('Successfully edited tag.')
 
-        db = self.config.get(tag.location)
-        tag.content = content
-        await self.config.put(tag.location, db)
-        await self.bot.say('Tag successfully edited.')
-
-    @tag.command(pass_context=True, aliases=['delete'])
-    async def remove(self, ctx, *, name : str):
+    @tag.command(aliases=['delete'])
+    @suggest_box()
+    async def remove(self, ctx, *, name: TagName(lower=True)):
         """Removes a tag that you own.
 
         The tag owner can always delete their own tags. If someone requests
-        deletion and has Manage Messages permissions or a Bot Mod role then
-        they can also remove tags from the server-specific database. Generic
-        tags can only be deleted by the bot owner or the tag owner.
+        deletion and has Manage Server permissions then they can also
+        delete it.
 
         Deleting a tag will delete all of its aliases as well.
         """
-        lookup = name.lower()
-        server = ctx.message.server
-        try:
-            tag = self.get_tag(server, lookup, redirect=False)
-        except RuntimeError as e:
-            return await self.bot.say(e)
 
-        if not tag.is_generic:
-            can_delete = checks.role_or_permissions(ctx, lambda r: r.name == 'Bot Admin', manage_messages=True)
+        bypass_owner_check = ctx.author.id == self.bot.owner_id or ctx.author.guild_permissions.manage_messages
+        clause = 'LOWER(name)=$1 AND location_id=$2'
+
+        if bypass_owner_check:
+            args = [name, ctx.guild.id]
         else:
-            can_delete = checks.is_owner_check(ctx.message)
+            args = [name, ctx.guild.id, ctx.author.id]
+            clause = f'{clause} AND owner_id=$3'
 
-        can_delete = can_delete or tag.owner_id == ctx.message.author.id
+        query = f'DELETE FROM tag_lookup WHERE {clause} RETURNING tag_id;'
+        deleted = await ctx.db.fetchrow(query, *args)
 
-        if not can_delete:
-            await self.bot.say('You do not have permissions to delete this tag.')
+        if deleted is None:
+            await ctx.send('Could not delete tag. Either it does not exist or you do not have permissions to do so.')
             return
 
-        if isinstance(tag, TagAlias):
-            location = server.id
-            db = self.config.get(location)
-            del db[lookup]
-            msg = 'Tag alias successfully removed.'
+        args.append(deleted[0])
+        query = f'DELETE FROM tags WHERE id=${len(args)} AND {clause};'
+        status = await ctx.db.execute(query, *args)
+
+        # the status returns DELETE <count>, similar to UPDATE above
+        if status[-1] == '0':
+            # this is based on the previous delete above
+            await ctx.send('Tag alias successfully deleted.')
         else:
-            location = tag.location
-            db = self.config.get(location)
-            msg = 'Tag and all corresponding aliases successfully removed.'
+            await ctx.send('Tag and corresponding aliases successfully deleted.')
 
-            if server is not None:
-                alias_db = self.config.get(server.id)
-                aliases = [key for key, t in alias_db.items() if isinstance(t, TagAlias) and t.original == lookup]
-                for alias in aliases:
-                    alias_db.pop(alias, None)
+    async def _send_alias_info(self, ctx, record):
+        embed = discord.Embed(colour=discord.Colour.blurple())
 
-            del db[lookup]
+        owner_id = record['lookup_owner_id']
+        embed.title = record['lookup_name']
+        embed.timestamp = record['lookup_created_at']
+        embed.set_footer(text='Alias created at')
 
-        await self.config.put(location, db)
-        await self.bot.say(msg)
+        user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
+        embed.set_author(name=str(user), icon_url=user.avatar_url)
 
-    @tag.command(pass_context=True, aliases=['owner'])
-    async def info(self, ctx, *, name : str):
+        embed.add_field(name='Owner', value=f'<@{owner_id}>')
+        embed.add_field(name='Original', value=record['name'])
+        await ctx.send(embed=embed)
+
+    async def _send_tag_info(self, ctx, record):
+        embed = discord.Embed(colour=discord.Colour.blurple())
+
+        owner_id = record['owner_id']
+        embed.title = record['name']
+        embed.timestamp = record['created_at']
+        embed.set_footer(text='Tag created at')
+
+        user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
+        embed.set_author(name=str(user), icon_url=user.avatar_url)
+
+        embed.add_field(name='Owner', value=f'<@{owner_id}>')
+        embed.add_field(name='Uses', value=record['uses'])
+
+        query = """SELECT (
+                       SELECT COUNT(*)
+                       FROM tags second
+                       WHERE (second.uses, second.id) >= (first.uses, first.id)
+                         AND second.location_id = first.location_id
+                   ) AS rank
+                   FROM tags first
+                   WHERE first.id=$1
+                """
+
+        rank = await ctx.db.fetchrow(query, record['id'])
+
+        if rank is not None:
+            embed.add_field(name='Rank', value=rank['rank'])
+
+        await ctx.send(embed=embed)
+
+    @tag.command( aliases=['owner'])
+    @suggest_box()
+    async def info(self, ctx, *, name: TagName(lower=True)):
         """Retrieves info about a tag.
 
         The info includes things like the owner and how many times it was used.
         """
 
-        lookup = name.lower()
-        server = ctx.message.server
-        try:
-            tag = self.get_tag(server, lookup, redirect=False)
-        except RuntimeError as e:
-            return await self.bot.say(e)
+        query = """SELECT
+                       tag_lookup.name <> tags.name AS "Alias",
+                       tag_lookup.name AS lookup_name,
+                       tag_lookup.created_at AS lookup_created_at,
+                       tag_lookup.owner_id AS lookup_owner_id,
+                       tags.*
+                   FROM tag_lookup
+                   INNER JOIN tags ON tag_lookup.tag_id = tags.id
+                   WHERE LOWER(tag_lookup.name)=$1 AND tag_lookup.location_id=$2
+                """
 
-        embed = await tag.embed(ctx, self.get_possible_tags(server))
-        await self.bot.say(embed=embed)
+        record = await ctx.db.fetchrow(query, name, ctx.guild.id)
+        if record is None:
+            return await ctx.send('Tag not found.')
 
-    @info.error
-    async def info_error(self, error, ctx):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say('Missing tag name to get info of.')
+        if record['Alias']:
+            await self._send_alias_info(ctx, record)
+        else:
+            await self._send_tag_info(ctx, record)
 
     @tag.command(pass_context=True)
-    async def raw(self, ctx, *, name: str):
+    @suggest_box()
+    async def raw(self, ctx, *, name: TagName(lower=True)):
         """Gets the raw content of the tag.
 
         This is with markdown escaped. Useful for editing.
         """
 
-        lookup = name.lower()
-        server = ctx.message.server
         try:
-            tag = self.get_tag(server, lookup)
+            tag = await self.get_tag(ctx.guild.id, name, connection=ctx.db)
         except RuntimeError as e:
-            return await self.bot.say(e)
+            return await ctx.send(e)
 
         transformations = {
             re.escape(c): '\\' + c
@@ -508,134 +638,380 @@ class Tags:
             return transformations.get(re.escape(obj.group(0)), '')
 
         pattern = re.compile('|'.join(transformations.keys()))
-        await self.bot.say(pattern.sub(replace, tag.content))
+        await ctx.send(pattern.sub(replace, tag['content']))
 
-    @tag.command(name='list', pass_context=True)
-    async def _list(self, ctx, *, member : discord.Member = None):
-        """Lists all the tags that belong to you or someone else.
+    @tag.command(name='list')
+    @suggest_box()
+    async def _list(self, ctx, *, member: discord.Member = None):
+        """Lists all the tags that belong to you or someone else."""
 
-        This includes the generic tags as well. If this is done in a private
-        message then you will only get the generic tags you own and not the
-        server specific tags.
-        """
+        member = member or ctx.author
 
-        owner = ctx.message.author if member is None else member
-        server = ctx.message.server
-        tags = [tag.name for tag in self.config.get('generic', {}).values() if tag.owner_id == owner.id]
-        if server is not None:
-            tags.extend(tag.name for tag in self.config.get(server.id, {}).values() if tag.owner_id == owner.id)
+        query = """SELECT name
+                   FROM tag_lookup
+                   WHERE location_id=$1 AND owner_id=$2
+                   ORDER BY name
+                """
 
-        tags.sort()
+        rows = await ctx.db.fetch(query, ctx.guild.id, member.id)
+        await ctx.release()
 
-        if tags:
+        if rows:
             try:
-                p = Pages(self.bot, message=ctx.message, entries=tags)
-                p.embed.colour = 0x738bd7 # blurple
-                p.embed.set_author(name=owner.display_name, icon_url=owner.avatar_url or owner.default_avatar_url)
+                p = Pages(self.bot, message=ctx.message, entries=tuple(r[0] for r in rows))
+                p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
                 await p.paginate()
             except Exception as e:
-                await self.bot.say(e)
+                await ctx.send(e)
         else:
-            await self.bot.say('{0.name} has no tags.'.format(owner))
+            await ctx.send(f'{member} has no tags.')
 
-    @tag.command(name='all', pass_context=True, no_pm=True)
+    @commands.command()
+    @suggest_box()
+    async def tags(self, ctx, *, member: discord.Member = None):
+        """An alias for tag list command."""
+        await ctx.invoke(self._list, member=member)
+
+    @tag.command(name='all')
+    @suggest_box()
     async def _all(self, ctx):
         """Lists all server-specific tags for this server."""
 
-        tags = [tag.name for tag in self.config.get(ctx.message.server.id, {}).values()]
-        tags.sort()
+        query = """SELECT name
+                   FROM tag_lookup
+                   WHERE location_id=$1
+                """
 
-        if tags:
+        rows = await ctx.db.fetch(query, ctx.guild.id)
+        await ctx.release()
+
+        if rows:
+            # PSQL orders this oddly for some reason
+            entries = sorted(tuple(r[0] for r in rows))
             try:
-                p = Pages(self.bot, message=ctx.message, entries=tags, per_page=15)
-                p.embed.colour =  0x738bd7 # blurple
+                p = Pages(self.bot, message=ctx.message, entries=entries, per_page=20)
                 await p.paginate()
             except Exception as e:
-                await self.bot.say(e)
+                await ctx.send(e)
         else:
-            await self.bot.say('This server has no server-specific tags.')
+            await ctx.send('This server has no server-specific tags.')
 
-    @tag.command(pass_context=True, no_pm=True)
-    @checks.mod_or_permissions(manage_messages=True)
+    @tag.command()
+    @suggest_box()
+    @checks.has_guild_permissions(manage_messages=True)
     async def purge(self, ctx, member: discord.Member):
         """Removes all server-specific tags by a user.
 
-        You must have Manage Messages permissions to use this.
+        You must have server-wide Manage Messages permissions to use this.
         """
 
-        db = self.config.get(ctx.message.server.id, {})
-        tags = [key for key, tag in db.items() if tag.owner_id == member.id]
+        # Though inefficient, for UX purposes we should do two queries
 
-        if not ctx.message.channel.permissions_for(ctx.message.server.me).add_reactions:
-            return await self.bot.say('Bot cannot add reactions.')
+        query = "SELECT COUNT(*) FROM tags WHERE location_id=$1 AND owner_id=$2;"
+        count = await ctx.db.fetchrow(query, ctx.guild.id, member.id)
+        count = count[0] # COUNT(*) always returns 0 or higher
 
-        if not tags:
-            return await self.bot.say('This user has no server-specific tags.')
+        if count == 0:
+            return await ctx.send(f'{member} does not have any tags to purge.')
 
-        msg = await self.bot.say('This will delete %s tags are you sure? **This action cannot be reversed**.\n\n' \
-                                 'React with either \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.' % len(tags))
+        confirm = await ctx.prompt(f'This will delete {count} tags are you sure? **This action cannot be reversed**.')
+        if not confirm:
+            return await ctx.send('Cancelling tag purge request.')
 
-        cancel = False
-        author_id = ctx.message.author.id
-        def check(reaction, user):
-            nonlocal cancel
-            if user.id != author_id:
-                return False
+        query = "DELETE FROM tags WHERE location_id=$1 AND owner_id=$2;"
+        await ctx.db.execute(query, ctx.guild.id, member.id)
 
-            if reaction.emoji == '\N{WHITE HEAVY CHECK MARK}':
-                return True
-            elif reaction.emoji == '\N{CROSS MARK}':
-                cancel = True
-                return True
-            return False
+        await ctx.send(f'Successfully removed all {count} tags that belong to {member}.')
 
-        for emoji in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
-            await self.bot.add_reaction(msg, emoji)
-
-        react = await self.bot.wait_for_reaction(message=msg, check=check, timeout=60.0)
-        if react is None or cancel:
-            await self.bot.delete_message(msg)
-            return await self.bot.say('Cancelling.')
-
-        for key in tags:
-            db.pop(key)
-
-        await self.config.put(ctx.message.server.id, db)
-        await self.bot.delete_message(msg)
-        await self.bot.say('Successfully removed all %s tags that belong to %s' % (len(tags), member.display_name))
-
-    @tag.command(pass_context=True)
-    async def search(self, ctx, *, query : str):
+    @tag.command()
+    @suggest_box()
+    async def search(self, ctx, *, query: commands.clean_content):
         """Searches for a tag.
 
-        This searches both the generic and server-specific database. If it's
-        a private message, then only generic tags are searched.
-
-        The query must be at least 2 characters.
+        The query must be at least 3 characters.
         """
 
-        server = ctx.message.server
-        query = query.lower()
-        if len(query) < 2:
-            return await self.bot.say('The query length must be at least two characters.')
+        if len(query) < 3:
+            return await ctx.send('The query length must be at least three characters.')
 
-        tags = self.get_possible_tags(server)
-        results = [tag.name for key, tag in tags.items() if query in key]
+        sql = """SELECT name
+                 FROM tag_lookup
+                 WHERE location_id=$1 AND name % $2
+                 ORDER BY similarity(name, $2) DESC
+                 LIMIT 100;
+              """
+
+        results = await ctx.db.fetch(sql, ctx.guild.id, query)
 
         if results:
             try:
-                p = Pages(self.bot, message=ctx.message, entries=results, per_page=15)
-                p.embed.colour = 0x738bd7 # blurple
+                p = Pages(self.bot, message=ctx.message, entries=tuple(r[0] for r in results), per_page=20)
+            except Exception as e:
+                await ctx.send(e)
+            else:
+                await ctx.release()
+                await p.paginate()
+        else:
+            await ctx.send('No tags found.')
+
+    @tag.group()
+    @can_use_box()
+    async def box(self, ctx):
+        """The tag box is where global tags are stored.
+
+        The tags in the box are not part of your server's tag list
+        unless you explicitly enable them. As a result, only those
+        with Manage Messages can check out the tag box, or anyone
+        if it's a private message.
+
+        To play around with the tag box, you should use the subcommands
+        provided.
+        """
+
+        if ctx.invoked_subcommand is None or ctx.subcommand_passed == 'box':
+            cmd = self.bot.get_command('help')
+            await ctx.invoke(cmd, cmd='tag box')
+
+    @box.command(name='put')
+    async def box_put(self, ctx, name: TagName, *, content: commands.clean_content):
+        """Puts a tag in the tag box.
+
+        These are global tags that anyone can opt-in to receiving
+        via the "tag box take" subcommand.
+        """
+
+        query = "INSERT INTO tags (name, content, owner_id) VALUES ($1, $2, $3);"
+
+        try:
+            await ctx.db.execute(query, name, content, ctx.author.id)
+        except asyncpg.UniqueViolationError:
+            await ctx.send('A tag with this name exists in the box already.')
+        else:
+            await ctx.send('Successfully put tag in the box.')
+
+    @box.command(name='take')
+    @commands.guild_only()
+    async def box_take(self, ctx, *, name: TagName(lower=True)):
+        """Takes a tag from the tag box.
+
+        When you take a tag from the tag box, you essentially
+        duplicate the tag for use for your own server. Any updates
+        to the tag in the tag box does not affect your duplicated
+        tag and your duplicated tag acts like a regular server
+        specific tag that you now own.
+        """
+
+        query = "SELECT name, content FROM tags WHERE LOWER(name)=$1 AND location_id IS NULL;"
+
+        tag = await ctx.db.fetchrow(query, name)
+
+        if tag is None:
+            return await ctx.send('A tag with this name cannot be found in the box.')
+
+        await ctx.invoke(self.create, name=tag['name'], content=tag['content'])
+
+    @box.command(name='show', aliases=['get'])
+    async def box_show(self, ctx, *, name: TagName(lower=True)):
+        """Shows a tag from the tag box."""
+
+        query = "SELECT name, content FROM tags WHERE LOWER(name)=$1 AND location_id IS NULL;"
+
+        tag = await ctx.db.fetchrow(query, name)
+
+        if tag is None:
+            return await ctx.send('A tag with this name cannot be found in the box.')
+
+        await ctx.send(tag['content'])
+
+        query = "UPDATE tags SET uses = uses + 1 WHERE name=$1 AND location_id IS NULL;"
+        await ctx.db.execute(query, tag['name'])
+
+    @box.command(name='edit', aliases=['change'])
+    async def box_edit(self, ctx, name: TagName(lower=True), *, content: commands.clean_content):
+        """Edits tag from the tag box.
+
+        You must own the tag to edit it.
+
+        Editing the tag does not affect tags where people
+        took it for their own personal use.
+        """
+
+        query = "UPDATE tags SET content = $1 WHERE LOWER(name)=$2 AND owner_id=$3 AND location_id IS NULL;"
+        status = await ctx.db.execute(query, name, content, ctx.author.id)
+
+        if status[-1] == '0':
+            await ctx.send('This tag is either not in the box or you do not own it.')
+        else:
+            await ctx.send('Successfully edited tag.')
+
+    @box.command(name='delete', aliases=['remove'])
+    async def box_delete(self, ctx, *, name: TagName(lower=True)):
+        """Deletes a tag from the tag box.
+
+        You must own the tag to delete it.
+
+        Deleting the tag does not affect tags where people
+        took it for their own personal use.
+        """
+
+        query = "DELETE FROM tags WHERE LOWER(name)=$1 AND owner_id=$2 AND location_id IS NULL;"
+        status = await ctx.db.execute(query, name, content, ctx.author.id)
+
+        if status[-1] == '0':
+            await ctx.send('This tag is either not in the box or you do not own it.')
+        else:
+            await ctx.send('Successfully deleted tag.')
+
+    @box.command(name='info')
+    async def box_info(self, ctx, *, name: TagName(lower=True)):
+        """Shows information about a tag in the box."""
+
+        query = """SELECT first.*, (
+                       SELECT COUNT(*)
+                       FROM tags second
+                       WHERE (second.uses, second.id) >= (first.uses, first.id)
+                         AND second.location_id IS NULL
+                   ) AS rank
+                   FROM tags first
+                   WHERE LOWER(first.name)=$1 AND first.location_id IS NULL;
+                """
+
+        data = await ctx.db.fetchrow(query, name)
+
+        if data is None or data['name'] is None:
+            return await ctx.send('This tag is not in the box.')
+
+        embed = discord.Embed(colour=discord.Colour.blurple())
+
+        owner_id = data['owner_id']
+        embed.title = data['name']
+        embed.timestamp = data['created_at']
+        embed.set_footer(text='Tag added to box')
+
+        user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
+        embed.set_author(name=str(user), icon_url=user.avatar_url)
+
+        embed.add_field(name='Owner', value=f'<@{owner_id}>')
+        embed.add_field(name='Uses', value=data['uses'])
+        embed.add_field(name='Rank', value=data['rank'])
+
+        await ctx.send(embed=embed)
+
+    @box.command(name='search')
+    async def box_search(self, ctx, *, query: commands.clean_content):
+        """Searches for a tag in the tag box.
+
+        The query must be at least 3 characters long.
+        """
+
+        if len(query) < 3:
+            return await ctx.send('Query must be 3 characters or longer.')
+
+        sql = "SELECT name FROM tags WHERE name % $1 AND location_id IS NULL LIMIT 100;"
+        data = await ctx.db.fetch(sql, query)
+
+        if len(data) == 0:
+            return await ctx.send('No tags found.')
+
+        await ctx.release()
+
+        data = [r[0] for r in data]
+        data.sort()
+
+        try:
+            p = Pages(self.bot, message=ctx.message, entries=data, per_page=20)
+            await p.paginate()
+        except Exception as e:
+            await ctx.send(e)
+
+    @box.command(name='stats')
+    async def box_stats(self, ctx):
+        """Shows statistics about the tag box."""
+
+        # This is the best I could split it to.
+        # Originally it was 3 different queries but 2 is the best I could do
+        # Splitting it into a single query incurred insane overhead for some reason.
+
+        query = """SELECT
+                       COUNT(*) AS "Creator Total",
+                       SUM(uses) AS "Creator Uses",
+                       owner_id AS "Creator ID",
+                       COUNT(*) OVER () AS "Creator Count"
+                   FROM tags
+                   WHERE location_id IS NULL
+                   GROUP BY owner_id
+                   ORDER BY SUM(uses) DESC
+                   LIMIT 3;
+                """
+
+        top_creators = await ctx.db.fetch(query)
+
+        query = """SELECT
+                       name AS "Tag Name",
+                       uses AS "Tag Uses",
+                       COUNT(*) OVER () AS "Total Tags",
+                       SUM(uses) OVER () AS "Total Uses"
+                   FROM tags
+                   WHERE location_id IS NULL
+                   ORDER BY uses DESC
+                   LIMIT 3;
+                """
+
+        top_tags = await ctx.db.fetch(query)
+
+        embed = discord.Embed(colour=discord.Colour.blurple(), title='Tag Box Stats')
+
+        embed.add_field(name='Total Tags', value=top_tags[0]['Total Tags'])
+        embed.add_field(name='Total Uses', value=top_tags[0]['Total Uses'])
+        embed.add_field(name='Tag Creators', value=top_creators[0]['Creator Count'])
+
+        emoji = 129351 # ord(':first_place:')
+
+        for offset, (name, uses, _, _) in enumerate(top_tags):
+            embed.add_field(name=f'{chr(emoji + offset)} Tag', value=f'{name} ({uses} uses)')
+
+        values = []
+        for offset, (total, uses, owner_id, _) in enumerate(top_creators):
+            values.append(f'{chr(emoji + offset)}: {self.bot.get_user(owner_id) or owner_id} -- {total} tags ({uses} uses)')
+
+        embed.add_field(name=f'Tag Creators', value='\n'.join(values), inline=False)
+        embed.set_footer(text='These statistics are for the tag box.')
+        await ctx.send(embed=embed)
+
+    @box.command(name='list')
+    async def box_list(self, ctx, *, user: discord.User = None):
+        """Lists all the tags in the box that belong to you or someone else.
+
+        Unlike the regular tag list command, this one is sorted by uses.
+        """
+
+        user = user or ctx.author
+
+        query = """SELECT name, uses
+                   FROM tags
+                   WHERE location_id IS NULL AND owner_id=$1
+                   ORDER BY uses DESC
+                """
+
+        rows = await ctx.db.fetch(query, user.id)
+        await ctx.release()
+
+        if rows:
+            entries = [f'{name} ({uses} uses)' for name, uses in rows]
+            try:
+                p = Pages(self.bot, message=ctx.message, entries=entries)
+                p.embed.set_author(name=user.display_name, icon_url=user.avatar_url)
+                p.embed.title = f'{sum(u for _, u in rows)} total uses'
                 await p.paginate()
             except Exception as e:
-                await self.bot.say(e)
+                await ctx.send(e)
         else:
-            await self.bot.say('No tags found.')
+            await ctx.send(f'{user} has no tags.')
 
-    @search.error
-    async def search_error(self, error, ctx):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.bot.say('Missing query to search for.')
+    @tag.command(hidden=True)
+    async def config(self, ctx):
+        """This is a reserved tag command. Check back later."""
+        pass
 
 def setup(bot):
     bot.add_cog(Tags(bot))

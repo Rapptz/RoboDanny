@@ -70,6 +70,75 @@ class Context(commands.Context):
 
         raise ValueError('Too many tries. Goodbye.')
 
+    async def prompt(self, message, *, timeout=60.0, delete_after=True, reacquire=True):
+        """An interactive reaction confirmation dialog.
+
+        Parameters
+        -----------
+        message: str
+            The message to show along with the prompt.
+        timeout: float
+            How long to wait before returning.
+        delete_after: bool
+            Whether to delete the confirmation message after we're done.
+        reacquire: bool
+            Whether to release the database connection and then acquire it
+            again when we're done.
+
+        Returns
+        --------
+        Optional[bool]
+            ``True`` if explicit confirm,
+            ``False`` if explicit deny,
+            ``None`` if deny due to timeout
+        """
+
+        if not self.channel.permissions_for(self.me).add_reactions:
+            raise RuntimeError('Bot does not have Add Reactions permission.')
+
+        fmt = f'{message}\n\nReact with \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.'
+
+        author_id = self.author.id
+        msg = await self.send(fmt)
+
+        confirm = None
+
+        def check(emoji, message_id, channel_id, user_id):
+            nonlocal confirm
+
+            if message_id != msg.id or user_id != author_id:
+                return False
+
+            codepoint = str(emoji)
+
+            if codepoint == '\N{WHITE HEAVY CHECK MARK}':
+                confirm = True
+                return True
+            elif codepoint == '\N{CROSS MARK}':
+                confirm = False
+                return True
+
+            return False
+
+        for emoji in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
+            await msg.add_reaction(emoji)
+
+        if reacquire:
+            await self.release()
+
+        try:
+            await self.bot.wait_for('raw_reaction_add', check=check, timeout=timeout)
+        except asyncio.TimeoutError:
+            confirm = None
+
+        if reacquire:
+            await self.acquire()
+
+        if delete_after:
+            await msg.delete()
+
+        return confirm
+
     def tick(self, opt, label=None):
         emoji = '<:check:316583761540022272>' if opt else '<:xmark:316583761699536896>'
         if label is not None:
