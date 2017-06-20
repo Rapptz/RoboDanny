@@ -27,19 +27,19 @@ class Meta:
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
-    @commands.command(name='help')
-    async def _help(self, ctx, *, command: str = None):
+    @commands.command(name='help', usage='[command]')
+    async def _help(self, ctx, *, cmd: str = None):
         """Shows help about a command or the bot"""
 
         try:
 
-            if command is None:
+            if cmd is None:
                 p = await HelpPaginator.from_bot(ctx)
             else:
-                entity = self.bot.get_cog(command) or self.bot.get_command(command)
+                entity = self.bot.get_cog(cmd) or self.bot.get_command(cmd)
 
                 if entity is None:
-                    return await ctx.send(f'Command "{command}" not found.')
+                    return await ctx.send(f'Command "{cmd}" not found.')
                 elif isinstance(entity, commands.Command):
                     p = await HelpPaginator.from_command(ctx, entity)
                 else:

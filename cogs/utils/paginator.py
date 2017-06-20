@@ -439,7 +439,7 @@ class HelpPaginator(Pages):
             ('[argument]', 'This means the argument is __**optional**__.'),
             ('[A|B]', 'This means the it can be __**either A or B**__.'),
             ('[argument...]', 'This means you can have multiple arguments.\n' \
-                              'Now that you know the baiscs, it should be noted that...\n' \
+                              'Now that you know the basics, it should be noted that...\n' \
                               '__**You do not type in the brackets!**__')
         )
 
