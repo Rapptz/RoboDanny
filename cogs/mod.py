@@ -146,6 +146,7 @@ class Mod:
         return row is not None
 
     async def __global_check(self, ctx):
+        print('Global Check is called.')
         if ctx.guild is None:
             return True
 
@@ -599,25 +600,24 @@ class Mod:
         return Counter(m.author.display_name for m in deleted)
 
     @commands.command()
+    @checks.has_permissions(manage_messages=True)
     async def cleanup(self, ctx, search=100):
         """Cleans up the bot's messages from the channel.
 
         If a search number is specified, it searches that many messages to delete.
-        If the bot has Manage Messages permissions and the invoker has Manage Messages
-        then it will try to delete messages that look like they invoked the bot as well.
+        If the bot has Manage Messages permissions then it will try to delete
+        messages that look like they invoked the bot as well.
 
         After the cleanup is completed, the bot will send you a message with
         which people got their messages deleted and their count. This is useful
         to see which users are spammers.
+
+        You must have Manage Messages permission to use this.
         """
 
         strategy = _basic_cleanup_strategy
-        if ctx.guild is not None:
-            invoker_permissions = ctx.author.permissions_in(ctx.channel)
-            my_permissions = ctx.me.permissions_in(ctx.channel)
-
-            if invoker_permissions.manage_messages and my_permissions.manage_messages:
-                strategy = _complex_cleanup_strategy
+        if ctx.me.permissions_in(ctx.channel).manage_messages:
+            strategy = _complex_cleanup_strategy
 
         spammers = await strategy(ctx, search)
         deleted = sum(spammers.values())
