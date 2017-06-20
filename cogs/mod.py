@@ -525,10 +525,9 @@ class Mod:
 
         try:
             p = Pages(self.bot, message=ctx.message, entries=entries, per_page=20)
+            await p.paginate()
         except Exception as e:
             await ctx.send(str(e))
-        else:
-            await p.paginate()
 
     @ignore.command(name='all')
     @checks.is_mod()
