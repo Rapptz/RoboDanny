@@ -754,6 +754,33 @@ class Tags:
         else:
             await ctx.send('No tags found.')
 
+    @tag.command()
+    @suggest_box()
+    async def claim(self, ctx, *, tag: TagName):
+        """Claims an unclaimed tag.
+
+        An unclaimed tag is a tag that effectively
+        has no owner because they have left the server.
+        """
+
+        # requires 2 queries for UX
+        query = "SELECT id, owner_id FROM tags WHERE location_id=$1 AND LOWER(name)=$2;"
+        row = await ctx.db.fetchrow(query, ctx.guild.id, tag.lower())
+        if row is None:
+            return await ctx.send(f'A tag with the name of "{tag}" does not exist.')
+
+        # just to be sure
+        if not ctx.guild.chunked:
+            await self.bot.request_offline_members(ctx.guild)
+
+        member = ctx.guild.get_member(row[1])
+        if member is not None:
+            return await ctx.send('Tag owner is still in server.')
+
+        query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
+        await ctx.db.execute(query, ctx.author.id, row[0])
+        await ctx.send('Successfully transferred tag ownership to you.')
+
     @tag.group()
     @can_use_box()
     async def box(self, ctx):
