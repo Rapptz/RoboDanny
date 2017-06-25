@@ -1,11 +1,10 @@
 import inspect
 import asyncio
+import enum
 
 from functools import wraps
 
 from lru import LRU
-
-# TODO: different cache strategies
 
 def _wrap_and_store_coroutine(cache, key, coro):
     async def func():
@@ -19,9 +18,18 @@ def _wrap_new_coroutine(value):
         return value
     return new_coroutine()
 
-def lru_cache(maxsize=128):
+class Strategy(enum.Enum):
+    lru = 1
+    raw = 2
+
+def cache(maxsize=128, strategy=Strategy.lru):
     def decorator(func):
-        _internal_cache = LRU(maxsize)
+        if strategy is Strategy.lru:
+            _internal_cache = LRU(maxsize)
+            _stats = _internal_cache.get_stats
+        elif strategy is Strategy.raw:
+            _internal_cache = {}
+            _stats = lambda: (0, 0)
 
         def _make_key(args, kwargs):
             # this is a bit of a cluster fuck
@@ -75,5 +83,6 @@ def lru_cache(maxsize=128):
         wrapper.cache = _internal_cache
         wrapper.get_key = lambda *args, **kwargs: _make_key(args, kwargs)
         wrapper.invalidate = _invalidate
+        wrapper.get_stats = _stats
         return wrapper
     return decorator

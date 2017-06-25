@@ -123,7 +123,7 @@ class Tags:
             else:
                 await ctx.send(error)
 
-    # @cache.lru_cache()
+    # @cache.cache()
     # async def get_tag_config(self, guild_id, *, connection=None):
     #     # tag config is stored as a special server-wide tag, 'config'
     #     # this 'config' value is serialised as JSON in the content

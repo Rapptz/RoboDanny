@@ -99,7 +99,7 @@ class Mod:
             elif isinstance(original, discord.HTTPException):
                 await ctx.send('Somehow, an unexpected error occurred. Try again later?')
 
-    @cache.lru_cache()
+    @cache.cache()
     async def get_guild_settings(self, guild_id):
         query = """SELECT * FROM guild_mod_config WHERE id=$1;"""
         async with self.bot.pool.acquire() as con:
