@@ -27,6 +27,8 @@ async def migrate_api(pool, client):
         await con.copy_records_to_table('feeds', records=records, columns=('channel_id', 'role_id', 'name'))
 
 async def migrate_mod(pool, client):
+    # NOTE: plonks table is technically in config, but most of its data
+    # comes from this table
     config = _load_json('mod.json')
 
     # guild_id: [raid_mode, broadcast_channel]
@@ -255,3 +257,18 @@ async def migrate_tags(pool, client):
 
             obj = io.BytesIO(stream.getvalue().encode())
             print(await con.copy_to_table('tag_lookup', columns=TagLookupData.__slots__, source=obj, format='csv'))
+
+def migrate_config(pool, client):
+    perms = _load_json('permissions.json')
+
+    async with pool.acquire() as con:
+        await con.execute('TRUNCATE command_config;')
+
+        records = [
+            (int(k), name, False)
+            for k, db in perms.items()
+                for name in db
+                    if client.get_guild(int(k))
+        ]
+
+        await con.copy_records_to_table('command_config', records=records, columns=('guild_id', 'name', 'whitelist'))

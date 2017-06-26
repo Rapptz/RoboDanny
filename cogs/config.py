@@ -1,6 +1,8 @@
 from discord.ext import commands
-from .utils import db, checks
+from .utils import db, checks, cache
 from .utils.paginator import Pages
+
+from collections import defaultdict
 
 class LazyEntity:
     """This is meant for use with the Paginator.
@@ -42,6 +44,109 @@ class Plonks(db.Table):
     # this can either be a channel_id or an author_id
     entity_id = db.Column(db.Integer(big=True), index=True, unique=True)
 
+class CommandConfig(db.Table, table_name='command_config'):
+    id = db.PrimaryKeyColumn()
+
+    guild_id = db.Column(db.Integer(big=True), index=True)
+    channel_id = db.Column(db.Integer(big=True))
+
+    name = db.Column(db.String)
+    whitelist = db.Column(db.Boolean)
+
+    @classmethod
+    async def create(cls, *, directory='migrations', verbose=False, connection=None):
+        created = await super().create(directory=directory, verbose=verbose, connection=connection)
+        if created:
+            async with cls.acquire_connection(connection) as con:
+                # create the unique index
+                sql = "CREATE UNIQUE INDEX IF NOT EXISTS command_config_uniq_idx " \
+                      "ON comand_config (channel_id, name, whitelist);"
+                if verbose:
+                    print(sql)
+                await con.execute(sql)
+
+class CommandName(commands.Converter):
+    async def convert(self, ctx, argument):
+        lowered = argument.lower()
+
+        valid_commands = {
+            c.qualified_name
+            for c in ctx.bot.walk_commands()
+            if c.cog_name not in ('Config', 'Admin')
+        }
+
+        print(valid_commands)
+
+        if lowered not in valid_commands:
+            raise commands.BadArgument('That command name is not valid.')
+
+        return lowered
+
+class ResolvedCommandPermissions:
+    class _Entry:
+        __slots__ = ('allow', 'deny')
+        def __init__(self):
+            self.allow = set()
+            self.deny = set()
+
+    def __init__(self, guild_id, records):
+        self.guild_id = guild_id
+
+        self._lookup = defaultdict(self._Entry)
+
+        # channel_id: { allow: [commands], deny: [commands] }
+
+        for name, channel_id, whitelist in records:
+            entry = self._lookup[channel_id]
+            if whitelist:
+                entry.allow.add(name)
+            else:
+                entry.deny.add(name)
+
+    def _split(self, obj):
+        # "hello there world" -> ["hello", "hello there", "hello there world"]
+        from itertools import accumulate
+        return list(accumulate(obj.split(), lambda x, y: f'{x} {y}'))
+
+    def is_blocked(self, ctx):
+        # fast path
+        if len(self._lookup) == 0:
+            return False
+
+        command_names = self._split(ctx.command.qualified_name)
+
+        guild = self._lookup[None] # no special channel_id
+        channel = self._lookup[ctx.channel.id]
+
+        blocked = None
+
+        # apply guild-level denies first
+        # then guild-level allow
+        # then channel-level deny
+        # then channel-level allow
+
+        # use ?foo bar
+        # ?foo bar <- guild allow
+        # ?foo <- channel block
+        # result: blocked
+        # this is why the two for loops are separate
+
+        for command in command_names:
+            if command in guild.deny:
+                blocked = True
+
+            if command in guild.allow:
+                blocked = False
+
+        for command in command_names:
+            if command in channel.deny:
+                blocked = True
+
+            if command in channel.allow:
+                blocked = False
+
+        return blocked
+
 class Config:
     """Handles the bot's configuration system.
 
@@ -51,6 +156,7 @@ class Config:
 
     def __init__(self, bot):
         self.bot = bot
+        db.create_tables(Plonks, CommandConfig, loop=bot.loop)
 
     async def is_plonked(self, guild, member, *, channel=None, connection=None, check_bypass=True):
         if check_bypass and member.guild_permissions.manage_guild:
@@ -86,18 +192,24 @@ class Config:
 
         return not is_plonked
 
-    def __check(self, ctx):
-        msg = ctx.message
-        if checks.is_owner_check(msg):
+    @cache.cache(strategy=cache.Strategy.raw)
+    async def get_command_permissions(self, guild_id, *, connection=None):
+        connection = connection or self.bot.pool
+        query = "SELECT name, channel_id, whitelist FROM command_config WHERE guild_id=$1;"
+
+        records = await connection.fetch(query, guild_id)
+        return ResolvedCommandPermissions(guild_id, records)
+
+    async def __global_check(self, ctx):
+        if ctx.guild is None:
             return True
 
-        try:
-            entry = self.config[msg.server.id]
-        except (KeyError, AttributeError):
-            return True
-        else:
-            name = ctx.command.qualified_name.split(' ')[0]
-            return name not in entry
+        # is_owner = await ctx.bot.is_owner(ctx.author)
+        # if is_owner:
+        #     return True
+
+        resolved = await self.get_command_permissions(ctx.guild.id, connection=ctx.db)
+        return not resolved.is_blocked(ctx)
 
     async def _bulk_ignore_entries(self, ctx, entries):
         async with ctx.db.transaction():
@@ -112,10 +224,14 @@ class Config:
             # do a bulk COPY
             await ctx.db.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
 
+    async def __error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.send(error)
+
     @commands.group()
     async def config(self, ctx):
         if ctx.invoked_subcommand is None:
-            await ctx.invoke(ctx.bot.get_command('help'), cmd='config')
+            await ctx.show_help('config')
 
     @config.group(invoke_without_command=True, aliases=['plonk'])
     @checks.is_mod()
@@ -216,6 +332,81 @@ class Config:
     async def unignore_all(self, ctx):
         """An alias for ignore clear command."""
         await ctx.invoke(self.ignore_clear)
+
+    @config.group(aliases=['guild'])
+    @checks.is_mod()
+    async def server(self, ctx):
+        """Handles the server-specific permissions."""
+        pass
+
+    @config.group()
+    @checks.is_mod()
+    async def channel(self, ctx):
+        """Handles the channel-specific permissions."""
+        pass
+
+    async def command_toggle(self, connection, guild_id, channel_id, name, *, whitelist=True):
+        # clear the cache
+        self.get_command_permissions.invalidate(self, guild_id)
+
+        query = "DELETE FROM command_config WHERE guild_id=$1 AND name=$2 AND channel_id=$3 AND whitelist=$4;"
+
+        # DELETE <num>
+        status = await connection.execute(query, guild_id, name, channel_id, whitelist)
+        if status[-1] != '0':
+            return
+
+        query = "INSERT INTO command_config (guild_id, channel_id, name, whitelist) VALUES ($1, $2, $3, $4);"
+
+        try:
+            await connection.execute(query, guild_id, channel_id, name, whitelist)
+        except asyncpg.UniqueViolationError:
+            msg = 'This command is already disabled.' if not whitelist else 'This command is already explicitly enabled.'
+            raise RuntimeError('This command is already disabled.')
+
+    @channel.command(name='disable')
+    async def channel_disable(self, ctx, *, command: CommandName):
+        """Disables a command for this channel."""
+
+        try:
+            await self.command_toggle(ctx.db, ctx.guild.id, ctx.channel.id, command, whitelist=False)
+        except RuntimeError as e:
+            await ctx.send(e)
+        else:
+            await ctx.send('Command successfully disabled.')
+
+    @channel.command(name='enable')
+    async def channel_enable(self, ctx, *, command: CommandName):
+        """Enables a command for this channel."""
+
+        try:
+            await self.command_toggle(ctx.db, ctx.guild.id, ctx.channel.id, command, whitelist=True)
+        except RuntimeError as e:
+            await ctx.send(e)
+        else:
+            await ctx.send('Command successfully enabled.')
+
+    @server.command(name='disable')
+    async def server_disable(self, ctx, *, command: CommandName):
+        """Disables a command for this server."""
+
+        try:
+            await self.command_toggle(ctx.db, ctx.guild.id, None, command, whitelist=False)
+        except RuntimeError as e:
+            await ctx.send(e)
+        else:
+            await ctx.send('Command successfully disabled.')
+
+    @server.command(name='enable')
+    async def server_enable(self, ctx, *, command: CommandName):
+        """Enables a command for this server."""
+
+        try:
+            await self.command_toggle(ctx.db, ctx.guild.id, None, command, whitelist=True)
+        except RuntimeError as e:
+            await ctx.send(e)
+        else:
+            await ctx.send('Command successfully enabled.')
 
 def setup(bot):
     bot.add_cog(Config(bot))
