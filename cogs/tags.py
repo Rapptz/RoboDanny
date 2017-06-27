@@ -119,7 +119,7 @@ class Tags:
         elif isinstance(error, commands.UserInputError):
             if ctx.command.qualified_name == 'tag':
                 await ctx.acquire()
-                await ctx.invoke(self.bot.get_command('help'), cmd='tag')
+                await ctx.show_help()
             else:
                 await ctx.send(error)
 
@@ -796,8 +796,7 @@ class Tags:
         """
 
         if ctx.invoked_subcommand is None or ctx.subcommand_passed == 'box':
-            cmd = self.bot.get_command('help')
-            await ctx.invoke(cmd, cmd='tag box')
+            await ctx.show_help('tag box')
 
     @box.command(name='put')
     async def box_put(self, ctx, name: TagName, *, content: commands.clean_content):

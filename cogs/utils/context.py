@@ -189,4 +189,4 @@ class Context(commands.Context):
         """
         cmd = self.bot.get_command('help')
         command = command or self.command.qualified_name
-        await self.invoke(cmd, cmd=command)
+        await self.invoke(cmd, command=command)

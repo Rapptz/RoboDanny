@@ -373,7 +373,7 @@ class Config:
         except RuntimeError as e:
             await ctx.send(e)
         else:
-            await ctx.send('Command successfully disabled.')
+            await ctx.send('Command successfully disabled for this channel.')
 
     @channel.command(name='enable')
     async def channel_enable(self, ctx, *, command: CommandName):
@@ -384,7 +384,7 @@ class Config:
         except RuntimeError as e:
             await ctx.send(e)
         else:
-            await ctx.send('Command successfully enabled.')
+            await ctx.send('Command successfully enabled for this channel.')
 
     @server.command(name='disable')
     async def server_disable(self, ctx, *, command: CommandName):
@@ -395,7 +395,7 @@ class Config:
         except RuntimeError as e:
             await ctx.send(e)
         else:
-            await ctx.send('Command successfully disabled.')
+            await ctx.send('Command successfully disabled for this server')
 
     @server.command(name='enable')
     async def server_enable(self, ctx, *, command: CommandName):
@@ -406,7 +406,17 @@ class Config:
         except RuntimeError as e:
             await ctx.send(e)
         else:
-            await ctx.send('Command successfully enabled.')
+            await ctx.send('Command successfully enabled for this server.')
+
+    @config.command(name='enable')
+    async def config_enable(self, ctx, *, command: CommandName):
+        """Enables a command for this server."""
+        await ctx.invoke(self.server_enable, command=command)
+
+    @config.command(name='disable')
+    async def config_disable(self, ctx, *, command: CommandName):
+        """Enables a command for this server."""
+        await ctx.invoke(self.server_disable, command=command)
 
 def setup(bot):
     bot.add_cog(Config(bot))
