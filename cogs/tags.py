@@ -162,16 +162,16 @@ class Tags:
             names = '\n'.join(r['name'] for r in rows)
             raise RuntimeError(f'Tag not found. Did you mean...\n{names}')
 
-        async with db.MaybeAcquire(connection, pool=self.bot.pool) as con:
-            query = """SELECT     tag_lookup.name, tags.content
-                       FROM       tag_lookup
-                       INNER JOIN tags ON tags.id = tag_lookup.tag_id
-                       WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
-                       ORDER BY   similarity(tag_lookup.name, $2) DESC
-                       LIMIT 5;
-                    """
+        con = connection or self.bot.pool
+        query = """SELECT     tag_lookup.name, tags.content
+                   FROM       tag_lookup
+                   INNER JOIN tags ON tags.id = tag_lookup.tag_id
+                   WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
+                   ORDER BY   similarity(tag_lookup.name, $2) DESC
+                   LIMIT 5;
+                """
 
-            return disambiguate(await con.fetch(query, guild_id, name), name)
+        return disambiguate(await con.fetch(query, guild_id, name), name)
 
     @commands.group(invoke_without_command=True)
     @suggest_box()
