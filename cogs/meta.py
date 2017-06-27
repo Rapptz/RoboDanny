@@ -32,7 +32,6 @@ class Meta:
         """Shows help about a command or the bot"""
 
         try:
-
             if command is None:
                 p = await HelpPaginator.from_bot(ctx)
             else:
@@ -45,10 +44,9 @@ class Meta:
                 else:
                     p = await HelpPaginator.from_cog(ctx, entity)
 
+            await p.paginate()
         except Exception as e:
             await ctx.send(e)
-        else:
-            await p.paginate()
 
     @commands.command(hidden=True)
     async def hello(self, ctx):
