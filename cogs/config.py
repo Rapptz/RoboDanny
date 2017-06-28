@@ -153,18 +153,22 @@ class Config:
         self.bot = bot
         db.create_tables(Plonks, CommandConfig, loop=bot.loop)
 
-    async def is_plonked(self, guild, member, *, channel=None, connection=None, check_bypass=True):
-        if check_bypass and member.guild_permissions.manage_guild:
-            return False
+    async def is_plonked(self, guild_id, member_id, *, channel_id=None, connection=None, check_bypass=True):
+        if check_bypass:
+            guild = self.bot.get_guild(guild_id)
+            if guild is not None:
+                member = guild.get_member(member_id)
+                if member is not None and member.guild_permissions.manage_guild:
+                    return False
 
         connection = connection or self.bot.pool
 
-        if channel is None:
+        if channel_id is None:
             query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id=$2;"
-            row = await connection.fetchrow(query, guild.id, member.id)
+            row = await connection.fetchrow(query, guild_id, member_id)
         else:
             query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id IN ($2, $3);"
-            row = await connection.fetchrow(query, guild.id, member.id, channel.id)
+            row = await connection.fetchrow(query, guild_id, member_id, channel_id)
 
         return row is not None
 
@@ -182,8 +186,8 @@ class Config:
             return True
 
         # check if we're plonked
-        is_plonked = await self.is_plonked(ctx.guild, ctx.author, channel=ctx.channel,
-                                                                  connection=ctx.db, check_bypass=False)
+        is_plonked = await self.is_plonked(ctx.guild.id, ctx.author.id, channel_id=ctx.channel.id,
+                                                                        connection=ctx.db, check_bypass=False)
 
         return not is_plonked
 
