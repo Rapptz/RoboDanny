@@ -46,19 +46,15 @@ class TagsTable(db.Table, table_name='tags'):
     created_at = db.Column(db.Datetime, default="now() at time zone 'utc'")
 
     @classmethod
-    async def create(cls, *, directory='migrations', verbose=False, connection=None):
-        created = await super().create(directory=directory, verbose=verbose, connection=connection)
-        if created:
-            async with cls.acquire_connection(connection) as con:
-                # create the indexes
-                sql = "CREATE INDEX IF NOT EXISTS tags_name_trgm_idx ON tags USING GIN (name gin_trgm_ops);\n" \
-                      "CREATE INDEX IF NOT EXISTS tags_name_lower_idx ON tags (LOWER(name));\n" \
-                      "CREATE UNIQUE INDEX IF NOT EXISTS tags_uniq_idx ON tags (LOWER(name), location_id);"
+    def create_table(cls, *, exists_ok=True):
+        statement = super().create_table(exists_ok=exists_ok)
 
-                if verbose:
-                    print(sql)
-                await con.execute(sql)
+        # create the indexes
+        sql = "CREATE INDEX IF NOT EXISTS tags_name_trgm_idx ON tags USING GIN (name gin_trgm_ops);\n" \
+              "CREATE INDEX IF NOT EXISTS tags_name_lower_idx ON tags (LOWER(name));\n" \
+              "CREATE UNIQUE INDEX IF NOT EXISTS tags_uniq_idx ON tags (LOWER(name), location_id);"
 
+        return statement + '\n' + sql
 
 class TagLookup(db.Table, table_name='tag_lookup'):
     id = db.PrimaryKeyColumn()
@@ -72,18 +68,15 @@ class TagLookup(db.Table, table_name='tag_lookup'):
     tag_id = db.Column(db.ForeignKey('tags', 'id'))
 
     @classmethod
-    async def create(cls, *, directory='migrations', verbose=False, connection=None):
-        created = await super().create(directory=directory, verbose=verbose, connection=connection)
-        if created:
-            async with cls.acquire_connection(connection) as con:
-                # create the indexes
-                sql = "CREATE INDEX IF NOT EXISTS tag_lookup_name_trgm_idx ON tag_lookup USING GIN (name gin_trgm_ops);\n" \
-                      "CREATE INDEX IF NOT EXISTS tag_lookup_name_lower_idx ON tag_lookup (LOWER(name));\n" \
-                      "CREATE UNIQUE INDEX IF NOT EXISTS tag_lookup_uniq_idx ON tag_lookup (LOWER(name), location_id);"
+    def create_table(cls, *, exists_ok=True):
+        statement = super().create_table(exists_ok=exists_ok)
 
-                if verbose:
-                    print(sql)
-                await con.execute(sql)
+        # create the indexes
+        sql = "CREATE INDEX IF NOT EXISTS tag_lookup_name_trgm_idx ON tag_lookup USING GIN (name gin_trgm_ops);\n" \
+              "CREATE INDEX IF NOT EXISTS tag_lookup_name_lower_idx ON tag_lookup (LOWER(name));\n" \
+              "CREATE UNIQUE INDEX IF NOT EXISTS tag_lookup_uniq_idx ON tag_lookup (LOWER(name), location_id);"
+
+        return statement + '\n' + sql
 
 class TagName(commands.clean_content):
     def __init__(self, *, lower=False):

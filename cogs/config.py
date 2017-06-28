@@ -54,16 +54,11 @@ class CommandConfig(db.Table, table_name='command_config'):
     whitelist = db.Column(db.Boolean)
 
     @classmethod
-    async def create(cls, *, directory='migrations', verbose=False, connection=None):
-        created = await super().create(directory=directory, verbose=verbose, connection=connection)
-        if created:
-            async with cls.acquire_connection(connection) as con:
-                # create the unique index
-                sql = "CREATE UNIQUE INDEX IF NOT EXISTS command_config_uniq_idx " \
-                      "ON comand_config (channel_id, name, whitelist);"
-                if verbose:
-                    print(sql)
-                await con.execute(sql)
+    def create_table(cls, *, exists_ok=True):
+        statement = super().create_table(exists_ok=exists_ok)
+        # create the unique index
+        sql = "CREATE UNIQUE INDEX IF NOT EXISTS command_config_uniq_idx ON command_config (channel_id, name, whitelist);"
+        return statement + '\n' + sql
 
 class CommandName(commands.Converter):
     async def convert(self, ctx, argument):
