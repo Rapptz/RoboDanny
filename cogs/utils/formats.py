@@ -5,7 +5,7 @@ class Plural:
 
     def __str__(self):
         v = self.value
-        if v > 1:
+        if v == 0 or v > 1:
             return f'{v} {self.name}s'
         return f'{v} {self.name}'
 
