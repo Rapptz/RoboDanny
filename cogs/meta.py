@@ -351,6 +351,7 @@ class Meta:
         perms.external_emojis = True
         perms.send_messages = True
         perms.manage_roles = True
+        perms.manage_channels = True
         perms.ban_members = True
         perms.kick_members = True
         perms.manage_messages = True
