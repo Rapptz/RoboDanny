@@ -351,6 +351,8 @@ class Column:
             builder.append('DEFAULT')
             if isinstance(default, str) and isinstance(self.column_type, String):
                 builder.append("'%s'" % default)
+            elif isinstance(default, bool):
+                builder.append(str(default).upper())
             else:
                 builder.append("(%s)" % default)
         elif self.unique:
@@ -822,15 +824,15 @@ class Table(metaclass=TableMeta):
 
         return SchemaDiff(self, upgrade, downgrade)
 
-async def _table_creator(table, *, verbose=True):
-    try:
-        await table.create(verbose=verbose)
-    except:
-        log.error('Failed to create table %s.', table.__tablename__)
+async def _table_creator(tables, *, verbose=True):
+    for table in tables:
+        try:
+            await table.create(verbose=verbose)
+        except:
+            log.error('Failed to create table %s.', table.__tablename__)
 
 def create_tables(*tables, verbose=True, loop=None):
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    for table in tables:
-        loop.create_task(_table_creator(table, verbose=verbose))
+    loop.create_task(_table_creator(tables, verbose=verbose))
