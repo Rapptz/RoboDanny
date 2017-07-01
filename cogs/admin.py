@@ -226,7 +226,7 @@ class Admin:
         try:
             start = time.time()
             results = await strategy(query)
-            dt = time.time() - start
+            dt = (time.time() - start) * 1000.0 # seconds to ms
         except Exception:
             return await ctx.send(f'```py\n{traceback.format_exc()}\n```')
 
