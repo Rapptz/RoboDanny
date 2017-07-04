@@ -431,7 +431,8 @@ class SchemaDiff:
             column = Column.from_dict(added)
             sub_statements.append('ADD COLUMN ' + column._create_table())
 
-        statements.append(base + ', '.join(sub_statements) + ';')
+        if sub_statements:
+            statements.append(base + ', '.join(sub_statements) + ';')
 
         # handle the index creation bits
         for dropped in path.get('drop_index', []):
@@ -737,7 +738,7 @@ class Table(metaclass=TableMeta):
                 else:
                     # we're not dropping an index, instead we're adding one
                     upgrade.setdefault('add_index', []).append({ 'name': a.name, 'index': a.index_name })
-                    upgrade.setdefault('drop_index', []).append({ 'name': a.name, 'index': a.index_name })
+                    downgrade.setdefault('drop_index', []).append({ 'name': a.name, 'index': a.index_name })
 
         def insert_column_diff(a, b):
             if a.column_type != b.column_type:
