@@ -19,10 +19,12 @@ class Pages:
         The bot instance.
     message
         The message that initiated this session.
-    entries
+    entries: List[str]
         A list of entries to paginate.
-    per_page
+    per_page: int
         How many entries show up per page.
+    show_entry_count: bool
+        Whether to show an entry count in the footer.
 
     Attributes
     -----------
@@ -33,7 +35,7 @@ class Pages:
     permissions: discord.Permissions
         Our permissions for the channel.
     """
-    def __init__(self, bot, *, message, entries, per_page=12):
+    def __init__(self, bot, *, message, entries, per_page=12, show_entry_count=True):
         self.bot = bot
         self.entries = entries
         self.message = message
@@ -46,6 +48,7 @@ class Pages:
         self.maximum_pages = pages
         self.embed = discord.Embed(colour=discord.Colour.blurple())
         self.paginating = len(entries) > per_page
+        self.show_entry_count = show_entry_count
         self.reaction_emojis = [
             ('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.first_page),
             ('\N{BLACK LEFT-POINTING TRIANGLE}', self.previous_page),
@@ -76,7 +79,13 @@ class Pages:
         for index, entry in enumerate(entries, 1 + ((page - 1) * self.per_page)):
             p.append(f'{index}. {entry}')
 
-        self.embed.set_footer(text=f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)')
+        if self.maximum_pages > 1:
+            if self.show_entry_count:
+                text = f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)'
+            else:
+                text = f'Page {page}/{self.maximum_pages}'
+
+            self.embed.set_footer(text=text)
 
         if not self.paginating:
             self.embed.description = '\n'.join(p)
