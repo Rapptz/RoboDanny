@@ -224,9 +224,9 @@ class Admin:
             strategy = ctx.db.fetch
 
         try:
-            start = time.time()
+            start = time.perf_counter()
             results = await strategy(query)
-            dt = (time.time() - start) * 1000.0 # seconds to ms
+            dt = (time.perf_counter() - start) * 1000.0
         except Exception:
             return await ctx.send(f'```py\n{traceback.format_exc()}\n```')
 
