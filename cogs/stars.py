@@ -1089,6 +1089,7 @@ class Stars:
         query = """SELECT bot_message_id
                    FROM starboard_entries
                    WHERE guild_id=$1
+                   AND bot_message_id IS NOT NULL
                    OFFSET FLOOR(RANDOM() * (
                        SELECT COUNT(*)
                        FROM starboard_entries
