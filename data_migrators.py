@@ -108,20 +108,8 @@ async def migrate_mod(pool, client):
                 if client.get_guild(int(k))
         ]
 
-        # it turns out that due to an issue, we can't use copy_records_to_table
-        # see: https://github.com/MagicStack/asyncpg/issues/153
-
-        # columns = ('id', *Holder.__slots__)
-        # await con.copy_records_to_table('guild_mod_config', records=records, columns=columns)
-
-        # so let's just mass-insert :^(
-        async with con.transaction():
-            query = """INSERT INTO guild_mod_config
-                              (id, raid_mode, broadcast_channel, mention_count, safe_mention_channel_ids)
-                       VALUES ($1, $2, $3, $4, $5);
-                    """
-
-            await con.executemany(query, records)
+        columns = ('id', *Holder.__slots__)
+        print('Guild Mod Config', await con.copy_records_to_table('guild_mod_config', records=records, columns=columns))
 
 async def migrate_tags(pool, client):
     tags = _load_json('tags.json')
@@ -239,24 +227,12 @@ async def migrate_tags(pool, client):
         # delete the current tags
         await con.execute('TRUNCATE tags, tag_lookup RESTART IDENTITY;')
         async with con.transaction():
-            stream = io.StringIO()
-            writer = csv.writer(stream, quoting=csv.QUOTE_MINIMAL)
+            records = [r.to_record() for r in tag_data]
+            print('Tags', await con.copy_records_to_table('tags', records=records, columns=TagData.__slots__))
 
-            for r in tag_data:
-                writer.writerow(r.to_record())
-
-            obj = io.BytesIO(stream.getvalue().encode())
-
-            print(await con.copy_to_table('tags', columns=TagData.__slots__, source=obj, format='csv'))
-
-            stream = io.StringIO()
-            writer = csv.writer(stream, quoting=csv.QUOTE_MINIMAL)
-
-            for r in lookup:
-                writer.writerow(r.to_record())
-
-            obj = io.BytesIO(stream.getvalue().encode())
-            print(await con.copy_to_table('tag_lookup', columns=TagLookupData.__slots__, source=obj, format='csv'))
+            records = [r.to_record() for r in lookup]
+            status = await con.copy_records_to_table('tag_lookup', records=records, columns=TagLookupData.__slots__)
+            print('Tag Lookup', status)
 
 async def migrate_config(pool, client):
     perms = _load_json('permissions.json')
@@ -312,9 +288,7 @@ async def migrate_stars(pool, client):
         # the incredibly basic case, creating the starboard table
         await con.execute("TRUNCATE starboard, starboard_entries, starrers RESTART IDENTITY;")
 
-        # can't insert NULL rows again thanks asyncpg
-        stream = io.StringIO()
-        writer = csv.writer(stream, quoting=csv.QUOTE_MINIMAL)
+        records = []
         for guild_id in stars:
             # we do not care about 'locked' status when porting
             stars[guild_id].pop('locked', None)
@@ -331,11 +305,10 @@ async def migrate_stars(pool, client):
             if channel is None:
                 continue
 
-            writer.writerow((guild_id, channel_id, None))
+            records.append((guild_id, channel_id, None))
             new_data[guild_id] = stars[guild_id]
 
-        obj = io.BytesIO(stream.getvalue().encode())
-        status = await con.copy_to_table('starboard', columns=('id', 'channel_id', 'locked'), source=obj, format='csv')
+        status = await con.copy_records_to_table('starboard', columns=('id', 'channel_id', 'locked'), records=records)
         print('Starboard', status)
 
         entries = []
@@ -358,23 +331,10 @@ async def migrate_stars(pool, client):
                     starrers.append(Starrer(author_id, entry_id))
 
         # actually port now
-
-        stream = io.StringIO()
-        writer = csv.writer(stream, quoting=csv.QUOTE_MINIMAL)
-
-        for entry in entries:
-            writer.writerow(entry.to_record())
-
-        obj = io.BytesIO(stream.getvalue().encode())
-        status = await con.copy_to_table('starboard_entries', columns=Entry.__slots__, source=obj, format='csv')
+        records = [entry.to_record() for entry in entries]
+        status = await con.copy_records_to_table('starboard_entries', columns=Entry.__slots__, records=records)
         print('Starboard Entries', status)
 
-        stream = io.StringIO()
-        writer = csv.writer(stream, quoting=csv.QUOTE_MINIMAL)
-
-        for r in starrers:
-            writer.writerow(r.to_record())
-
-        obj = io.BytesIO(stream.getvalue().encode())
-        status = await con.copy_to_table('starrers', columns=Starrer.__slots__, source=obj, format='csv')
+        records = [r.to_record() for r in starrers]
+        status = await con.copy_records_to_table('starrers', columns=Starrer.__slots__, records=records)
         print('Starboard Starrers', status)
