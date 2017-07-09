@@ -727,7 +727,7 @@ class Stars:
                    if ctx.guild.get_member(r[0])]
 
         try:
-            p = Pages(self.bot, message=ctx.message, entries=members, per_page=20, show_entry_count=False)
+            p = Pages(ctx, entries=members, per_page=20, show_entry_count=False)
             base = Plural(star=len(records))
             if len(records) > len(members):
                 p.embed.title = f'{base} ({len(records) - len(members)} left server)'

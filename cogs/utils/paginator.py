@@ -15,10 +15,8 @@ class Pages:
 
     Parameters
     ------------
-    bot
-        The bot instance.
-    message
-        The message that initiated this session.
+    ctx: Context
+        The context of the command.
     entries: List[str]
         A list of entries to paginate.
     per_page: int
@@ -35,12 +33,12 @@ class Pages:
     permissions: discord.Permissions
         Our permissions for the channel.
     """
-    def __init__(self, bot, *, message, entries, per_page=12, show_entry_count=True):
-        self.bot = bot
+    def __init__(self, ctx, *, entries, per_page=12, show_entry_count=True):
+        self.bot = ctx.bot
         self.entries = entries
-        self.message = message
-        self.channel = message.channel
-        self.author = message.author
+        self.message = ctx.message
+        self.channel = ctx.channel
+        self.author = ctx.author
         self.per_page = per_page
         pages, left_over = divmod(len(self.entries), self.per_page)
         if left_over:
@@ -59,11 +57,10 @@ class Pages:
             ('\N{INFORMATION SOURCE}', self.show_help),
         ]
 
-        guild = self.message.guild
-        if guild is not None:
-            self.permissions = self.channel.permissions_for(guild.me)
+        if ctx.guild is not None:
+            self.permissions = self.channel.permissions_for(ctx.guild.me)
         else:
-            self.permissions = self.channel.permissions_for(self.bot.user)
+            self.permissions = self.channel.permissions_for(ctx.bot.user)
 
         if not self.permissions.embed_links:
             raise CannotPaginate('Bot does not have embed links permission.')
@@ -286,8 +283,8 @@ def _command_signature(cmd):
     return ' '.join(result)
 
 class HelpPaginator(Pages):
-    def __init__(self, bot, message, entries, *, per_page=4):
-        super().__init__(bot, message=message, entries=entries, per_page=per_page)
+    def __init__(self, ctx, entries, *, per_page=4):
+        super().__init__(ctx, entries=entries, per_page=per_page)
         self.reaction_emojis.append(('\N{WHITE QUESTION MARK ORNAMENT}', self.show_bot_help))
         self.total = len(entries)
 
@@ -301,7 +298,7 @@ class HelpPaginator(Pages):
         # remove the ones we can't run
         entries = [cmd for cmd in entries if (await _can_run(cmd, ctx)) and not cmd.hidden]
 
-        self = cls(ctx.bot, ctx.message, entries)
+        self = cls(ctx, entries)
         self.title = f'{cog_name} Commands'
         self.description = inspect.getdoc(cog)
         self.prefix = cleanup_prefix(ctx.bot, ctx.prefix)
@@ -320,7 +317,7 @@ class HelpPaginator(Pages):
         else:
             entries = [cmd for cmd in entries if (await _can_run(cmd, ctx)) and not cmd.hidden]
 
-        self = cls(ctx.bot, ctx.message, entries)
+        self = cls(ctx, entries)
         self.title = command.signature
 
         if command.description:
@@ -358,7 +355,7 @@ class HelpPaginator(Pages):
 
             nested_pages.extend((cog, description, plausible[i:i + per_page]) for i in range(0, len(plausible), per_page))
 
-        self = cls(ctx.bot, ctx.message, nested_pages, per_page=1) # this forces the pagination session
+        self = cls(ctx, nested_pages, per_page=1) # this forces the pagination session
         self.prefix = cleanup_prefix(ctx.bot, ctx.prefix)
         await ctx.release()
 

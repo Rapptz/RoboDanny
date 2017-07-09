@@ -275,7 +275,7 @@ class Config:
         await ctx.release()
 
         try:
-            p = Pages(self.bot, message=ctx.message, entries=entries, per_page=20)
+            p = Pages(ctx, entries=entries, per_page=20)
             await p.paginate()
         except Exception as e:
             await ctx.send(str(e))

@@ -651,7 +651,7 @@ class Tags:
 
         if rows:
             try:
-                p = Pages(self.bot, message=ctx.message, entries=tuple(r[0] for r in rows))
+                p = Pages(ctx, entries=tuple(r[0] for r in rows))
                 p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
                 await p.paginate()
             except Exception as e:
@@ -682,7 +682,7 @@ class Tags:
             # PSQL orders this oddly for some reason
             entries = sorted(tuple(r[0] for r in rows))
             try:
-                p = Pages(self.bot, message=ctx.message, entries=entries, per_page=20)
+                p = Pages(ctx, entries=entries, per_page=20)
                 await p.paginate()
             except Exception as e:
                 await ctx.send(e)
@@ -738,7 +738,7 @@ class Tags:
 
         if results:
             try:
-                p = Pages(self.bot, message=ctx.message, entries=tuple(r[0] for r in results), per_page=20)
+                p = Pages(ctx, entries=tuple(r[0] for r in results), per_page=20)
             except Exception as e:
                 await ctx.send(e)
             else:
@@ -938,7 +938,7 @@ class Tags:
         data.sort()
 
         try:
-            p = Pages(self.bot, message=ctx.message, entries=data, per_page=20)
+            p = Pages(ctx, entries=data, per_page=20)
             await p.paginate()
         except Exception as e:
             await ctx.send(e)
@@ -1018,7 +1018,7 @@ class Tags:
         if rows:
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
             try:
-                p = Pages(self.bot, message=ctx.message, entries=entries)
+                p = Pages(ctx, entries=entries)
                 p.embed.set_author(name=user.display_name, icon_url=user.avatar_url)
                 p.embed.title = f'{sum(u for _, u in rows)} total uses'
                 await p.paginate()
