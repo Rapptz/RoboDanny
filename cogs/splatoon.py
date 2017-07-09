@@ -1,9 +1,13 @@
 from discord.ext import commands
-from .utils import config, checks, maps
-import asyncio, aiohttp
+from .utils import config, checks, maps, fuzzy
+from .utils.formats import Plural
+
 from urllib.parse import quote as urlquote
-import random
 from collections import namedtuple
+
+import random
+import asyncio
+import discord
 
 GameEntry = namedtuple('GameEntry', ('stage', 'mode'))
 
@@ -35,27 +39,33 @@ def get_random_scrims(modes, maps, count):
 
     return result
 
+# There's going to be some code duplication here because it's more
+# straightforward than trying to be clever, I guess.
+# I hope at one day to fix this and make it not-so-ugly.
+# Hopefully by completely dropping Splatoon 1 support in
+# the future.
+
 class Splatoon:
     """Splatoon related commands."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = config.Config('splatoon.json', loop=bot.loop)
+        self.splat1_data = config.Config('splatoon.json', loop=bot.loop)
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
 
     def __unload(self):
         self.map_updater.cancel()
 
-    async def splatnet_cookie(self):
-        username = self.config.get('username')
-        password = self.config.get('password')
-        self.cookie = await maps.get_new_splatnet_cookie(username, password)
+    async def update_splatnet_cookie(self):
+        username = self.splat1_data.get('username')
+        password = self.splat1_data.get('password')
+        await maps.get_new_splatnet_cookie(self.bot.session, username, password)
 
     async def update_maps(self):
         try:
-            await self.splatnet_cookie()
-            while not self.bot.is_closed:
+            await self.update_splatnet_cookie()
+            while not self.bot.is_closed():
                 await self.update_schedule()
                 await asyncio.sleep(120) # task runs every 2 minutes
         except asyncio.CancelledError:
@@ -63,7 +73,7 @@ class Splatoon:
 
     async def update_schedule(self):
         try:
-            schedule = await maps.get_splatnet_schedule(self.cookie)
+            schedule = await maps.get_splatnet_schedule(self.bot.session)
         except:
             # if we get an exception, keep the old data
             # make sure to remove the old data that already ended
@@ -75,153 +85,129 @@ class Splatoon:
                     continue
                 self.map_data.append(entry)
 
-    def get_map_message(self, index):
-        try:
-            return str(self.map_data[index])
-        except IndexError:
-            return 'No map data found. Try again later.'
+    @commands.group(aliases=['sp1', 'splatoon1'])
+    async def splat1(self, ctx):
+        """Commands for Splatoon 1, rather than Splatoon 2."""
+        if ctx.invoked_subcommand is None:
+            return await ctx.send("That doesn't seem like a valid Splatoon command.")
 
-    @commands.command(hidden=True)
-    async def refreshmaps(self):
-        """Force refresh the maps in the rotation."""
-        await self.update_schedule()
-        await self.bot.say('\U0001f44c')
-
-    @commands.command(aliases=['rotation'])
-    async def maps(self):
+    @splat1.command(name='maps', aliases=['rotation'])
+    async def splat1_maps(self, ctx):
         """Shows the current maps in the Splatoon schedule."""
-        await self.bot.say(self.get_map_message(0))
+        try:
+            await ctx.send(self.map_data[0])
+        except IndexError:
+            await ctx.send('No map data found. Try again later.')
 
-    @commands.command(hidden=True)
-    async def nextmaps(self):
-        """Shows the next maps in the Splatoon schedule."""
-        await self.bot.say(self.get_map_message(1))
-
-    @commands.command(hidden=True)
-    async def lastmaps(self):
-        """Shows the last maps in the Splatoon schedule."""
-        await self.bot.say(self.get_map_message(2))
-
-    @commands.command()
-    async def schedule(self):
+    @splat1.command(name='schedule')
+    async def splat1_schedule(self, ctx):
         """Shows the current Splatoon schedule."""
         if self.map_data:
-            await self.bot.say('\n'.join(map(str, self.map_data)))
+            await ctx.send('\n'.join(str(x) for x in self.map_data))
         else:
-            await self.bot.say('No map data found. Try again later.')
+            await ctx.send('No map data found. Try again later.')
 
     def weapon_to_string(self, weapon):
-        return '{0[name]}, Sub: {0[sub]}, Special: {0[special]}'.format(weapon)
+        return f'**{weapon["name"]}**\nSub: {weapon["sub"]}, Special: {weapon["special"]}'
 
-    @commands.command()
-    async def weapon(self, *, query : str):
-        """Displays weapon info from a query.
+    @splat1.command(name='weapon')
+    async def splat1_weapon(self, ctx, *, query: str):
+        """Displays Splatoon weapon info from a query.
 
         The query must be at least 3 characters long, otherwise it'll tell you it failed.
-
-        If 15 or more weapons are found then the results will be PMed to you instead.
         """
         query = query.strip().lower()
-        weapons = self.config.get('weapons', [])
+        weapons = self.splat1_data.get('weapons', [])
         if len(query) < 3:
-            await self.bot.say('The query must be at least 3 characters long.')
-            return
+            return await ctx.send('The query must be at least 3 characters long.')
 
         def predicate(weapon):
             lowered = [weapon.lower() for weapon in weapon.values()]
             return any(query in wep for wep in lowered)
 
-        result = list(filter(predicate, weapons))
-        if not result:
-            await self.bot.say('Sorry. The query "{}" returned nothing.'.format(query))
-            return
+        results = list(filter(predicate, weapons))
+        if not results:
+            return await ctx.send('No results found.')
 
-        output = ['Found {} weapon(s):'.format(len(result))]
-        output.extend(self.weapon_to_string(weapon) for weapon in result)
+        output = [f'Found {Plural(weapon=len(results))}:']
+        output.extend(self.weapon_to_string(weapon) for weapon in results)
 
-        if len(result) > 15:
-            await self.bot.whisper('\n'.join(output))
+        if len(results) > 10:
+            await ctx.author.send('\n'.join(output))
         else:
-            await self.bot.say('\n'.join(output))
+            await ctx.send('\n'.join(output))
 
-    @commands.command(invoke_without_command=True)
-    async def scrim(self, games=5, *, mode : str = None):
-        """Generates scrim map and mode combinations.
+    @splat1.command(name='scrim')
+    async def splat1_scrim(self, ctx, games=5, *, mode: str = None):
+        """Generates Splatoon scrim map and mode combinations.
 
-        The mode combinations do not have Turf War. The number of games must
-        be between 3 and 16.
+        The mode combinations do not have Turf War.
 
         The mode is rotated unless you pick a mode to play, in which all map
         combinations will use that mode instead.
         """
 
-        maps = self.config.get('maps', [])
+        maps = self.splat1_data.get('maps', [])
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control']
-        game_count = max(min(games, 16), 3)
+        game_count = max(min(games, len(maps)), 3)
 
         if mode is not None:
             mode = mode.lower()
 
-            # half-assed fuzzy matching
-            lookup = {
-                'tc': modes[2],
-                'tower': modes[2],
-                'tower control': modes[2],
-                'sz': modes[1],
-                'zones': modes[1],
-                'zone': modes[1],
-                'splat zone': modes[1],
-                'splat zones': modes[1],
-                'rainmaker': modes[0],
-                'rm': modes[0],
-                'turf': 'Turf War',
-                'turf war': 'Turf War',
+            # shortcuts that can't be detected by fuzzy matching:
+            shortcuts = {
+                'rm': 'Rainmaker',
+                'sz': 'Splat Zones',
+                'tc': 'Tower Control',
                 'tw': 'Turf War'
             }
 
-            resulting_mode = lookup.get(mode, None)
-            if resulting_mode is not None:
-                result = ['The following games will be played in {}'.format(resulting_mode)]
-                for index, stage in enumerate(random.sample(maps, game_count), 1):
-                    result.append('Game {}: {}'.format(index, stage))
-            else:
-                await self.bot.say('Could not figure out what mode you meant.')
-                return
+            real_mode = shortcuts.get(mode)
+            if real_mode is None:
+                real_mode = fuzzy.extract_one(mode, modes + ['Turf War'], scorer=fuzzy.partial_ratio, score_cutoff=50)
+                if real_mode is not None:
+                    real_mode = real_mode[0]
+                else:
+                    return await ctx.send('Could not figure out what mode you meant.')
+
+            result = [f'The following games will be played in {real_mode}.']
+            for index, stage in enumerate(random.sample(maps, game_count), 1):
+                result.append(f'Game {index}: {stage}')
         else:
             random.shuffle(modes)
             scrims = get_random_scrims(modes, maps, game_count)
-            result = ['Game {0}: {1.mode} on {1.stage}'.format(game, scrim) for game, scrim in enumerate(scrims, 1)]
+            result = [f'Game {game}: {scrim.mode} on {scrim.stage}' for game, scrim in enumerate(scrims, 1)]
 
-        await self.bot.say('\n'.join(result))
+        await ctx.send('\n'.join(result))
 
-    @commands.group(invoke_without_command=True)
-    async def brand(self, *, query : str):
-        """Shows brand info based on either the name or the ability given.
+    @splat1.command(name='brand', invoke_without_command=True)
+    async def splat1_brand(self, ctx, *, query : str):
+        """Shows Splatoon brand info based on either the name or the ability given.
 
         If the query is an ability then it attempts to find out what brands
         influence that ability, otherwise it just looks for the brand being given.
 
-        The query must be at least 2 characters long.
+        The query must be at least 4 characters long.
         """
         query = query.strip().lower()
 
-        if len(query) < 2:
-            await self.bot.say('The query must be at least 5 characters long.')
-            return
+        if len(query) < 4:
+            return await ctx.send('The query must be at least 5 characters long.')
 
-        brands = self.config.get('brands', [])
+        brands = self.splat1_data.get('brands', [])
 
         # First, attempt to figure out if it's a brand name.
         def first_check(data):
             lowered = data['name'].lower()
-            return query in lowered
+            return fuzzy.partial_ratio(query, lowered) >= 60
 
         def second_check(data):
             buffed = data['buffed']
             nerfed = data['nerfed']
             if buffed is None or nerfed is None:
                 return False
-            return query in buffed.lower() or query in nerfed.lower()
+            return fuzzy.partial_ratio(query, buffed.lower()) >= 60 or \
+                   fuzzy.partial_ratio(query, nerfed.lower()) >= 60
 
         result = list(filter(first_check, brands))
         output = []
@@ -235,7 +221,7 @@ class Splatoon:
                 nerfed = entry['nerfed']
 
                 if buffed is None or nerfed is None:
-                    output.append('The brand "{}" is neutral.'.format(name))
+                    output.append(f'The brand "{name}" is neutral.')
                     continue
 
                 output.append(fmt.format(name, buffed, nerfed))
@@ -248,80 +234,73 @@ class Splatoon:
                 output.append(fmt.format(entry['name'], entry['buffed'], entry['nerfed']))
 
         if not output:
-            await self.bot.say('Your query returned nothing.')
+            await ctx.send('Your query returned nothing.')
         else:
-            await self.bot.say('\n'.join(output))
-
-
-    @brand.command(name='list')
-    async def _list(self):
-        """Lists all Splatoon brands."""
-        brands = self.config.get('brands', [])
-        max_name = max(len(b['name']) for b in brands)
-        max_ability = max(len(b['buffed']) if b['buffed'] else 4 for b in brands)
-        output = ['```']
-        tmp = { 'name': 'Brand', 'nerfed': 'Nerfed', 'buffed': 'Buffed' }
-        fmt = '{0[name]!s:<{n}} {0[buffed]!s:<{a}} {0[nerfed]!s:<{a}}'
-        output.append(fmt.format(tmp, n=max_name, a=max_ability))
-        output.append('-' * (max_name + max_ability * 2))
-
-        for brand in brands:
-            output.append(fmt.format(brand, n=max_name, a=max_ability))
-        output.append('```')
-        await self.bot.say('\n'.join(output))
+            await ctx.send('\n'.join(output))
 
     @commands.command(hidden=True)
-    async def marie(self):
+    async def marie(self, ctx):
         """A nice little easter egg."""
-        await self.bot.say('http://i.stack.imgur.com/0OT9X.png')
-
-    @commands.group(hidden=True)
-    async def conf(self):
-        """Edits the config file"""
-        pass
-
-    @conf.group()
-    async def add(self):
-        """Adds an entry to the config file."""
-        pass
-
-    @add.command(name='weapon')
-    @checks.is_owner()
-    async def add_wep(self, name, sub, special):
-        """Adds a weapon to the config file."""
-        weapons = self.config.get('weapons', [])
-        entry = {
-            'name': name,
-            'sub': sub,
-            'special': special
-        }
-        weapons.append(entry)
-        await self.config.put('weapons', weapons)
-        await self.bot.say('\U0001f44c')
-
-    @add.command(name='map')
-    @checks.is_owner()
-    async def _map(self, name):
-        """Adds a map to the config file."""
-        entry = self.config.get('maps', [])
-        entry.append(name)
-        await self.config.put('maps', entry)
-        await self.bot.say('\U0001f44c')
+        await ctx.send('http://i.stack.imgur.com/0OT9X.png')
 
     @commands.command()
-    async def splatwiki(self, *, title : str):
+    async def splatwiki(self, ctx, *, title: str):
         """Returns a Inkipedia page."""
-        url = 'http://splatoonwiki.org/wiki/Special:Search/' + urlquote(title)
+        url = f'http://splatoonwiki.org/wiki/Special:Search/{urlquote(title)}'
 
-        async with aiohttp.get(url) as resp:
-            if 'Special:Search' in resp.url:
-                await self.bot.say('Could not find your page. Try a search:\n{0.url}'.format(resp))
+        async with ctx.session.get(url) as resp:
+            if 'Special:Search' in resp.url.path:
+                await ctx.send(f'Could not find your page. Try a search:\n{resp.url.human_repr()}')
             elif resp.status == 200:
-                await self.bot.say(resp.url)
+                await ctx.send(resp.url)
             elif resp.status == 502:
-                await self.bot.say('It seems that Inkipedia is taking too long to respond. Try again later.')
+                await ctx.send('It seems that Inkipedia is taking too long to respond. Try again later.')
             else:
-                await self.bot.say('An error has occurred of status code {0.status} happened. Tell Danny.'.format(resp))
+                await ctx.send(f'An error has occurred of status code {resp.status} happened.')
+
+    @commands.command()
+    async def schedule(self, ctx):
+        """Shows the current Splatoon 2 schedule."""
+        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 schedule" for Splatoon 1 instead.')
+
+    @commands.command()
+    async def maps(self, ctx):
+        """Shows the current maps in the Splatoon 2."""
+        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 maps" for Splatoon 1 instead.')
+
+    @commands.command()
+    async def weapon(self, ctx, *, query: str):
+        """Displays Splatoon 2 weapon info from a query.
+
+        The query must be at least 3 characters long, otherwise it'll tell you it failed.
+
+        If 15 or more weapons are found then the results will be PMed to you instead.
+        """
+        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 weapon" for Splatoon 1 instead.')
+
+    @commands.command()
+    async def scrim(self, ctx, games=5, *, mode: str = None):
+        """Generates Splatoon 2 scrim map and mode combinations.
+
+        The mode combinations do not have Turf War.
+
+        The mode is rotated unless you pick a mode to play, in which all map
+        combinations will use that mode instead.
+        """
+        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 scrim" for Splatoon 1 instead.')
+
+    @commands.group(invoke_without_command=True)
+    async def brand(self, ctx, *, query: str):
+        """Shows Splatoon 2 brand info
+
+        This is based on either the name or the ability given.
+
+        If the query is an ability then it attempts to find out what brands
+        influence that ability, otherwise it just looks for the brand being given.
+
+        The query must be at least 4 characters long.
+        """
+        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 brand" for Splatoon 1 instead.')
 
 def setup(bot):
     bot.add_cog(Splatoon(bot))

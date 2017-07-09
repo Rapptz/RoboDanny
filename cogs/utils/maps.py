@@ -4,7 +4,7 @@
 
 from lxml import etree
 import datetime, re
-import asyncio, aiohttp
+import asyncio
 
 NINTENDO_LOGIN_PAGE = "https://id.nintendo.net/oauth/authorize"
 SPLATNET_CALLBACK_URL = "https://splatoon.nintendo.net/users/auth/nintendo/callback"
@@ -18,7 +18,6 @@ class Rotation(object):
         self.turf_maps = []
         self.ranked_mode = None
         self.ranked_maps = []
-
 
     @property
     def is_over(self):
@@ -39,19 +38,23 @@ class Rotation(object):
         return prefix + fmt.format(self.turf_maps, self.ranked_mode, self.ranked_maps)
 
 # based on https://github.com/Wiwiweb/SakuraiBot/blob/master/src/sakuraibot.py
-async def get_new_splatnet_cookie(username, password):
+async def get_new_splatnet_cookie(session, username, password):
     parameters = {'client_id': SPLATNET_CLIENT_ID,
                   'response_type': 'code',
                   'redirect_uri': SPLATNET_CALLBACK_URL,
                   'username': username,
                   'password': password}
 
-    async with aiohttp.post(NINTENDO_LOGIN_PAGE, data=parameters) as response:
+    async with session.post(NINTENDO_LOGIN_PAGE, data=parameters) as response:
         cookie = response.history[-1].cookies.get('_wag_session')
         if cookie is None:
             print(req)
             raise Exception("Couldn't retrieve cookie")
-        return cookie
+        url = response.url
+
+    # update our cookies for this session
+    cookies = { '_wag_session': cookie }
+    session.cookie_jar.update_cookies(cookies, response_url=url)
 
 def parse_splatnet_time(timestr):
     # time is given as "MM/DD at H:MM [p|a].m. (PDT|PST)"
@@ -93,9 +96,7 @@ def parse_splatnet_time(timestr):
     return splatoon_time
 
 
-async def get_splatnet_schedule(splatnet_cookie):
-    cookies = {'_wag_session': splatnet_cookie}
-
+async def get_splatnet_schedule(session):
 
     """
     This is repeated 3 times:
@@ -119,7 +120,7 @@ async def get_splatnet_schedule(splatnet_cookie):
     """
 
     schedule = []
-    async with aiohttp.get(SPLATNET_SCHEDULE_URL, cookies=cookies, data={'locale':"en"}) as response:
+    async with session.get(SPLATNET_SCHEDULE_URL, data={'locale':"en"}) as response:
         text = await response.text()
         root = etree.fromstring(text, etree.HTMLParser())
         stage_schedule_nodes = root.xpath("//*[@class='stage-schedule']")
