@@ -65,6 +65,17 @@ class Pages:
         if not self.permissions.embed_links:
             raise CannotPaginate('Bot does not have embed links permission.')
 
+        if not self.permissions.send_messages:
+            raise CannotPaginate('Bot cannot send messages.')
+
+        if self.paginating:
+            # verify we can actually use the pagination session
+            if not self.permissions.add_reactions:
+                raise CannotPaginate('Bot does not have add reactions permission.')
+
+            if not self.permissions.read_message_history:
+                raise CannotPaginate('Bot does not have Read Message History permission.')
+
     def get_page(self, page):
         base = (page - 1) * self.per_page
         return self.entries[base:base + self.per_page]
@@ -92,13 +103,6 @@ class Pages:
             self.embed.description = '\n'.join(p)
             await self.message.edit(embed=self.embed)
             return
-
-        # verify we can actually use the pagination session
-        if not self.permissions.add_reactions:
-            raise CannotPaginate('Bot does not have add reactions permission.')
-
-        if not self.permissions.read_message_history:
-            raise CannotPaginate('Bot does not have Read Message History permission.')
 
         p.append('')
         p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
@@ -205,9 +209,12 @@ class Pages:
 
     async def paginate(self):
         """Actually paginate the entries and run the interactive loop if necessary."""
-        # this allows us to react while it's "loading"
-        # making it much more "snappier"
-        self.bot.loop.create_task(self.show_page(1, first=True))
+        first_page = self.show_page(1, first=True)
+        if not self.paginating:
+            await first_page
+        else:
+            # allow us to react to reactions right away if we're paginating
+            self.bot.loop.create_task(first_page)
 
         while self.paginating:
             try:
@@ -396,13 +403,6 @@ class HelpPaginator(Pages):
         if not first:
             await self.message.edit(embed=self.embed)
             return
-
-        # verify we can actually use the pagination session
-        if not self.permissions.add_reactions:
-            raise CannotPaginate('Bot does not have add reactions permission.')
-
-        if not self.permissions.read_message_history:
-            raise CannotPaginate('Bot does not have Read Message History permission.')
 
         self.message = await self.channel.send(embed=self.embed)
         for (reaction, _) in self.reaction_emojis:
