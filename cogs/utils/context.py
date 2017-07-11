@@ -48,9 +48,15 @@ class Context(commands.Context):
     def session(self):
         return self.bot.session
 
-    async def too_many_matches(self, matches, entry):
+    async def disambiguate(self, matches, entry):
+        if len(matches) == 0:
+            raise ValueError('No results found.')
+
+        if len(matches) == 1:
+            return matches[0]
+
         await self.send('There are too many matches... Which one did you mean? **Only say the number**.')
-        await self.send('\n'.join(map(entry, enumerate(matches, 1))))
+        await self.send('\n'.join(f'{index}: {entry(item)}' for index, item in enumerate(matches, 1)))
 
         def check(m):
             return m.content.isdigit() and m.author.id == ctx.author.id and m.channel == ctx.channel.id

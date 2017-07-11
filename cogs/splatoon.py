@@ -51,6 +51,7 @@ class Splatoon:
     def __init__(self, bot):
         self.bot = bot
         self.splat1_data = config.Config('splatoon.json', loop=bot.loop)
+        self.splat2_data = config.Config('splatoon2.json', loop=bot.loop)
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
 
@@ -84,6 +85,15 @@ class Splatoon:
                 if entry.is_over:
                     continue
                 self.map_data.append(entry)
+
+    def get_weapons_named(self, name, *, splatoon2=True):
+        data = self.splat2_data if splatoon2 else self.splat1_data
+        data = data.get('weapons', [])
+        name = name.lower()
+
+        choices = {w['name']: w for w in data}
+        results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.partial_ratio, score_cutoff=60)
+        return [v for k, _, v in results]
 
     @commands.group(aliases=['sp1', 'splatoon1'])
     async def splat1(self, ctx):
@@ -137,17 +147,7 @@ class Splatoon:
         else:
             await ctx.send('\n'.join(output))
 
-    @splat1.command(name='scrim')
-    async def splat1_scrim(self, ctx, games=5, *, mode: str = None):
-        """Generates Splatoon scrim map and mode combinations.
-
-        The mode combinations do not have Turf War.
-
-        The mode is rotated unless you pick a mode to play, in which all map
-        combinations will use that mode instead.
-        """
-
-        maps = self.splat1_data.get('maps', [])
+    async def generate_scrims(self, ctx, maps, games, mode):
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control']
         game_count = max(min(games, len(maps)), 3)
 
@@ -179,6 +179,19 @@ class Splatoon:
             result = [f'Game {game}: {scrim.mode} on {scrim.stage}' for game, scrim in enumerate(scrims, 1)]
 
         await ctx.send('\n'.join(result))
+
+    @splat1.command(name='scrim')
+    async def splat1_scrim(self, ctx, games=5, *, mode: str = None):
+        """Generates Splatoon scrim map and mode combinations.
+
+        The mode combinations do not have Turf War.
+
+        The mode is rotated unless you pick a mode to play, in which all map
+        combinations will use that mode instead.
+        """
+
+        maps = self.splat1_data.get('maps', [])
+        await self.generate_scrims(ctx, maps, games, mode)
 
     @splat1.command(name='brand', invoke_without_command=True)
     async def splat1_brand(self, ctx, *, query : str):
@@ -273,10 +286,31 @@ class Splatoon:
         """Displays Splatoon 2 weapon info from a query.
 
         The query must be at least 3 characters long, otherwise it'll tell you it failed.
-
-        If 15 or more weapons are found then the results will be PMed to you instead.
         """
-        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 weapon" for Splatoon 1 instead.')
+        query = query.strip().lower()
+        weapons = self.splat2_data.get('weapons', [])
+        if len(query) < 3:
+            return await ctx.send('The query must be at least 3 characters long.')
+
+        def predicate(weapon):
+            lowered = [weapon.lower() for weapon in weapon.values()]
+            return any(query in wep for wep in lowered)
+
+        results = list(filter(predicate, weapons))
+        if not results:
+            return await ctx.send('No results found.')
+
+        e = discord.Embed(colour=discord.Colour.blurple())
+        e.title = f'Found {Plural(weapon=len(results))}'
+
+        subs = '\n'.join(w['sub'] for w in results)
+        names = '\n'.join(w['name'] for w in results)
+        special = '\n'.join(w['special'] for w in results)
+
+        e.add_field(name='Name', value=names)
+        e.add_field(name='Sub', value=subs)
+        e.add_field(name='Special', value=special)
+        await ctx.send(embed=e)
 
     @commands.command()
     async def scrim(self, ctx, games=5, *, mode: str = None):
@@ -287,7 +321,8 @@ class Splatoon:
         The mode is rotated unless you pick a mode to play, in which all map
         combinations will use that mode instead.
         """
-        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 scrim" for Splatoon 1 instead.')
+        maps = self.splat2_data.get('maps', [])
+        await self.generate_scrims(ctx, maps, games, mode)
 
     @commands.group(invoke_without_command=True)
     async def brand(self, ctx, *, query: str):
