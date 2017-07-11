@@ -59,22 +59,27 @@ class Context(commands.Context):
         await self.send('\n'.join(f'{index}: {entry(item)}' for index, item in enumerate(matches, 1)))
 
         def check(m):
-            return m.content.isdigit() and m.author.id == ctx.author.id and m.channel == ctx.channel.id
+            return m.content.isdigit() and m.author.id == self.author.id and m.channel.id == self.channel.id
+
+        await self.release()
 
         # only give them 3 tries.
-        for i in range(3):
-            try:
-                message = await self.wait_for('message', check=check, timeout=10.0)
-            except asyncio.TimeoutError:
-                raise ValueError('Took too long. Goodbye.')
+        try:
+            for i in range(3):
+                try:
+                    message = await self.bot.wait_for('message', check=check, timeout=30.0)
+                except asyncio.TimeoutError:
+                    raise ValueError('Took too long. Goodbye.')
 
-            index = int(message.content)
-            try:
-                return matches[index - 1]
-            except:
-                await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
+                index = int(message.content)
+                try:
+                    return matches[index - 1]
+                except:
+                    await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
 
-        raise ValueError('Too many tries. Goodbye.')
+            raise ValueError('Too many tries. Goodbye.')
+        finally:
+            await self.acquire()
 
     async def prompt(self, message, *, timeout=60.0, delete_after=True, reacquire=True):
         """An interactive reaction confirmation dialog.
