@@ -338,3 +338,46 @@ async def migrate_stars(pool, client):
         records = [r.to_record() for r in starrers]
         status = await con.copy_records_to_table('starrers', columns=Starrer.__slots__, records=records)
         print('Starboard Starrers', status)
+
+async def migrate_profile(pool, client):
+    # note: also porting over pokemon.json
+    friend_codes = _load_json('pokemon.json').get('friend_codes', {})
+    profiles = _load_json('profiles.json')
+
+    class ProfileEntry:
+        __slots__ = ('id', 'nnid', 'squad', 'extra', 'fc_3ds')
+
+        def __init__(self, user_id, profile, fc):
+            self.id = int(user_id)
+            self.squad = profile.get('squad')
+            self.nnid = profile.get('nnid')
+            self.fc_3ds = fc
+
+            extra = {}
+            rank = profile.get('rank')
+            if rank:
+                extra['sp1_rank'] = rank
+
+            weapon = profile.get('weapon')
+            if weapon:
+                extra['sp1_weapon'] = weapon
+
+            self.extra = json.dumps(extra)
+
+        def to_record(self):
+            return tuple(getattr(self, a) for a in self.__slots__)
+
+    data = []
+
+    for key, value in profiles.items():
+        code = friend_codes.pop(key, None)
+        data.append(ProfileEntry(key, value, code))
+
+    for key, value in friend_codes.items():
+        data.append(ProfileEntry(key, {}, value))
+
+    async with pool.acquire() as con:
+        await con.execute("TRUNCATE profiles;")
+        records = [r.to_record() for r in data]
+        status = await con.copy_records_to_table('profiles', columns=ProfileEntry.__slots__, records=records)
+        print('Profiles', status)

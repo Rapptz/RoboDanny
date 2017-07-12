@@ -91,8 +91,8 @@ class Splatoon:
         data = data.get('weapons', [])
         name = name.lower()
 
-        choices = {w['name']: w for w in data}
-        results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.partial_ratio, score_cutoff=60)
+        choices = {w['name'].lower(): w for w in data}
+        results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
         return [v for k, _, v in results]
 
     @commands.group(aliases=['sp1', 'splatoon1'])
