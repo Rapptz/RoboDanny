@@ -213,6 +213,12 @@ class Time(SQLType):
             return 'TIME WITH TIME ZONE'
         return 'TIME'
 
+class JSON(SQLType):
+    python = None
+
+    def to_sql(self):
+        return 'JSONB'
+
 class ForeignKey(SQLType):
     def __init__(self, table, column, *, sql_type=None, on_delete='CASCADE', on_update='NO ACTION'):
         if not table or not isinstance(table, str):
@@ -509,7 +515,21 @@ class Table(metaclass=TableMeta):
         \*\*kwargs
             The arguments to forward to asyncpg.create_pool.
         """
-        cls._pool = pool = await asyncpg.create_pool(uri, **kwargs)
+
+        def _encode_jsonb(value):
+            return json.dumps(value)
+
+        def _decode_jsonb(value):
+            return json.loads(value)
+
+        old_init = kwargs.pop('init', None)
+
+        async def init(con):
+            await con.set_type_codec('jsonb', schema='pg_catalog', encoder=_encode_jsonb, decoder=_decode_jsonb, format='text')
+            if old_init is not None:
+                await old_init(con)
+
+        cls._pool = pool = await asyncpg.create_pool(uri, init=init, **kwargs)
         return pool
 
     @classmethod
