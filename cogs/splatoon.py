@@ -337,5 +337,28 @@ class Splatoon:
         """
         await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 brand" for Splatoon 1 instead.')
 
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def new_weapon(self, ctx, name, sub, special):
+        """Add a new Splatoon 2 weapon."""
+        weapons = self.splat2_data.get('weapons', [])
+        entry = {
+            'name': name,
+            'sub': sub,
+            'special': special
+        }
+        weapons.append(entry)
+        await self.splat2_data.put('weapons', weapons)
+        await ctx.send('\N{OK HAND SIGN}')
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def new_map(self, ctx, *, name):
+        """Add a new Splatoon 2 map."""
+        entry = self.splat2_data.get('maps', [])
+        entry.append(name)
+        await self.splat2_data.put('maps', entry)
+        await ctx.send('\N{OK HAND SIGN}')
+
 def setup(bot):
     bot.add_cog(Splatoon(bot))
