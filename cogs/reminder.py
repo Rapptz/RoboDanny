@@ -1,24 +1,40 @@
-from .utils import config, checks, time
+from .utils import checks, db, time
 from discord.ext import commands
 import discord
 import asyncio
 import datetime
-import json
 
-DISCORD_EPOCH = discord.utils.DISCORD_EPOCH
+class Reminders(db.Table):
+    id = db.PrimaryKeyColumn()
+
+    expires = db.Column(db.Datetime, index=True)
+    created = db.Column(db.Datetime, default="now() at time zone 'utc'")
+    event = db.Column(db.String)
+    extra = db.Column(db.JSON, default="'{}'::jsonb")
 
 class Timer:
-    __slots__ = ('args', 'event', 'id', 'created', '_expires')
+    __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires')
 
-    def __init__(self, *, id, args, event, created, **kwargs):
-        self.id = id
-        self.args = args
-        self.event = event
+    def __init__(self, *, record):
+        self.id = record['id']
 
-        if isinstance(created, datetime.datetime):
-            created = created.timestamp()
+        extra = record['extra']
+        self.args = extra.get('args', [])
+        self.kwargs = extra.get('kwargs', {})
+        self.event = record['event']
+        self.created_at = record['created']
+        self.expires = record['expires']
 
-        self.created = created
+    @classmethod
+    def temporary(cls, *, expires, created, event, args, kwargs):
+        pseudo = {
+            'id': None,
+            'extra': { 'args': args, 'kwargs': kwargs },
+            'event': event,
+            'created': created,
+            'expires': expires
+        }
+        return cls(record=pseudo)
 
     def __eq__(self, other):
         try:
@@ -29,87 +45,53 @@ class Timer:
     def __hash__(self):
         return hash(self.id)
 
-    @discord.utils.cached_slot_property('_expires')
-    def expires(self):
-        return discord.utils.snowflake_time(self.id)
-
-    @property
-    def created_at(self):
-        return datetime.datetime.fromtimestamp(self.created)
-
     @property
     def human_delta(self):
         return time.human_timedelta(self.created_at)
 
-    def to_json(self):
-        return {
-            'args': self.args,
-            'event': self.event,
-            'id': self.id,
-            'created': self.created,
-        }
-
     def __repr__(self):
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
-
-    @classmethod
-    def from_json(cls, obj):
-        try:
-            obj['id']
-        except KeyError:
-            return obj
-        return cls(**obj)
 
 class Reminder:
     """Reminders to do something."""
 
     def __init__(self, bot):
         self.bot = bot
-        # 'data' has the timers,
-        # 'count' has the total number of timers since inception
-        #  used to generate the timer IDs
-        self.timers = config.Config('reminders.json', hook=Timer)
         self._have_data = asyncio.Event(loop=bot.loop)
         self._current_timer = None
         self._task = bot.loop.create_task(self.dispatch_timers())
+        db.create_tables(Reminders, loop=bot.loop)
 
     def __unload(self):
         self._task.cancel()
 
     async def __error(self, ctx, error):
-        import traceback
-        traceback.print_exc()
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
-    def get_active_timers(self, *, days=7):
-        data = self.timers.get('data', [])
-        threshold = datetime.datetime.utcnow() + datetime.timedelta(days=days)
-        a = [o for o in data if o.expires < threshold]
-        a.sort(key=lambda x: x.expires)
-        return a
+    async def get_active_timers(self, *, connection=None, days=7):
+        query = "SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval) ORDER BY expires;"
+        con = connection or self.bot.pool
 
-    async def wait_for_active_timers(self, *, days=7):
-        timers = self.get_active_timers(days=days)
-        if len(timers):
-            self._have_data.set()
-            return timers
+        records = await con.fetch(query, datetime.timedelta(days=days))
+        return [Timer(record=a) for a in records]
 
-        self._have_data.clear()
-        self._current_timer = None
-        await self._have_data.wait()
-        return self.get_active_timers(days=days)
+    async def wait_for_active_timers(self, *, connection=None, days=7):
+        async with db.MaybeAcquire(connection=connection, pool=self.bot.pool) as con:
+            timers = await self.get_active_timers(connection=con, days=days)
+            if len(timers):
+                self._have_data.set()
+                return timers
+
+            self._have_data.clear()
+            self._current_timer = None
+            await self._have_data.wait()
+            return await self.get_active_timers(connection=con, days=days)
 
     async def call_timer(self, timer):
-        # remove timer from the storage
-        data = self.timers.get('data', [])
-        try:
-            data.remove(timer)
-        except ValueError:
-            # wtf?
-            pass
-
-        await self.timers.put('data', data)
+        # delete the timer
+        query = "DELETE FROM reminders WHERE id=$1;"
+        await self.bot.pool.execute(query, timer.id)
 
         # dispatch the event
         event_name = f'{timer.event}_timer_complete'
@@ -132,32 +114,64 @@ class Reminder:
                 await self.call_timer(timer)
         except asyncio.CancelledError:
             pass
+        except (OSError, discord.ConnectionClosed, asyncpg.PostgresConnectionError):
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.dispatch_timers())
 
     async def short_timer_optimisation(self, seconds, timer):
         await asyncio.sleep(seconds)
         event_name = f'{timer.event}_timer_complete'
         self.bot.dispatch(event_name, timer)
 
-    async def create_timer(self, when, event, *args):
-        total = self.timers.get('count', 0)
-        data = self.timers.get('data', [])
+    async def create_timer(self, *args, **kwargs):
+        """Creates a timer.
+
+        Parameters
+        -----------
+        when: datetime.datetime
+            When the timer should fire.
+        event: str
+            The name of the event to trigger.
+            Will transform to 'on_{event}_timer_complete'.
+        \*args
+            Arguments to pass to the event
+        \*\*kwargs
+            Keyword arguments to pass to the event
+        connection: asyncpg.Connection
+            Special keyword-only argument to use a specific connection
+            for the DB request.
+
+        Note
+        ------
+        Arguments and keyword arguments must be JSON serialisable.
+
+        Returns
+        --------
+        :class:`Timer`
+        """
+        when, event, *args = args
+
+        try:
+            connection = kwargs.pop('connection')
+        except KeyError:
+            connection = self.bot.pool
 
         now = datetime.datetime.utcnow()
-        unix_seconds = (when - datetime.datetime(1970, 1, 1)).total_seconds()
-        ms = int(unix_seconds * 1000 - DISCORD_EPOCH)
-        timer_id = (ms << 22) + total
-
-        timer = Timer(id=timer_id, event=event, args=args, created=now)
-
+        timer = Timer.temporary(event=event, args=args, kwargs=kwargs, expires=when, created=now)
         delta = (when - now).total_seconds()
         if delta <= 60:
             # a shortcut for small timers
             self.bot.loop.create_task(self.short_timer_optimisation(delta, timer))
             return timer
 
-        await self.timers.put('count', total + 1)
-        data.append(timer)
-        await self.timers.put('data', data)
+        query = """INSERT INTO reminders (event, extra, expires)
+                   VALUES ($1, $2::jsonb, $3)
+                   RETURNING id;
+                """
+
+        row = await connection.fetchrow(query, event, { 'args': args, 'kwargs': kwargs }, when)
+        timer.id = row[0]
+
         self._have_data.set()
 
         # check if this timer is earlier than our currently run timer
