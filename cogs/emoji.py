@@ -1,10 +1,11 @@
 from discord.ext import commands
-from .utils import config, checks
+from .utils import db, checks
 
-from collections import Counter
+from collections import Counter, defaultdict
 
 import discord
 import asyncio
+import asyncpg
 import datetime
 import logging
 import re
@@ -12,8 +13,7 @@ import io
 
 log = logging.getLogger(__name__)
 
-BLOB_GUILD_ID = '272885620769161216'
-COUNCIL_LITE_ID = '300509002520068097'
+BLOB_GUILD_ID = 272885620769161216
 EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
 
 class BlobEmoji(commands.Converter):
@@ -33,15 +33,15 @@ class BlobEmoji(commands.Converter):
             raise commands.BadArgument('Not a valid blob emoji.')
         return emoji
 
-def is_council_lite_or_higher():
-    def pred(ctx):
-        server = ctx.message.server
-        if server is None or server.id != BLOB_GUILD_ID:
-            return False
+def partial_emoji(argument, *, regex=EMOJI_REGEX):
+    if argument.isdigit():
+        # assume it's an emoji ID
+        return int(argument)
 
-        council_lite = discord.utils.find(lambda r: r.id == COUNCIL_LITE_ID, server.roles)
-        return ctx.message.author.top_role >= council_lite
-    return commands.check(pred)
+    m = regex.match(argument)
+    if m is None:
+        raise commands.BadArgument("That's not a custom emoji...")
+    return int(m.group(1))
 
 def usage_per_day(dt, usages):
     tracking_started = datetime.datetime(2017, 3, 31)
@@ -56,326 +56,292 @@ def usage_per_day(dt, usages):
         return usages
     return usages / days
 
+class EmojiStats(db.Table, table_name='emoji_stats'):
+    id = db.Column(db.Integer(big=True, auto_increment=True), primary_key=True)
+
+    guild_id = db.Column(db.Integer(big=True), index=True)
+    emoji_id = db.Column(db.Integer(big=True), index=True)
+    total = db.Column(db.Integer, default=0)
+
+    @classmethod
+    def create_table(cls, *, exists_ok=True):
+        statement = super().create_table(exists_ok=exists_ok)
+
+        # create the indexes
+        sql = "CREATE UNIQUE INDEX IF NOT EXISTS emoji_stats_uniq_idx ON emoji_stats (guild_id, emoji_id);"
+        return statement + '\n' + sql
+
 class Emoji:
-    """Custom emoji tracking statistics for Wolfiri"""
+    """Custom emoji tracking"""
 
     def __init__(self, bot):
         self.bot = bot
+        self._batch_of_data = defaultdict(Counter)
+        self._batch_lock = asyncio.Lock(loop=bot.loop)
+        self._task = bot.loop.create_task(self.bulk_insert())
 
-        # guild_id: data
-        # where data is
-        # emoji_id: count
-        self.config = config.Config('emoji_statistics.json')
+    def __unload(self):
+        self._task.cancel()
 
-    def __check(self, ctx):
-        server = ctx.message.server
-        if server is not None and server.id == BLOB_GUILD_ID:
-            return ctx.prefix == '?'
-        return True
+    async def __error(self, ctx, error):
+       if isinstance(error, commands.BadArgument):
+            await ctx.send(error)
+
+    async def bulk_insert(self):
+        try:
+            while not self.bot.is_closed():
+                query = """INSERT INTO emoji_stats (guild_id, emoji_id, total)
+                           SELECT x.guild, x.emoji, x.added
+                           FROM jsonb_to_recordset($1::jsonb) AS x(guild BIGINT, emoji BIGINT, added INT)
+                           ON CONFLICT (guild_id, emoji_id) DO UPDATE
+                           SET total = emoji_stats.total + excluded.total;
+                        """
+
+                async with self._batch_lock:
+                    transformed = [
+                        {'guild': guild_id, 'emoji': emoji_id, 'added': count}
+                        for guild_id, data in self._batch_of_data.items()
+                        for emoji_id, count in data.items()
+                    ]
+                    self._batch_of_data.clear()
+                    await self.bot.pool.execute(query, transformed)
+                await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            pass
+        except (OSError, asyncpg.PostgresConnectionError):
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.bulk_insert())
 
     async def do_redirect(self, message):
         if len(message.attachments) == 0:
             return
 
-        async with self.bot.http.session.get(message.attachments[0]['url']) as resp:
-            if resp.status != 200:
-                return
+        data = io.BytesIO()
+        await message.attachments[0].save(data)
+        data.seek(0)
 
-            data = await resp.read()
-
-        fmt = 'Suggestion from {0.author}: {0.clean_content}'.format(message)
-        ch = self.bot.get_channel('305838206119575552')
-        await self.bot.send_file(ch, io.BytesIO(data), filename='unknown.png', content=fmt)
+        ch = self.bot.get_channel(305838206119575552)
+        if ch is not None:
+            fmt = f'Suggestion from {message.author}: {message.clean_content}'
+            await ch.send(fmt, file=discord.File(data, message.attachments[0].filename))
 
     async def on_message(self, message):
-        if message.server is None:
+        if message.guild is None:
             return
 
         if message.author.bot:
             return # no bots.
 
         # handle the redirection from #suggestions
-        if message.channel.id == '295012914564169728':
-            await self.do_redirect(message)
+        if message.channel.id == 295012914564169728:
+            return await self.do_redirect(message)
 
         matches = EMOJI_REGEX.findall(message.content)
         if not matches:
             return
 
-        db = self.config.get(message.server.id, {})
-        for emoji_id in set(matches):
-            try:
-                count = db[emoji_id]
-            except KeyError:
-                db[emoji_id] = 1
-            else:
-                db[emoji_id] = count + 1
+        async with self._batch_lock:
+            self._batch_of_data[message.guild.id].update(map(int, matches))
 
-        await self.config.put(message.server.id, db)
-
-    async def on_server_update(self, before, after):
-        if before.id != BLOB_GUILD_ID:
-            return
-
-        await self.on_server_emojis_update(before.emojis, after.emojis)
-
-    async def on_server_emojis_update(self, before, after):
-        # I designed this event and I god damn hate it.
-        # First, an exhibit on how annoying it is to fetch
-        # the server:
-
+    async def on_guild_emojis_update(self, guild, before, after):
         # we only care when an emoji is added
         lookup = { e.id for e in before }
         added = [e for e in after if e.id not in lookup and len(e.roles) == 0]
         if len(added) == 0:
             return
 
-        server = added[0].server
-        log.info('Server %s has added %s emojis.', server, len(added))
-        if server.id != BLOB_GUILD_ID:
-            return # not the server we care about
+        log.info('Server %s has added %s emojis.', guild, len(added))
+        if guild.id != BLOB_GUILD_ID:
+            return # not the guild we care about
 
         # this is the backup channel
-        channel = self.bot.get_channel('305841865293430795')
+        channel = self.bot.get_channel(305841865293430795)
         if channel is None:
             return
 
         for emoji in added:
-            async with self.bot.http.session.get(emoji.url) as resp:
+            async with self.bot.session.get(emoji.url) as resp:
                 if resp.status != 200:
                     continue
 
-                data = await resp.read()
-                await self.bot.send_file(channel, io.BytesIO(data), filename=emoji.name + '.png', content=emoji.name)
+                data = io.BytesIO(await resp.read())
+                await channel.send(emoji.name, file=discord.File(data, f'{emoji.name}.png'))
                 await asyncio.sleep(1)
 
-    def get_all_blob_stats(self):
-        blob_guild = self.bot.get_server(BLOB_GUILD_ID)
+    async def get_all_blob_stats(self, ctx):
+        blob_guild = self.bot.get_guild(BLOB_GUILD_ID)
         blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
-        total_usage = Counter()
-        for data in self.config.all().values():
-            total_usage.update(data)
 
-        blob_usage = Counter({e: 0 for e in blob_ids})
-        blob_usage.update(x for x in total_usage.elements() if x in blob_ids)
+        query = "SELECT COALESCE(SUM(total), 0) FROM emoji_stats;"
+        total_usage = await ctx.db.fetchrow(query)
+
+        query = """SELECT emoji_id, COALESCE(SUM(total), 0) AS "Count"
+                   FROM emoji_stats
+                   WHERE emoji_id = ANY($1::bigint[])
+                   GROUP BY emoji_id
+                   ORDER BY "Count" DESC;
+                """
+
+        blob_usage = await ctx.db.fetch(query, list(blob_ids.keys()))
 
         e = discord.Embed(title='Blob Statistics', colour=0xf1c40f)
 
         common = blob_usage.most_common()
-        total_count = sum(blob_usage.values())
-        global_usage = sum(total_usage.values())
-        fmt = '{0} ({1:.2%} of all emoji usage)'
-
-        e.add_field(name='Total Usage', value=fmt.format(total_count, total_count / global_usage))
+        total_count = sum(r['Count'] for r in blob_usage)
+        global_usage = total_usage[0]
+        e.add_field(name='Total Usage', value=f'{total_count} ({total_count / global_usage:.2%})')
 
         def elem_to_string(key, count):
             elem = blob_ids.get(key)
             per_day = usage_per_day(elem.created_at, count)
-            return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total_count, per_day)
+            return f'{elem}: {count} times, {count / total_count:.2f}/day ({per_day:.2%})'
 
         top = [elem_to_string(key, count) for key, count in common[0:7]]
         bottom = [elem_to_string(key, count) for key, count in common[-7:]]
         e.add_field(name='Most Common', value='\n'.join(top), inline=False)
         e.add_field(name='Least Common', value='\n'.join(bottom), inline=False)
-        return e
+        await ctx.send(embed=e)
 
-    def get_blob_stats_for(self, emoji):
-        blob_guild = self.bot.get_server(BLOB_GUILD_ID)
-        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
-
+    async def get_stats_for(self, ctx, emoji):
         e = discord.Embed(colour=0xf1c40f, title='Statistics')
-        total_usage = Counter()
-        for data in self.config.all().values():
-            total_usage.update(data)
 
-        blob_usage = Counter({e: 0 for e in blob_ids})
-        blob_usage.update(x for x in total_usage.elements() if x in blob_ids)
-        usage = blob_usage.get(emoji.id)
-        total = sum(blob_usage.values())
+        query = """SELECT COALESCE(SUM(total), 0) AS "Count"
+                   FROM emoji_stats
+                   WHERE emoji_id=$1
+                   GROUP BY emoji_id;
+                """
 
-        rank = None
-        for (index, (x, _)) in enumerate(blob_usage.most_common()):
-            if x == emoji.id:
-                rank = index + 1
-                break
+        usage = await ctx.db.fetchrow(query, emoji.id)
+        usage = usage[0]
 
         e.add_field(name='Emoji', value=emoji)
-        e.add_field(name='Usage', value='{0}, {2:.2f}/day ({1:.2%})'.format(usage, usage / total,
-                                                                            usage_per_day(emoji.created_at, usage)))
-        e.add_field(name='Rank', value=rank)
-        return e
+        e.add_field(name='Usage', value=f'{usage}, {usage_per_day(emoji.created_at, usage):.2f}/day')
+        await ctx.send(embed=e)
 
     @commands.group(hidden=True, invoke_without_command=True)
-    async def blobstats(self, *, emoji: BlobEmoji = None):
+    async def blobstats(self, ctx, *, emoji: BlobEmoji = None):
         """Usage statistics of blobs."""
         if emoji is None:
-            e = self.get_all_blob_stats()
+            await self.get_all_blob_stats(ctx)
         else:
-            e = self.get_blob_stats_for(emoji)
+            await self.get_stats_for(ctx, emoji)
 
-        await self.bot.say(embed=e)
-
-    @blobstats.error
-    async def blobstats_error(self, error, ctx):
-        if isinstance(error, commands.BadArgument):
-            await self.bot.say(str(error))
-
-    @blobstats.command(hidden=True, name='server')
-    async def blobstats_server(self, *, server_id: str = None):
-        """What server uses blobs the most?
-
-        Useful for detecting abuse as well.
-        """
-        blob_guild = self.bot.get_server(BLOB_GUILD_ID)
-        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
-
-        per_guild = Counter()
-
-        # RIP
-        for guild_id, data in self.config.all().items():
-            for key in blob_ids:
-                per_guild[guild_id] += data.get(key, 0)
-
-        total_usage = sum(per_guild.values())
-
-        e = discord.Embed(colour=0xf1c40f, title='Server Statistics')
-
-        if server_id is not None:
-            guild = self.bot.get_server(server_id)
-            total = per_guild[server_id]
-            counter = Counter({k: v for k, v in self.config.get(server_id, {}).items() if k in blob_ids})
-            top = counter.most_common(10)
-            e.title = guild.name if guild else 'Unknown Guild?'
-            e.add_field(name='Usage', value='{0} ({1:.2%})'.format(total, total / total_usage))
-            if guild and guild.me:
-                e.add_field(name='Per Day', value=usage_per_day(guild.me.joined_at, total))
-                e.set_footer(text='Joined on')
-                e.timestamp = guild.me.joined_at
-
-                def elem_to_string(key, count):
-                    elem = blob_ids.get(key)
-                    per_day = usage_per_day(guild.me.joined_at, count)
-                    return '{0}: {1} times, {3:.2f}/day ({2:.2%})'.format(elem, count, count / total, per_day)
-
-                e.description = '\n'.join(elem_to_string(k, v) for k, v in top)
-
-            return await self.bot.say(embed=e)
-
-        top_ten = per_guild.most_common(10)
-        for top, count in top_ten:
-            guild = self.bot.get_server(top)
-            percent = count / total_usage
-            if guild is None:
-                name = 'Unknown Guild: ' + top
-                value = '{0} ({1:.2%})'.format(count, percent)
-            else:
-                name = '{0} (ID: {0.id})'.format(guild)
-                value = '{0}, {1:.2f}/day ({2:.2%})'.format(count, usage_per_day(guild.me.joined_at, count), percent)
-            e.add_field(name=name, value=value, inline=False)
-
-        await self.bot.say(embed=e)
-
-    @commands.command(hidden=True)
-    @checks.is_owner()
-    async def clear_emoji_data(self, *, server_id):
-        """Deletes a server's emoji data."""
-
-        if self.config.get(server_id) is not None:
-            await self.config.remove(server_id)
-            await self.bot.say('Deleted.')
-        else:
-            await self.bot.say('No data found.')
-
-    @commands.command(pass_context=True, aliases=['blobpost'], hidden=True)
-    @checks.is_in_servers(BLOB_GUILD_ID)
-    @checks.admin_or_permissions(administrator=True)
+    @commands.command(aliases=['blobpost'], hidden=True)
+    @checks.is_in_guilds(BLOB_GUILD_ID)
+    @checks.is_admin()
     async def blobsort(self, ctx):
         """Sorts the blob post."""
-        emojis = sorted([e.name for e in ctx.message.server.emojis if len(e.roles) == 0])
+        emojis = sorted([e.name for e in ctx.guild.emojis if len(e.roles) == 0])
         fp = io.BytesIO()
         pages = [emojis[i:i + 30] for i in range(0, len(emojis), 30)]
 
         for number, page in enumerate(pages, 1):
-            fmt = 'Page %s\n' % number
+            fmt = f'Page {number}\n'
             fp.write(fmt.encode('utf-8'))
             for emoji in page:
-                fmt = ':{0}: = `:{0}:`\n'.format(emoji)
+                fmt = f':{emoji}: = `:{emoji}:`\n'
                 fp.write(fmt.encode('utf-8'))
 
             fp.write(b'\n')
 
         fp.seek(0)
-        await self.bot.upload(fp, filename='blob_posts.txt')
+        await ctx.send(file=discord.File(fp, 'blob_posts.txt'))
 
-    @commands.command(pass_context=True, hidden=True)
-    @commands.cooldown(3, 60.0, commands.BucketType.server)
-    async def blobprune(self, ctx):
-        """Good candidates to prune."""
+    async def get_guild_stats(self, ctx):
+        e = discord.Embed(title='Emoji Leaderboard', colour=discord.Colour.blurple())
 
-        await self.bot.type()
+        query = """SELECT
+                       COALESCE(SUM(total), 0) AS "Count",
+                       COUNT(*) AS "Emoji"
+                   FROM emoji_stats
+                   WHERE guild_id=$1
+                   GROUP BY guild_id;
+                """
+        record = await ctx.db.fetchrow(query, ctx.guild.id)
+        total = record['Count']
+        emoji_used = record['Emoji']
+        per_day = usage_per_day(ctx.me.joined_at, total)
+        e.set_footer(text=f'{total} uses over {emoji_used} emoji for {per_day:.2f} uses per day.')
 
-        blob_guild = self.bot.get_server(BLOB_GUILD_ID)
-        seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
-        blob_ids = {e.id: e for e in blob_guild.emojis if len(e.roles) == 0 }
-        total_usage = Counter()
-        for data in self.config.all().values():
-            total_usage.update(data)
+        query = """SELECT emoji_id, total
+                   FROM emoji_stats
+                   WHERE guild_id=$1
+                   ORDER BY total DESC
+                   LIMIT 10;
+                """
 
-        blob_usage = Counter({e: 0 for e in blob_ids})
-        blob_usage.update(x for x in total_usage.elements() if x in blob_ids)
+        top = await ctx.db.fetch(query, ctx.guild.id)
 
-        common = blob_usage.most_common()
-        total_count = sum(blob_usage.values())
-
-        data = [(blob_ids.get(k), v) for k, v in common if blob_ids.get(k).created_at < seven_days_ago]
-
-        def elem_to_string(elem, count):
-            per_day = usage_per_day(elem.created_at, count)
-            fmt = '{0.created_at} -- {0.name} -- {1} times -- {2:.2f}/day -- {3:.2%} blob usage'
-            return fmt.format(elem, count, per_day, count / total_count)
-
-        data = '\n'.join(elem_to_string(k, v) for k, v in data).encode('utf-8')
-
-        # post to hastebin
-        async with self.bot.http.session.post('https://hastebin.com/documents', data=data) as resp:
-            if resp.status != 200:
-                return await self.bot.say('Could not post to hastebin, sorry.')
-
-            key = (await resp.json())['key']
-            await self.bot.say('https://hastebin.com/' + key)
-
-    @commands.command(pass_context=True, hidden=True)
-    @is_council_lite_or_higher()
-    async def blobpoll(self, ctx, message_id: str, *emojis: str):
-        """React to a post with the emojis given."""
-
-        # disambiguate the message ID...
-
-        # check if it's in the message cache
-        message = discord.utils.find(lambda m: m.id == message_id, self.bot.messages)
-        if message is None:
-            possible_channels = ('294924110130184193', '289847856033169409', '294928568532729856', BLOB_GUILD_ID)
-                                 # blob-council-queue   #approval-queue       #blob-council-chat   #general
-            for channel_id in possible_channels:
-                try:
-                    ch = self.bot.get_channel(channel_id)
-                    message = await self.bot.get_message(ch, message_id)
-                except Exception:
-                    continue
-                else:
-                    break
+        def to_string(emoji_id, count):
+            emoji = self.bot.get_emoji(emoji_id)
+            if emoji is None:
+                name = f'[Unknown Emoji](https://cdn.discordapp.com/emojis/{emoji_id}.png)'
+                emoji = discord.Object(id=emoji_id)
             else:
-                return await self.bot.say('Could not find message, sorry.')
-        elif message.server is None or message.server.id != BLOB_GUILD_ID:
-            return await self.bot.say('This message does not belong in the blob guild...')
+                name = str(emoji)
 
-        if not message.channel.permissions_for(message.server.me).add_reactions:
-            return await self.bot.say('Do not have permissions to react.')
+            per_day = usage_per_day(emoji.created_at, count)
+            p = count / total
+            return f'{name}: {count} uses ({p:.2%}), {per_day:.2f} uses/day.'
 
-        for emoji in emojis:
-            await self.bot.add_reaction(message, emoji.strip('<:>'))
+        e.description = '\n'.join(f'{i}. {to_string(emoji, total)}' for i, (emoji, total) in enumerate(top, 1))
+        await ctx.send(embed=e)
 
-        await self.bot.say('<:blobokhand:304461480802123777>')
+    async def get_emoji_stats(self, ctx, emoji_id):
+        e = discord.Embed(title='Emoji Stats')
+        cdn = f'https://cdn.discordapp.com/emojis/{emoji_id}.png'
+
+        # first verify it's a real ID
+        async with ctx.session.get(cdn) as resp:
+            if resp.status == 404:
+                e.description = "This isn't a valid emoji."
+                e.set_thumbnail(url='https://this.is-serious.business/09e106.jpg')
+                return await ctx.send(embed=e)
+
+        e.set_thumbnail(url=cdn)
+
+        # valid emoji ID so let's use it
+        query = """SELECT guild_id, SUM(total) AS "Count"
+                   FROM emoji_stats
+                   WHERE emoji_id=$1
+                   GROUP BY guild_id;
+                """
+
+        records = await ctx.db.fetch(query, emoji_id)
+        transformed = {k: v for k, v in records}
+        total = sum(transformed.values())
+
+        dt = discord.utils.snowflake_time(emoji_id)
+
+        # get the stats for this guild in particular
+        try:
+            count = transformed[ctx.guild.id]
+            per_day = usage_per_day(dt, count)
+            value = f'{count} uses ({count / total:.2%} of global uses), {per_day:.2f} uses/day'
+        except KeyError:
+            value = 'Not used here.'
+
+        e.add_field(name='Server Stats', value=value, inline=False)
+
+        # global stats
+        per_day = usage_per_day(dt, total)
+        value = f'{total} uses, {per_day:.2f} uses/day'
+        e.add_field(name='Global Stats', value=value, inline=False)
+        e.set_footer(text='These statistics are for servers I am in')
+        await ctx.send(embed=e)
+
+    @commands.command()
+    @commands.guild_only()
+    async def emojistats(self, ctx, *, emoji: partial_emoji = None):
+        """Shows you statistics about the emoji usage in this server.
+
+        If no emoji is given, then it gives you the top 10 emoji used.
+        """
+
+        if emoji is None:
+            await self.get_guild_stats(ctx)
+        else:
+            await self.get_emoji_stats(ctx, emoji)
 
 def setup(bot):
     bot.add_cog(Emoji(bot))

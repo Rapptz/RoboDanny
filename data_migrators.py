@@ -377,7 +377,26 @@ async def migrate_profile(pool, client):
         data.append(ProfileEntry(key, {}, value))
 
     async with pool.acquire() as con:
-        await con.execute("TRUNCATE profiles;")
+        await con.execute("TRUNCATE profiles RESTART IDENTITY;")
         records = [r.to_record() for r in data]
         status = await con.copy_records_to_table('profiles', columns=ProfileEntry.__slots__, records=records)
         print('Profiles', status)
+
+
+async def migrate_emoji(pool, client):
+    # guild_id: <data>
+    # emoji_id: count
+    stats = _load_json('emoji_statistics.json')
+
+    # this is hella easy
+    async with pool.acquire() as con:
+        await con.execute("TRUNCATE emoji_stats RESTART IDENTITY;")
+
+        records = [
+            (int(guild_id), int(emoji_id), count)
+            for guild_id, data in stats.items()
+            for emoji_id, count in data.items()
+        ]
+
+        status = await con.copy_records_to_table('emoji_stats', columns=('guild_id', 'emoji_id', 'total'), records=records)
+        print('Emoji Statistics', status)
