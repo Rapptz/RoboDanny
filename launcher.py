@@ -78,6 +78,7 @@ def db():
 @click.option('-q', '--quiet', help='less verbose output', is_flag=True)
 def init(cogs, quiet):
     """This manages the migrations and database creation system for you."""
+
     run = asyncio.get_event_loop().run_until_complete
     try:
         run(Table.create_pool(config.postgresql))
@@ -99,11 +100,14 @@ def init(cogs, quiet):
 
     for table in Table.all_tables():
         try:
-            run(table.create(verbose=not quiet, run_migrations=False))
+            created = run(table.create(verbose=not quiet, run_migrations=False))
         except Exception:
             click.echo(f'Could not create {table.__tablename__}.\n{traceback.format_exc()}', err=True)
         else:
-            click.echo(f'[{table.__module__}] Processing creation or migration for {table.__tablename__} complete.')
+            if created:
+                click.echo(f'[{table.__module__}] Created {table.__tablename__}.')
+            else:
+                click.echo(f'[{table.__module__}] No work needed for {table.__tablename__}.')
 
 @db.command(short_help='migrates the databases')
 @click.argument('cog', nargs=1, metavar='[cog]')
