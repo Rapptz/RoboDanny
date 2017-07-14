@@ -104,7 +104,6 @@ class Tags:
 
     def __init__(self, bot):
         self.bot = bot
-        db.create_tables(TagsTable, TagLookup, loop=bot.loop)
 
     async def __error(self, ctx, error):
         if isinstance(error, UnavailableTagCommand):

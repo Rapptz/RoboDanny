@@ -151,7 +151,6 @@ class Config:
 
     def __init__(self, bot):
         self.bot = bot
-        db.create_tables(Plonks, CommandConfig, loop=bot.loop)
 
     async def is_plonked(self, guild_id, member_id, *, channel_id=None, connection=None, check_bypass=True):
         if check_bypass:

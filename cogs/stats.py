@@ -29,7 +29,6 @@ class Stats:
     def __init__(self, bot):
         self.bot = bot
         self.process = psutil.Process()
-        db.create_tables(Commands, loop=bot.loop)
 
     async def on_command(self, ctx):
         command = ctx.command.qualified_name

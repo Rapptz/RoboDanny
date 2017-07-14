@@ -79,7 +79,6 @@ class Mod:
 
     def __init__(self, bot):
         self.bot = bot
-        db.create_tables(GuildConfig, loop=bot.loop)
 
         # guild_id: set(user_id)
         self._recently_kicked = defaultdict(set)

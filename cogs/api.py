@@ -45,7 +45,6 @@ class API:
     def __init__(self, bot):
         self.bot = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
-        db.create_tables(RTFM, Feeds, loop=bot.loop)
 
     # async def on_member_join(self, member):
     #     if member.guild.id != DISCORD_API_ID:

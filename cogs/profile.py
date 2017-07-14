@@ -154,7 +154,6 @@ class SplatoonWeapon(commands.Converter):
 class Profile:
     def __init__(self, bot):
         self.bot = bot
-        db.create_tables(Profiles, loop=bot.loop)
 
     async def __error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
