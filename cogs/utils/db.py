@@ -537,7 +537,112 @@ class Table(metaclass=TableMeta):
         return MaybeAcquire(connection, pool=cls._pool)
 
     @classmethod
-    async def create(cls, *, directory='migrations', verbose=False, connection=None):
+    def write_migration(cls, *, directory='migrations'):
+        """Writes the migration diff into the data file.
+
+        Note
+        ------
+        This doesn't actually commit/do the migration.
+        To do so, use :meth:`migrate`.
+
+        Returns
+        --------
+        bool
+            ``True`` if a migration was written, ``False`` otherwise.
+
+        Raises
+        -------
+        RuntimeError
+            Could not find the migration data necessary.
+        """
+
+        directory = Path(directory) / cls.__tablename__
+        p = directory.with_suffix('.json')
+
+        if not p.exists():
+            raise RuntimeError('Could not find migration file.')
+
+        current = directory.with_name('current-' + p.name)
+
+        if not current.exists():
+            raise RuntimeError('Could not find current data file.')
+
+        with current.open() as fp:
+            current_table = cls.from_dict(json.load(fp))
+
+        diff = cls().diff(current_table)
+
+        # the most common case, no difference
+        if diff.is_empty():
+            return None
+
+        # load the migration data
+        with p.open('r', encoding='utf-8') as fp:
+            data = json.load(fp)
+            migrations = data['migrations']
+
+        # check if we should add it
+        our_migrations = diff.to_dict()
+        if len(migrations) == 0 or migrations[-1] != our_migrations:
+            # we have a new migration, so add it
+            migrations.append(our_migrations)
+            temp_file = p.with_name('%s-%s.tmp' % (uuid.uuid4(), p.name))
+            with temp_file.open('w', encoding='utf-8') as tmp:
+                json.dump(data, tmp, ensure_ascii=True, indent=4)
+
+            temp_file.replace(p)
+            return True
+        return False
+
+    @classmethod
+    async def migrate(cls, *, directory='migrations', index=-1, downgrade=False, verbose=False, connection=None):
+        """Actually run the latest migration pointed by the data file.
+
+        Parameters
+        -----------
+        directory: str
+            The directory of where the migration data file resides.
+        index: int
+            The index of the migration array to use.
+        downgrade: bool
+            Whether to run an upgrade or a downgrade.
+        verbose: bool
+            Whether to output some information to stdout.
+        connection: Optional[asyncpg.Connection]
+            The connection to use, if not provided will acquire one from
+            the internal pool.
+        """
+
+        directory = Path(directory) / cls.__tablename__
+        p = directory.with_suffix('.json')
+        if not p.exists():
+            raise RuntimeError('Could not find migration file.')
+
+        with p.open('r', encoding='utf-8') as fp:
+            data = json.load(fp)
+            migrations = data['migrations']
+
+        try:
+            migration = migrations[index]
+        except IndexError:
+            return False
+
+        diff = SchemaDiff(cls, migration['upgrade'], migration['downgrade'])
+        if diff.is_empty():
+            return False
+
+        async with MaybeAcquire(connection, pool=cls._pool) as con:
+            sql = diff.to_sql(downgrade=downgrade)
+            if verbose:
+                print(sql)
+            await con.execute(sql)
+
+        current = directory.with_name('current-' + p.name)
+        with current.open('w', encoding='utf-8') as fp:
+            json.dump(cls.to_dict(), fp, indent=4, ensure_ascii=True)
+
+    @classmethod
+    async def create(cls, *, directory='migrations', verbose=False, connection=None, run_migrations=True):
         """Creates the database and manages migrations, if any.
 
         Parameters
@@ -549,6 +654,8 @@ class Table(metaclass=TableMeta):
         connection: Optional[asyncpg.Connection]
             The connection to use, if not provided will acquire one from
             the internal pool.
+        run_migrations: bool
+            Whether to run migrations at all.
 
         Returns
         --------
@@ -584,6 +691,9 @@ class Table(metaclass=TableMeta):
                 json.dump(table_data, fp, indent=4, ensure_ascii=True)
 
             return True
+
+        if not run_migrations:
+            return None
 
         with current.open() as fp:
             current_table = cls.from_dict(json.load(fp))
@@ -622,6 +732,44 @@ class Table(metaclass=TableMeta):
             json.dump(table_data, fp, indent=4, ensure_ascii=True)
 
         return False
+
+    @classmethod
+    async def drop(cls, *, directory='migrations', verbose=False, connection=None):
+        """Drops the database and migrations, if any.
+
+        Parameters
+        -----------
+        directory: str
+            The migrations directory.
+        verbose: bool
+            Whether to output some information to stdout.
+        connection: Optional[asyncpg.Connection]
+            The connection to use, if not provided will acquire one from
+            the internal pool.
+        """
+
+        directory = Path(directory) / cls.__tablename__
+        p = directory.with_suffix('.json')
+        current = directory.with_name('current-' + p.name)
+
+        if not p.exists() or not current.exists():
+            raise RuntimeError('Could not find the appropriate data files.')
+
+        try:
+            p.unlink()
+        except:
+            raise RuntimeError('Could not delete migration file')
+
+        try:
+            current.unlink()
+        except:
+            raise RuntimeError('Could not delete current migration file')
+
+        async with MaybeAcquire(connection, pool=cls._pool) as con:
+            sql = 'DROP TABLE {0} CASCADE;'.format(cls.__tablename__)
+            if verbose:
+                print(sql)
+            await con.execute(sql)
 
     @classmethod
     def create_table(cls, *, exists_ok=True):
