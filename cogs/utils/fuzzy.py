@@ -106,8 +106,8 @@ def extract_one(query, choices, *, scorer=quick_ratio, score_cutoff=0):
         # iterator could return nothing
         return None
 
-def extract_or_exact(query, choices, *, scorer=quick_ratio, score_cutoff=0):
-    matches = extract(query, choices, scorer=scorer, score_cutoff=score_cutoff, limit=None)
+def extract_or_exact(query, choices, *, limit=None, scorer=quick_ratio, score_cutoff=0):
+    matches = extract(query, choices, scorer=scorer, score_cutoff=score_cutoff, limit=limit)
     if len(matches) == 0:
         return []
 

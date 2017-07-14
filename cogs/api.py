@@ -89,36 +89,36 @@ class API:
     async def build_rtfm_lookup_table(self):
         cache = {}
 
-        pages = (
-            'http://discordpy.rtfd.io/en/rewrite/api.html',
-            'http://discordpy.rtfd.io/en/rewrite/ext/commands/api.html'
-        )
+        page_types = {
+            'rewrite': (
+                'http://discordpy.rtfd.io/en/rewrite/api.html',
+                'http://discordpy.rtfd.io/en/rewrite/ext/commands/api.html'
+            ),
+            'latest': (
+                'http://discordpy.rtfd.io/en/latest/api.html',
+            )
+        }
 
-        for page in pages:
-            async with self.bot.session.get(page) as resp:
-                if resp.status != 200:
-                    raise RuntimeError('Cannot build rtfm lookup table, try again later.')
+        for key, pages in page_types.items():
+            sub = cache[key] = {}
+            for page in pages:
+                async with self.bot.session.get(page) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError('Cannot build rtfm lookup table, try again later.')
 
-                text = await resp.text(encoding='utf-8')
-                root = etree.fromstring(text, etree.HTMLParser())
-                nodes = root.findall(".//dt/a[@class='headerlink']")
+                    text = await resp.text(encoding='utf-8')
+                    root = etree.fromstring(text, etree.HTMLParser())
+                    nodes = root.findall(".//dt/a[@class='headerlink']")
 
-                for node in nodes:
-                    href = node.get('href', '')
-                    as_key = href.replace('#discord.', '').replace('ext.commands.', '')
-                    cache[as_key] = page + href
+                    for node in nodes:
+                        href = node.get('href', '')
+                        as_key = href.replace('#discord.', '').replace('ext.commands.', '')
+                        sub[as_key] = page + href
 
         self._rtfm_cache = cache
 
-    @commands.group(aliases=['rtfd'], invoke_without_command=True)
-    async def rtfm(self, ctx, *, obj: str = None):
-        """Gives you a documentation link for a discord.py entity.
-
-        Events, objects, and functions are all supported through a
-        a cruddy fuzzy algorithm.
-        """
-
-        base_url = 'http://discordpy.rtfd.io/en/rewrite/'
+    async def do_rtfm(self, ctx, key, obj):
+        base_url = f'http://discordpy.rtfd.io/en/{key}/'
 
         if obj is None:
             await ctx.send(base_url)
@@ -128,29 +128,58 @@ class API:
             await ctx.trigger_typing()
             await self.build_rtfm_lookup_table()
 
-        pit_of_success_helpers = {
-            'vc': 'VoiceClient',
-            'msg': 'Message',
-            'color': 'Colour',
-            'perm': 'Permissions',
-            'channel': 'TextChannel',
-            'chan': 'TextChannel',
-        }
+        if key == 'rewrite':
+            pit_of_success_helpers = {
+                'vc': 'VoiceClient',
+                'msg': 'Message',
+                'color': 'Colour',
+                'perm': 'Permissions',
+                'channel': 'TextChannel',
+                'chan': 'TextChannel',
+            }
 
-        def replace(o):
-            return pit_of_success_helpers.get(o.group(0), '')
+            # point the abc.Messageable types properly:
+            q = obj.lower()
+            for name in dir(discord.abc.Messageable):
+                if name[0] == '_':
+                    continue
+                if q == name:
+                    obj = f'abc.Messageable.{name}'
+                    break
 
-        pattern = re.compile('|'.join(fr'\b{k}\b' for k in pit_of_success_helpers.keys()))
-        obj = pattern.sub(replace, obj)
-        matches = fuzzy.extract_matches(obj, self._rtfm_cache, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
+            def replace(o):
+                return pit_of_success_helpers.get(o.group(0), '')
+
+            pattern = re.compile('|'.join(fr'\b{k}\b' for k in pit_of_success_helpers.keys()))
+            obj = pattern.sub(replace, obj)
+
+        cache = self._rtfm_cache[key]
+        matches = fuzzy.extract_or_exact(obj, cache, scorer=fuzzy.token_sort_ratio, limit=5, score_cutoff=60)
+
+        e = discord.Embed(colour=discord.Colour.blurple())
         if len(matches) == 0:
             return await ctx.send('Could not find anything. Sorry.')
 
-        await ctx.send('\n'.join(url for _, __, url in matches))
+        e.description = '\n'.join(f'[{key}]({url}) ({p}%)' for key, p, url in matches)
+        await ctx.send(embed=e)
 
         if ctx.guild and ctx.guild.id == DISCORD_API_ID:
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
+
+    @commands.group(aliases=['rtfd'], invoke_without_command=True)
+    async def rtfm(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity.
+
+        Events, objects, and functions are all supported through a
+        a cruddy fuzzy algorithm.
+        """
+        await self.do_rtfm(ctx, 'latest', obj)
+
+    @rtfm.command(name='rewrite')
+    async def rtfm_rewrite(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a rewrite discord.py entity."""
+        await self.do_rtfm(ctx, 'rewrite', obj)
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
