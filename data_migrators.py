@@ -16,15 +16,17 @@ async def migrate_api(pool, client):
     feeds = _load_json('feeds.json')
 
     async with pool.acquire() as con:
-        await con.execute('DELETE FROM rtfm;\nDELETE FROM feeds;')
+        await con.execute('TRUNCATE rtfm, feeds RESTART IDENTITY;')
         records = [(int(k), v) for k, v in rtfm.items() if client.get_user(int(k))]
-        await con.copy_records_to_table('rtfm', records=records, columns=('user_id', 'count'))
+        status = await con.copy_records_to_table('rtfm', records=records, columns=('user_id', 'count'))
+        print('[rtfm]', status)
 
         records = [(int(channel_id), int(role_id), name)
                    for channel_id, data in feeds.items()
                         for name, role_id in data.items()]
 
-        await con.copy_records_to_table('feeds', records=records, columns=('channel_id', 'role_id', 'name'))
+        status = await con.copy_records_to_table('feeds', records=records, columns=('channel_id', 'role_id', 'name'))
+        print('[feeds]', status)
 
 async def migrate_mod(pool, client):
     # NOTE: plonks table is technically in config, but most of its data
@@ -71,8 +73,8 @@ async def migrate_mod(pool, client):
                 for entity_id in channels
         )
 
-        await con.copy_records_to_table('plonks', records=records, columns=('guild_id', 'entity_id'))
-
+        status = await con.copy_records_to_table('plonks', records=records, columns=('guild_id', 'entity_id'))
+        print('[plonks]', status)
         # a bit more complex, the guild_mod_config table
 
         class Holder:
@@ -109,7 +111,7 @@ async def migrate_mod(pool, client):
         ]
 
         columns = ('id', *Holder.__slots__)
-        print('Guild Mod Config', await con.copy_records_to_table('guild_mod_config', records=records, columns=columns))
+        print('[guild_mod_config]', await con.copy_records_to_table('guild_mod_config', records=records, columns=columns))
 
 async def migrate_tags(pool, client):
     tags = _load_json('tags.json')
@@ -136,9 +138,9 @@ async def migrate_tags(pool, client):
 
             dt = data.get('created_at')
             if dt:
-                self.created_at = datetime.datetime.fromtimestamp(dt).isoformat()
+                self.created_at = datetime.datetime.fromtimestamp(dt)
             else:
-                self.created_at = datetime.datetime.utcnow().isoformat()
+                self.created_at = datetime.datetime.utcnow()
 
         def to_record(self):
             return tuple(getattr(self, attr) for attr in self.__slots__)
@@ -153,9 +155,9 @@ async def migrate_tags(pool, client):
 
             dt = data.get('created_at')
             if dt:
-                self.created_at = datetime.datetime.fromtimestamp(dt).isoformat()
+                self.created_at = datetime.datetime.fromtimestamp(dt)
             else:
-                self.created_at = datetime.datetime.utcnow().isoformat()
+                self.created_at = datetime.datetime.utcnow()
 
             original = data['original']
 
@@ -228,11 +230,11 @@ async def migrate_tags(pool, client):
         await con.execute('TRUNCATE tags, tag_lookup RESTART IDENTITY;')
         async with con.transaction():
             records = [r.to_record() for r in tag_data]
-            print('Tags', await con.copy_records_to_table('tags', records=records, columns=TagData.__slots__))
+            print('[tags]', await con.copy_records_to_table('tags', records=records, columns=TagData.__slots__))
 
             records = [r.to_record() for r in lookup]
             status = await con.copy_records_to_table('tag_lookup', records=records, columns=TagLookupData.__slots__)
-            print('Tag Lookup', status)
+            print('[tag_lookup]', status)
 
 async def migrate_config(pool, client):
     perms = _load_json('permissions.json')

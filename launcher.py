@@ -248,6 +248,8 @@ def convertjson(ctx, cogs):
     Note, this deletes all previous entries in the table
     so you can consider this to be a destructive decision.
 
+    Do not pass in cog names with "cogs." as a prefix.
+
     This also connects us to Discord itself so we can
     use the cache for our migrations.
 
@@ -273,8 +275,11 @@ def convertjson(ctx, cogs):
 
             to_run.append((elem, cog))
 
+    async def make_pool():
+        return await asyncpg.create_pool(config.postgresql)
+
     try:
-        pool = run(Table.create_pool(config.postgresql))
+        pool = run(make_pool())
     except Exception:
         click.echo(f'Could not create PostgreSQL connection pool.\n{traceback.format_exc()}', err=True)
         return
@@ -296,10 +301,10 @@ def convertjson(ctx, cogs):
         try:
             run(migrator(pool, client))
         except Exception:
-            click.echo(f'migrator {migrator.__name__} has failed, terminating\n{traceback.format_exc()}', err=True)
+            click.echo(f'[error] {migrator.__name__} has failed, terminating\n{traceback.format_exc()}', err=True)
             return
         else:
-            click.echo(f'migrator {migrator.__name__} completed successfully')
+            click.echo(f'[{migrator.__name__}] completed successfully')
 
 if __name__ == '__main__':
     main()
