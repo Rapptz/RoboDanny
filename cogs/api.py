@@ -46,44 +46,44 @@ class API:
         self.bot = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
 
-    # async def on_member_join(self, member):
-    #     if member.guild.id != DISCORD_API_ID:
-    #         return
+    async def on_member_join(self, member):
+        if member.guild.id != DISCORD_API_ID:
+            return
 
-    #     if member.bot:
-    #         role = discord.Object(id=USER_BOTS_ROLE)
-    #         await member.add_roles(role)
+        if member.bot:
+            role = discord.Object(id=USER_BOTS_ROLE)
+            await member.add_roles(role)
 
-    # async def on_message(self, message):
-    #     channel = message.channel
-    #     author = message.author
+    async def on_message(self, message):
+        channel = message.channel
+        author = message.author
 
-    #     if channel.id != DISCORD_PY_ID:
-    #         return
+        if channel.id != DISCORD_PY_ID:
+            return
 
-    #     if author.status is discord.Status.offline:
-    #         fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible'
-    #         await channel.set_permissions(author, read_messages=False, reason='invisible block')
-    #         await channel.send(fmt)
+        if author.status is discord.Status.offline:
+            fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible'
+            await channel.set_permissions(author, read_messages=False, reason='invisible block')
+            await channel.send(fmt)
 
-    #         try:
-    #             msg = f'Heya. You have been automatically blocked from <#{DISCORD_PY_ID}> for 5 minutes for being ' \
-    #                    'invisible.\nTry chatting again in 5 minutes when you change your status. If you\'re curious ' \
-    #                    'why invisible users are blocked, it is because they tend to break the client and cause them to ' \
-    #                    'be hard to mention. Since we want to help you usually, we expect mentions to work without ' \
-    #                    'headaches.\n\nSorry for the trouble.'
-    #             await author.send(msg)
-    #         except discord.HTTPException:
-    #             pass
+            try:
+                msg = f'Heya. You have been automatically blocked from <#{DISCORD_PY_ID}> for 5 minutes for being ' \
+                       'invisible.\nTry chatting again in 5 minutes when you change your status. If you\'re curious ' \
+                       'why invisible users are blocked, it is because they tend to break the client and cause them to ' \
+                       'be hard to mention. Since we want to help you usually, we expect mentions to work without ' \
+                       'headaches.\n\nSorry for the trouble.'
+                await author.send(msg)
+            except discord.HTTPException:
+                pass
 
-    #         await asyncio.sleep(300)
-    #         await channel.set_permissions(author, overwrite=None, reason='invisible unblock')
-    #         return
+            await asyncio.sleep(300)
+            await channel.set_permissions(author, overwrite=None, reason='invisible unblock')
+            return
 
-    #     m = self.issue.search(message.content)
-    #     if m is not None:
-    #         url = 'https://github.com/Rapptz/discord.py/issues/'
-    #         await channel.send(url + m.group('number'))
+        m = self.issue.search(message.content)
+        if m is not None:
+            url = 'https://github.com/Rapptz/discord.py/issues/'
+            await channel.send(url + m.group('number'))
 
     async def build_rtfm_lookup_table(self):
         cache = {}
