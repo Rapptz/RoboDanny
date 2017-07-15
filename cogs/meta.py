@@ -336,12 +336,12 @@ class Meta:
         This is a good way of checking if the bot has the permissions needed
         to execute the commands it wants to execute.
 
-        To execute this command you must have Manage Roles permissions or
-        have the Bot Admin role. You cannot use this in private messages.
+        To execute this command you must have Manage Roles permission.
+        You cannot use this in private messages.
         """
-        channel = ctx.message.channel
-        member = ctx.message.server.me
-        await self.say_permissions(member, channel)
+        channel = ctx.channel
+        member = ctx.guild.me
+        await self.say_permissions(ctx, member, channel)
 
     @commands.command(aliases=['invite'])
     async def join(self, ctx):
