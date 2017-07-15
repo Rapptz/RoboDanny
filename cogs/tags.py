@@ -142,6 +142,27 @@ class Tags:
         query = """SELECT name, content FROM tags WHERE location_id=$1;"""
         return con.fetch(query, guild.id)
 
+    async def get_random_tag(self, guild, *, connection=None):
+        """Returns a random tag."""
+
+        con = connection or self.bot.pool
+        pred = 'location_id IS NULL' if guild is None else 'location_id=$1'
+        query = f"""SELECT name, content
+                    FROM tags
+                    WHERE {pred}
+                    OFFSET FLOOR(RANDOM() * (
+                        SELECT COUNT(*)
+                        FROM tags
+                        WHERE {pred}
+                    ))
+                    LIMIT 1;
+                 """
+
+        if guild is None:
+            return await con.fetchrow(query)
+        else:
+            return await con.fetchrow(query, guild.id)
+
     async def get_tag(self, guild_id, name, *, connection=None):
         def disambiguate(rows, query):
             if rows is None or len(rows) == 0:

@@ -11,63 +11,59 @@ class RNG:
     async def random(self, ctx):
         """Displays a random thing you request."""
         if ctx.invoked_subcommand is None:
-            await self.bot.say('Incorrect random subcommand passed.')
+            await ctx.send(f'Incorrect random subcommand passed. Try {ctx.prefix}help random')
 
     @random.command()
-    async def weapon(self, count=1):
-        """Displays a random Splatoon weapon.
+    async def weapon(self, ctx, count=1):
+        """Displays a random Splatoon 2 weapon.
 
         The count parameter is how many to generate. It cannot be
         negative. If it's negative or zero then only one weapon will be
         selected. The maximum number of random weapons generated is 8.
         """
+
         splatoon = self.bot.get_cog('Splatoon')
         if splatoon is None:
-            await self.bot.say('Splatoon cog is not loaded.')
-            return
+            return await ctx.send('Splatoon commands currently disabled.')
 
-        count = count if count > 0 else 1
-        count = count if count < 8 else 8
-
-        weapons = splatoon.config.get('weapons', [])
+        count = min(max(count, 1), 8)
+        weapons = splatoon.splat2_data.get('weapons', [])
         if weapons:
             if count == 1:
                 weapon = rng.choice(weapons)
-                await self.bot.say(splatoon.weapon_to_string(weapon))
+                await ctx.send(f'{weapon["name"]} with {weapon["sub"]} and {weapon["special"]} special.')
             else:
                 sample = rng.sample(weapons, count)
-                msg = '\n'.join(map(lambda w: w['name'], sample))
-                await self.bot.say(msg)
-
-        del splatoon
+                await ctx.send('\n'.join(w['name'] for w in sample))
 
     @random.command()
-    async def private(self):
-        """Displays an all private Splatoon match.
+    async def private(self, ctx):
+        """Displays an all private Splatoon 2 match.
 
         The map and mode is randomised along with both team's weapons.
         """
         splatoon = self.bot.get_cog('Splatoon')
         if splatoon is None:
-            await self.bot.say('Splatoon cog is not loaded.')
-            return
+            return await ctx.send('Splatoon commands currently disabled.')
 
-        maps = splatoon.config.get('maps', [])
+        maps = splatoon.splat2_data.get('maps', [])
+
         stage = rng.choice(maps) if maps else 'Random Stage'
         modes = [ 'Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control' ]
         mode = rng.choice(modes)
-        result = ['Playing {} on {}'.format(mode, stage), '', '**Team Alpha**']
-        weapons = rng.sample(splatoon.config.get('weapons'), 8)
+        result = [f'Playing {mode} on {stage}', '', '**Team Alpha**']
+
+        weapons = rng.sample(splatoon.splat2_data.get('weapons', []), 8)
         for i in range(8):
             if i == 4:
                 result.append('')
                 result.append('**Team Bravo**')
 
-            result.append('Player {}: {[name]}'.format(i + 1, weapons[i]))
+            result.append(f'Player {i + 1}: {weapons[i]["name"]}')
 
-        await self.bot.say('\n'.join(result))
+        await ctx.send('\n'.join(result))
 
-    @random.command(pass_context=True)
+    @random.command()
     async def tag(self, ctx):
         """Displays a random tag.
 
@@ -75,52 +71,52 @@ class RNG:
         """
         tags = self.bot.get_cog('Tags')
         if tags is None:
-            await self.bot.say('Tags cog is not loaded.')
-            return
+            return await ctx.send('Tag commands currently disabled.')
 
-        db = tags.get_possible_tags(ctx.message.server)
-        name = rng.sample(list(db), 1)[0]
-        await self.bot.say('Random tag found: {}\n{}'.format(name, db[name]))
-        del tags
+        tag = await tags.get_random_tag(ctx.guild, connection=ctx.db)
+        if tag is None:
+            return await ctx.send('This server has no tags.')
+
+        await ctx.send(f'Random tag found: {tag["name"]}\n{tag["content"]}')
 
     @random.command(name='map')
-    async def _map(self):
-        """Displays a random Splatoon map."""
+    async def _map(self, ctx):
+        """Displays a random Splatoon 2 map."""
         splatoon = self.bot.get_cog('Splatoon')
         if splatoon is None:
-            await self.bot.say('Splatoon cog is not loaded.')
+            await ctx.send('Splatoon commands currently disabled.')
             return
 
-        maps = splatoon.config.get('maps', [])
+        maps = splatoon.splat2_data.get('maps', [])
         if maps:
-            await self.bot.say(rng.choice(maps))
+            await ctx.send(rng.choice(maps))
 
         del splatoon
 
     @random.command()
-    async def mode(self):
+    async def mode(self, ctx):
         """Displays a random Splatoon mode."""
         mode = rng.choice(['Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control'])
-        await self.bot.say(mode)
+        await ctx.send(mode)
 
     @random.command()
-    async def game(self):
+    async def game(self, ctx):
         """Displays a random map/mode combination (no Turf War)"""
         splatoon = self.bot.get_cog('Splatoon')
         if splatoon is None:
-            await self.bot.say('Splatoon cog is not loaded.')
+            await ctx.send('Splatoon commands currently disabled.')
             return
 
-        maps = splatoon.config.get('maps', [])
+        maps = splatoon.splat2_data.get('maps', [])
         if maps:
             mode = rng.choice(['Splat Zones', 'Tower Control', 'Rainmaker'])
             stage = rng.choice(maps)
-            await self.bot.say('{} on {}'.format(mode, stage))
+            await ctx.send(f'{mode} on {stage}')
 
         del splatoon
 
     @random.command()
-    async def number(self, minimum=0, maximum=100):
+    async def number(self, ctx, minimum=0, maximum=100):
         """Displays a random number within an optional range.
 
         The minimum must be smaller than the maximum and the maximum number
@@ -129,32 +125,31 @@ class RNG:
 
         maximum = min(maximum, 1000)
         if minimum >= maximum:
-            await self.bot.say('Maximum is smaller than minimum.')
+            await ctx.send('Maximum is smaller than minimum.')
             return
 
-        await self.bot.say(rng.randint(minimum, maximum))
+        await ctx.send(rng.randint(minimum, maximum))
 
     @random.command()
-    async def lenny(self):
+    async def lenny(self, ctx):
         """Displays a random lenny face."""
         lenny = rng.choice([
             "( ͡° ͜ʖ ͡°)", "( ͠° ͟ʖ ͡°)", "ᕦ( ͡° ͜ʖ ͡°)ᕤ", "( ͡~ ͜ʖ ͡°)",
             "( ͡o ͜ʖ ͡o)", "͡(° ͜ʖ ͡ -)", "( ͡͡ ° ͜ ʖ ͡ °)﻿", "(ง ͠° ͟ل͜ ͡°)ง",
             "ヽ༼ຈل͜ຈ༽ﾉ"
         ])
-        await self.bot.say(lenny)
+        await ctx.send(lenny)
 
     @commands.command()
-    async def choose(self, *choices):
+    async def choose(self, ctx, *choices: commands.clean_content):
         """Chooses between multiple choices.
 
         To denote multiple choices, you should use double quotes.
         """
         if len(choices) < 2:
-            return await self.bot.say('Not enough choices to pick from.')
+            return await ctx.send('Not enough choices to pick from.')
 
-        choice = rng.choice(choices).replace('@', '@\u200b') # this breaks user mentions
-        await self.bot.say(choice)
+        await ctx.send(choice)
 
 def setup(bot):
     bot.add_cog(RNG(bot))
