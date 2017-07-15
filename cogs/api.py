@@ -153,7 +153,7 @@ class API:
             obj = pattern.sub(replace, obj)
 
         cache = self._rtfm_cache[key]
-        matches = fuzzy.extract_or_exact(obj, cache, scorer=fuzzy.token_sort_ratio, limit=5, score_cutoff=60)
+        matches = fuzzy.extract_or_exact(obj, cache, scorer=fuzzy.token_sort_ratio, limit=5, score_cutoff=50)
 
         e = discord.Embed(colour=discord.Colour.blurple())
         if len(matches) == 0:
