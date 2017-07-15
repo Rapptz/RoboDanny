@@ -1,6 +1,5 @@
 import datetime
 import parsedatetime as pdt
-from dateutil.relativedelta import relativedelta
 from .formats import Plural
 from discord.ext import commands
 import re
