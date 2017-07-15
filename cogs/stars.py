@@ -554,10 +554,10 @@ class Stars:
             await ctx.db.execute(query, ctx.guild.id, channel.id)
         except:
             await channel.delete(reason='Failure to commit to create the ')
-            await ctx.send('Could not create the channel due to an internal error.')
-
-        self.get_starboard.invalidate(self, ctx.guild.id)
-        await ctx.send(f'\N{GLOWING STAR} Starboard created at {channel.mention}.')
+            await ctx.send('Could not create the channel due to an internal error. Join the bot support server for help.')
+        else:
+            self.get_starboard.invalidate(self, ctx.guild.id)
+            await ctx.send(f'\N{GLOWING STAR} Starboard created at {channel.mention}.')
 
     @commands.group(invoke_without_command=True)
     @commands.guild_only()
