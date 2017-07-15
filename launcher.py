@@ -295,8 +295,11 @@ def convertjson(ctx, cogs):
         click.echo(f'successfully booted up bot {client.user} (ID: {client.user.id})')
         await client.logout()
 
-    run(client.login(config.token))
-    run(client.connect(reconnect=False))
+    try:
+        run(client.login(config.token))
+        run(client.connect(reconnect=False))
+    except:
+        pass
 
     extensions = ['cogs.' + name for _, name in to_run]
     ctx.invoke(init, cogs=extensions)
