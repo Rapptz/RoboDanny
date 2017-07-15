@@ -1,5 +1,5 @@
 from discord.ext import commands
-from .utils import checks, db, fuzzy
+from .utils import checks, db, fuzzy, cache
 import asyncio
 import discord
 import re
@@ -247,9 +247,11 @@ class API:
         else:
             await ctx.send('\N{THUMBS UP SIGN}')
 
-    async def get_feeds(self, channel_id):
+    @cache.cache()
+    async def get_feeds(self, channel_id, *, connection=None):
+        con = connection or self.bot.pool
         query = 'SELECT name, role_id FROM feeds WHERE channel_id=$1;'
-        feeds = await self.bot.pool.fetch(query, channel_id)
+        feeds = await con.fetch(query, channel_id)
         return {f['name']: f['role_id'] for f in feeds}
 
     @commands.group(name='feeds', invoke_without_command=True)
@@ -288,7 +290,7 @@ class API:
 
         query = 'SELECT role_id FROM feeds WHERE channel_id=$1 AND name=$2;'
 
-        exists = await con.fetchrow(query, ctx.channel.id, name)
+        exists = await ctx.db.fetchrow(query, ctx.channel.id, name)
         if exists is not None:
             await ctx.send('This feed already exists.')
             return
@@ -301,7 +303,8 @@ class API:
 
         role = await ctx.guild.create_role(name=role_name, permissions=discord.Permissions.none())
         query = 'INSERT INTO feeds (role_id, channel_id, name) VALUES ($1, $2, $3);'
-        await con.execute(query, role.id, ctx.channel.id, name)
+        await ctx.db.execute(query, role.id, ctx.channel.id, name)
+        self.get_feeds.invalidate(self, ctx.channel.id)
         await ctx.send(f'{ctx.tick(True)} Successfully created feed.')
 
     @_feeds.command(name='delete', aliases=['remove'])
@@ -316,6 +319,7 @@ class API:
 
         query = 'DELETE FROM feeds WHERE channel_id=$1 AND name=$2 RETURNING *;'
         records = await ctx.db.fetch(query, ctx.channel.id, feed)
+        self.get_feeds.invalidate(self, ctx.channel.id)
 
         if len(records) == 0:
             return await ctx.send('This feed does not exist.')
