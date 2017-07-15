@@ -179,7 +179,7 @@ class Stats:
 
     async def on_command_error(self, ctx, error):
         ignored = (commands.NoPrivateMessage, commands.DisabledCommand, commands.CheckFailure,
-                   commands.CommandNotFound, commands.UserInputError, discord.HTTPException)
+                   commands.CommandNotFound, commands.UserInputError, discord.Forbidden)
         error = getattr(error, 'original', error)
 
         if isinstance(error, ignored):
