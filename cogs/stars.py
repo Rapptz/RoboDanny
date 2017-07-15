@@ -1209,7 +1209,7 @@ class Stars:
         default unit is "days".
 
         The number cannot be negative, and it must be a maximum
-        of 35.
+        of 35. If the unit is years then the cap is 10 years.
 
         You cannot mix and match units.
 
@@ -1224,7 +1224,10 @@ class Stars:
         if units not in valid_units:
             return await ctx.send(f'Not a valid unit! I expect only {human_join(valid_units)}.')
 
-        number = min(max(number, 1), 45)
+        number = min(max(number, 1), 35)
+
+        if units == 'years' and number > 10:
+            return await ctx.send('The maximum is 10 years!')
 
         # the input is sanitised so this should be ok
         # only doing this because asyncpg requires a timedelta object but
