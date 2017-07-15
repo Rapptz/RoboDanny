@@ -333,7 +333,7 @@ class Tags:
             return await ctx.send('You took too long. Goodbye.')
 
         if msg.content:
-            cleaned_content = await commands.clean_content().convert(ctx, msg.content)
+            clean_content = await commands.clean_content().convert(ctx, msg.content)
         else:
             # fast path I guess?
             clean_content = msg.content
@@ -342,7 +342,7 @@ class Tags:
             clean_content = f'{clean_content}\n{msg.attachments[0].url}'
 
         await ctx.acquire()
-        await ctx.invoke(self.create, name=name, content=cleaned_content)
+        await ctx.invoke(self.create, name=name, content=clean_content)
 
     @make.error
     async def tag_make_error(self, ctx, error):
