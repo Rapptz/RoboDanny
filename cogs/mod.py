@@ -778,7 +778,7 @@ class Mod:
         """Removes a bot user's messages and messages with their optional prefix."""
 
         def predicate(m):
-            return m.author.bot or (prefix and m.message.startswith(prefix))
+            return m.author.bot or (prefix and m.content.startswith(prefix))
 
         await self.do_removal(ctx, search, predicate)
 
