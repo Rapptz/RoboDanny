@@ -43,6 +43,13 @@ class MemberID(commands.Converter):
     async def convert(self, ctx, argument):
         try:
             m = await commands.MemberConverter().convert(ctx, argument)
+
+            can_execute = ctx.author.id == ctx.bot.owner_id or \
+                          ctx.author == ctx.guild.owner or \
+                          ctx.author.top_role > m.top_role
+
+            if not can_execute:
+                raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
             return m.id
         except commands.BadArgument:
             try:
