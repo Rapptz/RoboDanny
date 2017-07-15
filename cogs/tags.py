@@ -16,7 +16,7 @@ class UnavailableTagCommand(commands.CheckFailure):
 
 class UnableToUseBox(commands.CheckFailure):
     def __str__(self):
-        return 'You do not have permissions to view the tag box! Manage Messages required.'
+        return 'You do not have permissions to use the tag box. Manage Messages required!'
 
 def suggest_box():
     """Custom commands.guild_only with different error checking."""
