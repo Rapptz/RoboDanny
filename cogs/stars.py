@@ -652,7 +652,7 @@ class Stars:
     @star.command(name='show')
     @requires_starboard()
     async def star_show(self, ctx, message: int):
-        """Shows a starred via message ID.
+        """Shows a starred message via its ID.
 
         To get the ID of a message you should right click on the
         message and then click "Copy ID". You must have
