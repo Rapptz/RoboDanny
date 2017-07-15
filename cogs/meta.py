@@ -1,6 +1,6 @@
 from discord.ext import commands
 from .utils import checks, formats
-from .utils.paginator import HelpPaginator
+from .utils.paginator import HelpPaginator, CannotPaginate
 import discord
 from collections import OrderedDict, deque, Counter
 import os, datetime
@@ -45,7 +45,7 @@ class Meta:
                     p = await HelpPaginator.from_cog(ctx, entity)
 
             await p.paginate()
-        except Exception as e:
+        except CannotPaginate as e:
             await ctx.send(e)
 
     @commands.command(hidden=True)
