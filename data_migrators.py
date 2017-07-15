@@ -145,6 +145,9 @@ async def migrate_tags(pool, client):
         def to_record(self):
             return tuple(getattr(self, attr) for attr in self.__slots__)
 
+        def _key(self):
+            return (self.name.lower(), self.location_id)
+
     class TagLookupData:
         __slots__ = ('name', 'tag_id', 'owner_id', 'created_at', 'location_id')
 
@@ -224,6 +227,10 @@ async def migrate_tags(pool, client):
     seen = set()
     seen_add = seen.add
     lookup = [x for x in lookup if not (x._key() in seen or seen_add(x._key()))]
+
+    seen = set()
+    seen_add = seen.add
+    tag_data = [x for x in tag_data if not (x._key() in seen or seen_add(x._key()))]
 
     async with pool.acquire() as con:
         # delete the current tags
