@@ -195,6 +195,10 @@ async def migrate_tags(pool, client):
                 # if location.isdigit() and client.get_guild(int(location)) is not None
     ]
 
+    seen = set()
+    seen_add = seen.add
+    tag_data = [x for x in tag_data if not (x._key() in seen or seen_add(x._key()))]
+
     lookup = []
 
     for location, obj in tags.items():
@@ -227,10 +231,6 @@ async def migrate_tags(pool, client):
     seen = set()
     seen_add = seen.add
     lookup = [x for x in lookup if not (x._key() in seen or seen_add(x._key()))]
-
-    seen = set()
-    seen_add = seen.add
-    tag_data = [x for x in tag_data if not (x._key() in seen or seen_add(x._key()))]
 
     async with pool.acquire() as con:
         # delete the current tags
