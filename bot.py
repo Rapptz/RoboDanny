@@ -59,7 +59,7 @@ class RoboDanny(commands.AutoShardedBot):
         self.session = aiohttp.ClientSession(loop=self.loop)
 
         self.add_command(self.do)
-        # self.add_check(self.only_me_for_rewrite)
+
         # guild_id: list
         self.prefixes = Config('prefixes.json')
 
@@ -67,7 +67,7 @@ class RoboDanny(commands.AutoShardedBot):
             try:
                 self.load_extension(extension)
             except Exception as e:
-                print('Failed to load extension %s' % extension, file=sys.stderr)
+                print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
 
     async def on_command_error(self, ctx, error):
@@ -76,9 +76,9 @@ class RoboDanny(commands.AutoShardedBot):
         elif isinstance(error, commands.DisabledCommand):
             await ctx.author.send('Sorry. This command is disabled and cannot be used.')
         elif isinstance(error, commands.CommandInvokeError):
-            print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
+            print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
             traceback.print_tb(error.original.__traceback__)
-            print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
+            print(f'{error.original.__class__.__name__}: {error.original}', file=sys.stderr)
 
     def get_guild_prefixes(self, guild, *, local_inject=_prefix_callable):
         proxy_msg = discord.Object(id=None)
@@ -100,15 +100,12 @@ class RoboDanny(commands.AutoShardedBot):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
 
-        print('Ready: {0} (ID: {0.id})'.format(self.user))
+        print(f'Ready: {self.user} (ID: {self.user.id})')
 
     async def on_resumed(self):
         print('resumed...')
 
-    async def on_message(self, message):
-        if message.author.bot:
-            return
-
+    async def process_commands(self, message):
         ctx = await self.get_context(message, cls=context.Context)
 
         if ctx.command is None:
@@ -117,8 +114,10 @@ class RoboDanny(commands.AutoShardedBot):
         async with ctx.acquire():
             await self.invoke(ctx)
 
-    def only_me_for_rewrite(self, ctx):
-        return ctx.author.id == 80088516616269824
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+        await self.process_commands(message)
 
     async def close(self):
         await super().close()
