@@ -242,7 +242,7 @@ class Mod:
         e.timestamp = now
         e.set_footer(text='Created')
         e.set_author(name=str(member), icon_url=member.avatar_url)
-        e.add_field(name='Created', value=human_timedelta(member.created_at))
+        e.add_field(name='Created', value=time.human_timedelta(member.created_at))
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
         channel = self.bot.get_channel(settings['broadcast_channel'])
