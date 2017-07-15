@@ -709,7 +709,7 @@ class Mod:
 
         if ctx.invoked_subcommand is None:
             help_cmd = self.bot.get_command('help')
-            await ctx.invoke(help_cmd, 'remove')
+            await ctx.invoke(help_cmd, command='remove')
 
     async def do_removal(self, ctx, limit, predicate):
         if limit > 2000:
