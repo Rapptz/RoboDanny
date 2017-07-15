@@ -149,7 +149,7 @@ class RNG:
         if len(choices) < 2:
             return await ctx.send('Not enough choices to pick from.')
 
-        await ctx.send(choice)
+        await ctx.send(rng.choice(choices))
 
 def setup(bot):
     bot.add_cog(RNG(bot))
