@@ -2,6 +2,7 @@ from .utils import checks, db, time
 from discord.ext import commands
 import discord
 import asyncio
+import asyncpg
 import datetime
 
 class Reminders(db.Table):
