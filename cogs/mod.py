@@ -422,9 +422,9 @@ class Mod:
         You must have Manage Messages permission to use this.
         """
 
-        strategy = _basic_cleanup_strategy
+        strategy = self._basic_cleanup_strategy
         if ctx.me.permissions_in(ctx.channel).manage_messages:
-            strategy = _complex_cleanup_strategy
+            strategy = self._complex_cleanup_strategy
 
         spammers = await strategy(ctx, search)
         deleted = sum(spammers.values())
