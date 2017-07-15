@@ -724,7 +724,7 @@ class Mod:
 
         spammers = Counter(m.author.display_name for m in deleted)
         deleted = len(deleted)
-        messages = f'{deleted} message{" was" if deleted == 1 else "s were"} removed.'
+        messages = [f'{deleted} message{" was" if deleted == 1 else "s were"} removed.']
         if deleted:
             messages.append('')
             spammers = sorted(spammers.items(), key=lambda t: t[1], reverse=True)
