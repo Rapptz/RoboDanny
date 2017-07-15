@@ -1248,5 +1248,34 @@ class Stars:
         if isinstance(error, commands.BadArgument):
             await ctx.send('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
 
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def star_announce(self, ctx, *, message):
+        """Announce stuff to every starboard."""
+        query = "SELECT id, channel_id FROM starboard;"
+        records = await ctx.db.fetch(query)
+        await ctx.release()
+
+        to_send = []
+        for guild_id, channel_id in records:
+            guild = self.bot.get_guild(guild_id)
+            if guild:
+                channel = self.bot.get_channel(channel_id)
+                if channel and channel.permissions_for(guild.me).send_messages:
+                    to_send.append(channel)
+
+        await ctx.send(f'Preparing to send to {len(to_send)} channels (out of {len(records)}).')
+
+        success = 0
+        for channel in to_send:
+            try:
+                await channel.send(message)
+            except:
+                pass
+            else:
+                success += 1
+
+        await ctx.send(f'Successfully sent to {success} channels (out of {len(to_send)}).')
+
 def setup(bot):
     bot.add_cog(Stars(bot))
