@@ -9,7 +9,7 @@ import discord
 import traceback
 import asyncpg
 
-class UnavailableTagCommand(commands.CommandError):
+class UnavailableTagCommand(commands.CheckFailure):
     def __str__(self):
         return 'Sorry. This command is unavailable in private messages.\n' \
                'Consider browsing or using the tag box instead.\nSee ?tag box for more info.'
