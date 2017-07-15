@@ -14,6 +14,10 @@ class UnavailableTagCommand(commands.CheckFailure):
         return 'Sorry. This command is unavailable in private messages.\n' \
                'Consider browsing or using the tag box instead.\nSee ?tag box for more info.'
 
+class UnableToUseBox(commands.CheckFailure):
+    def __str__(self):
+        return 'You do not have permissions to view the tag box! Manage Messages required.'
+
 def suggest_box():
     """Custom commands.guild_only with different error checking."""
     def pred(ctx):
@@ -26,7 +30,14 @@ def can_use_box():
     def pred(ctx):
         if ctx.guild is None:
             return True
-        return ctx.author.id == ctx.bot.owner_id or ctx.channel.permissions_for(ctx.author).manage_messages
+        if ctx.author.id == ctx.bot.owner_id:
+            return True
+
+        has_perms = ctx.channel.permissions_for(ctx.author).manage_messages
+        if not has_perms:
+            raise UnableToUseBox()
+
+        return True
     return commands.check(pred)
 
 # The tag data is heavily duplicated (denormalized) and heavily indexed to speed up
@@ -106,7 +117,7 @@ class Tags:
         self.bot = bot
 
     async def __error(self, ctx, error):
-        if isinstance(error, UnavailableTagCommand):
+        if isinstance(error, (UnavailableTagCommand, UnableToUseBox)):
             await ctx.send(error)
         elif isinstance(error, commands.UserInputError):
             if ctx.command.qualified_name == 'tag':
