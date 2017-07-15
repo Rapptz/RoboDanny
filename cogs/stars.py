@@ -17,7 +17,7 @@ import re
 
 log = logging.getLogger(__name__)
 
-class StarError(commands.CommandError):
+class StarError(commands.CheckFailure):
     pass
 
 def requires_starboard():
