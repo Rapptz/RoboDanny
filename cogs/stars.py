@@ -759,6 +759,10 @@ class Stars:
         _avatar_id = re.compile(r'\/avatars\/(?P<id>[0-9]{15,})')
         start = time.time()
 
+        perms = ctx.starboard.channel.permissions_for(ctx.me)
+        if not perms.read_message_history:
+            return await ctx.send(f'Bot does not have Read Message History in {ctx.starboard.channel.mention}.')
+
         await ctx.send('Please be patient this will take a while...')
         async with ctx.typing():
             channel = ctx.starboard.channel
@@ -845,7 +849,10 @@ class Stars:
                 _log = self.bot.get_channel(309632009427222529)
                 delta = time.time() - start
 
-                # we should update the locked state here too
+                await ctx.acquire()
+                query = "UPDATE starboard SET locked = FALSE WHERE id=$1;"
+                await ctx.db.execute(query, ctx.guild.id)
+                self.get_starboard.invalidate(self, ctx.guild.id)
 
                 m = await ctx.send(f'{ctx.author.mention}, we are done migrating!\n' \
                                    f'Deleted {deleted} out of date entries.\n' \
