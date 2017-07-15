@@ -202,9 +202,9 @@ class Config:
         if ctx.guild is None:
             return True
 
-        # is_owner = await ctx.bot.is_owner(ctx.author)
-        # if is_owner:
-        #     return True
+        is_owner = await ctx.bot.is_owner(ctx.author)
+        if is_owner:
+            return True
 
         resolved = await self.get_command_permissions(ctx.guild.id, connection=ctx.db)
         return not resolved.is_blocked(ctx)
@@ -407,11 +407,13 @@ class Config:
             await ctx.send('Command successfully enabled for this server.')
 
     @config.command(name='enable')
+    @checks.is_mod()
     async def config_enable(self, ctx, *, command: CommandName):
         """Enables a command for this server."""
         await ctx.invoke(self.server_enable, command=command)
 
     @config.command(name='disable')
+    @checks.is_mod()
     async def config_disable(self, ctx, *, command: CommandName):
         """Enables a command for this server."""
         await ctx.invoke(self.server_disable, command=command)
