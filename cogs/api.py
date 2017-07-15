@@ -430,7 +430,7 @@ class API:
             await self.refresh_faq_cache()
 
         if query is None:
-            return await self.bot.say('http://discordpy.readthedocs.io/en/rewrite/faq.html')
+            return await ctx.send('http://discordpy.readthedocs.io/en/rewrite/faq.html')
 
         matches = fuzzy.extract_matches(query, self.faq_entries, scorer=fuzzy.partial_ratio, score_cutoff=40)
         if len(matches) == 0:
