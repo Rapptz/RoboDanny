@@ -534,7 +534,7 @@ class Stars:
             return await ctx.send('\N{NO ENTRY SIGN} I do not have proper permissions (Manage Roles and Manage Channel)')
 
         overwrites = {
-            ctx.me: discord.PermissionOverwrite(send_messages=True, manage_messages=True,
+            ctx.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True,
                                                 embed_links=True, read_message_history=True),
             ctx.guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False,
                                                                 read_message_history=True)
