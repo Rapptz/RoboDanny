@@ -186,7 +186,6 @@ class Emoji:
 
         e = discord.Embed(title='Blob Statistics', colour=0xf1c40f)
 
-        common = blob_usage.most_common()
         total_count = sum(r['Count'] for r in blob_usage)
         global_usage = total_usage[0]
         e.add_field(name='Total Usage', value=f'{total_count} ({total_count / global_usage:.2%})')
@@ -196,8 +195,8 @@ class Emoji:
             per_day = usage_per_day(elem.created_at, count)
             return f'{elem}: {count} times, {count / total_count:.2f}/day ({per_day:.2%})'
 
-        top = [elem_to_string(key, count) for key, count in common[0:7]]
-        bottom = [elem_to_string(key, count) for key, count in common[-7:]]
+        top = [elem_to_string(key, count) for key, count in blob_usage[0:7]]
+        bottom = [elem_to_string(key, count) for key, count in blob_usage[-7:]]
         e.add_field(name='Most Common', value='\n'.join(top), inline=False)
         e.add_field(name='Least Common', value='\n'.join(bottom), inline=False)
         await ctx.send(embed=e)
