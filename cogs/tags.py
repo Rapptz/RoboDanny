@@ -273,13 +273,13 @@ class Tags:
         """
 
         query = """INSERT INTO tag_lookup (name, owner_id, location_id, tag_id)
-                   SELECT $1, tag_lookup.owner_id, tag_lookup.location_id, tag_lookup.tag_id
+                   SELECT $1, $4, tag_lookup.location_id, tag_lookup.tag_id
                    FROM tag_lookup
                    WHERE tag_lookup.location_id=$3 AND LOWER(tag_lookup.name)=$2;
                 """
 
         try:
-            status = await ctx.db.execute(query, new_name, old_name.lower(), ctx.guild.id)
+            status = await ctx.db.execute(query, new_name, old_name.lower(), ctx.guild.id, ctx.author.id)
         except asyncpg.UniqueViolationError:
             await ctx.send('A tag with this name already exists.')
         else:
