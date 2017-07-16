@@ -180,23 +180,30 @@ class Tags:
             if rows is None or len(rows) == 0:
                 raise RuntimeError('Tag not found. Maybe check the tag box?')
 
-            # check if we got an exact match
-            if rows[0]['name'].lower() == query:
-                return rows[0]
-
             names = '\n'.join(r['name'] for r in rows)
             raise RuntimeError(f'Tag not found. Did you mean...\n{names}')
 
         con = connection or self.bot.pool
-        query = """SELECT     tag_lookup.name, tags.content
-                   FROM       tag_lookup
+
+        query = """SELECT tag_lookup.name, tags.content
+                   FROM tag_lookup
                    INNER JOIN tags ON tags.id = tag_lookup.tag_id
-                   WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
-                   ORDER BY   similarity(tag_lookup.name, $2) DESC
-                   LIMIT 5;
+                   WHERE tag_lookup.location_id=$1 AND LOWER(tag_lookup.name)=$2;
                 """
 
-        return disambiguate(await con.fetch(query, guild_id, name), name)
+        row = await con.fetchrow(query, guild_id, name)
+        if row is None:
+            query = """SELECT     tag_lookup.name, tags.content
+                       FROM       tag_lookup
+                       INNER JOIN tags ON tags.id = tag_lookup.tag_id
+                       WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
+                       ORDER BY   similarity(tag_lookup.name, $2) DESC
+                       LIMIT 5;
+                    """
+
+            return disambiguate(await con.fetch(query, guild_id, name), name)
+        else:
+            return row
 
     @commands.group(invoke_without_command=True)
     @suggest_box()
