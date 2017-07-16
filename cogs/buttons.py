@@ -4,6 +4,9 @@ import discord
 from .utils import checks
 from lxml import etree
 import random
+import logging
+
+log = logging.getLogger(__name__)
 
 def date(argument):
     formats = (
@@ -323,8 +326,8 @@ class Buttons:
 
         async with self.bot.session.get('https://www.google.com/search', params=params, headers=headers) as resp:
             if resp.status != 200:
-
-                raise RuntimeError('Google somehow failed to respond.')
+                log.info('Google failed to respond with %s status code.', resp.status)
+                raise RuntimeError('Google has failed to respond.')
 
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
