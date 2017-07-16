@@ -65,7 +65,7 @@ class DisambiguateMember(commands.IDConverter):
             try:
                 result = await ctx.disambiguate(matches, entry)
             except Exception as e:
-                raise commands.BadArgument(e) from None
+                raise commands.BadArgument(f'Could not find this member. {e}') from None
 
         if result is None:
             raise commands.BadArgument("Could not found this member. Note this is case sensitive.")
