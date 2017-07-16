@@ -476,8 +476,15 @@ class Tags:
 
         records = await ctx.db.fetch(query, ctx.guild.id, member.id)
 
-        e.add_field(name='Owned Tags', value=records[0]['Count'])
-        e.add_field(name='Owned Tag Uses', value=records[0]['Uses'])
+        if len(records) > 1:
+            owned = records[0]['Count']
+            uses = records[0]['Uses']
+        else:
+            owned = 'None'
+            uses = 0
+
+        e.add_field(name='Owned Tags', value=owned)
+        e.add_field(name='Owned Tag Uses', value=uses)
         e.add_field(name='Tag Command Uses', value=count[0])
 
         if len(records) < 3:
