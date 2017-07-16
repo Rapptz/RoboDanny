@@ -185,7 +185,7 @@ class Tags:
 
         con = connection or self.bot.pool
 
-        query = """SELECT tag_lookup.name, tags.content
+        query = """SELECT tags.name, tags.content
                    FROM tag_lookup
                    INNER JOIN tags ON tags.id = tag_lookup.tag_id
                    WHERE tag_lookup.location_id=$1 AND LOWER(tag_lookup.name)=$2;
@@ -193,7 +193,7 @@ class Tags:
 
         row = await con.fetchrow(query, guild_id, name)
         if row is None:
-            query = """SELECT     tag_lookup.name, tags.content
+            query = """SELECT     tags.name, tags.content
                        FROM       tag_lookup
                        INNER JOIN tags ON tags.id = tag_lookup.tag_id
                        WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
