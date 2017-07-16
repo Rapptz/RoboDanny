@@ -193,7 +193,7 @@ class Emoji:
         def elem_to_string(key, count):
             elem = blob_ids.get(key)
             per_day = usage_per_day(elem.created_at, count)
-            return f'{elem}: {count} times, {count / total_count:.2f}/day ({per_day:.2%})'
+            return f'{elem}: {count} times, {per_day:.2f}/day ({count / total_count:.2%})'
 
         top = [elem_to_string(key, count) for key, count in blob_usage[0:7]]
         bottom = [elem_to_string(key, count) for key, count in blob_usage[-7:]]
