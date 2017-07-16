@@ -263,7 +263,9 @@ class Buttons:
         # <img alt="category here" src="cool image">
         category = node.find(".//img[@id='wob_tci']")
 
-        temperature = node.find(".//span[@id='wob_ttm']")
+        xpath = etree.XPath(".//div[@id='wob_d']//div[contains(@class, 'vk_bk')]//span[@class='wob_t']")
+        temperatures = xpath(node)
+
         misc_info_node = node.find(".//div[@class='vk_gy vk_sh wob-dtl']")
 
         if misc_info_node is None:
@@ -273,11 +275,20 @@ class Buttons:
         humidity = misc_info_node.find("./div/span[@id='wob_hm']")
         wind = misc_info_node.find("./div/span/span[@id='wob_tws']")
 
+
         try:
             e.title = 'Weather for ' + location.text.strip()
-            e.description = '*%s*' % category.get('alt')
+            e.description = f'*{category.get("alt")}*'
             e.set_thumbnail(url='https:' + category.get('src'))
-            e.add_field(name='Temperature', value=temperature.text + ' °C', inline=False)
+
+            if len(temperatures) == 4:
+                first_unit = temperatures[0].text + temperatures[2].text
+                second_unit = temperatures[1].text + temperatures[3].text
+                units = f'{first_unit} | {second_unit}'
+            else:
+                units = 'Unknown'
+
+            e.add_field(name='Temperature', value=units, inline=False)
 
             if precipitation is not None:
                 e.add_field(name='Precipitation', value=precipitation.text)
@@ -312,6 +323,7 @@ class Buttons:
 
         async with self.bot.session.get('https://www.google.com/search', params=params, headers=headers) as resp:
             if resp.status != 200:
+
                 raise RuntimeError('Google somehow failed to respond.')
 
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
