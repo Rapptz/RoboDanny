@@ -182,7 +182,7 @@ class Reminder:
 
         return timer
 
-    @commands.command(aliases=['timer'])
+    @commands.command(aliases=['timer', 'remind'])
     async def reminder(self, ctx, when: time.FutureTime, *, message: commands.clean_content = 'something'):
         """Reminds you of something after a certain amount of time.
 
