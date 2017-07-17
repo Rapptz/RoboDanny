@@ -682,7 +682,8 @@ class Stars:
             # "fast" path, just redirect the message
             msg = await self.get_message(ctx.starboard.channel, bot_message_id)
             if msg is not None:
-                return await ctx.send(msg.content, embed=msg.embeds[0])
+                embed = msg.embeds[0] if msg.embeds else None
+                return await ctx.send(msg.content, embed=embed)
             else:
                 # somehow it got deleted, so just delete the entry
                 query = "DELETE FROM starboard_entries WHERE message_id=$1;"
