@@ -1,5 +1,5 @@
 from discord.ext import commands
-from .utils import checks, db, fuzzy, cache
+from .utils import checks, db, fuzzy, cache, time
 import asyncio
 import discord
 import re
@@ -240,12 +240,80 @@ class API:
     async def block(self, ctx, *, member: discord.Member):
         """Blocks a user from your channel."""
 
+        reason = f'Block by {ctx.author} (ID: {ctx.author.id})'
+
         try:
-            await ctx.channel.set_permissions(member, read_messages=True)
+            await ctx.channel.set_permissions(member, read_messages=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
             await ctx.send('\N{THUMBS UP SIGN}')
+
+    @commands.command()
+    @commands.has_permissions(manage_roles=True)
+    @is_discord_api()
+    async def tempblock(self, ctx, duration: time.FutureTime, *, member: discord.Member):
+        """Temporarily blocks a user from your channel.
+
+        The duration can be a a short time form, e.g. 30d or a more human
+        duration such as "until thursday at 3PM" or a more concrete time
+        such as "2017-12-31".
+
+        Note that times are in UTC.
+        """
+
+        reminder = self.bot.get_cog('Reminder')
+        if reminder is None:
+            return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
+
+        timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id, ctx.channel.id, member.id)
+
+        reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
+
+        try:
+            await ctx.channel.set_permissions(member, read_messages=False, reason=reason)
+        except:
+            await ctx.send('\N{THUMBS DOWN SIGN}')
+        else:
+            await ctx.send(f'Blocked {member} for {time.human_timedelta(duration.dt)}.')
+
+    async def on_tempblock_timer_complete(self, timer):
+        guild_id, mod_id, channel_id, member_id = timer.args
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            # RIP
+            return
+
+        channel = guild.get_channel(channel_id)
+        if channel is None:
+            # RIP x2
+            return
+
+        to_unblock = guild.get_member(member_id)
+        if to_unblock is None:
+            # RIP x3
+            return
+
+        moderator = guild.get_member(mod_id)
+        if moderator is None:
+            try:
+                moderator = await self.bot.get_user_info(mod_id)
+            except:
+                # request failed somehow
+                moderator = f'Mod ID {mod_id}'
+            else:
+                moderator = f'{moderator} (ID: {mod_id})'
+        else:
+            moderator = f'{moderator} (ID: {mod_id})'
+
+
+        reason = f'Automatic unblock from timer made on {timer.created_at} by {moderator}.'
+
+        try:
+            await channel.set_permissions(to_unblock, read_messages=None, reason=reason)
+        except:
+            pass
 
     @cache.cache()
     async def get_feeds(self, channel_id, *, connection=None):
