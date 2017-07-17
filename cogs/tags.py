@@ -570,8 +570,9 @@ class Tags:
             await ctx.send('Could not delete tag. Either it does not exist or you do not have permissions to do so.')
             return
 
-        query = f'DELETE FROM tags WHERE id=$1;'
-        status = await ctx.db.execute(query, deleted[0])
+        args.append(deleted[0])
+        query = f'DELETE FROM tags WHERE id=${len(args)} AND {clause};'
+        status = await ctx.db.execute(query, *args)
 
         # the status returns DELETE <count>, similar to UPDATE above
         if status[-1] == '0':
