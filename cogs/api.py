@@ -482,7 +482,7 @@ class API:
 
     async def refresh_faq_cache(self):
         self.faq_entries = {}
-        base_url = 'http://discordpy.readthedocs.io/en/rewrite/faq.html'
+        base_url = 'http://discordpy.readthedocs.io/en/latest/faq.html'
         async with self.bot.session.get(base_url) as resp:
             text = await resp.text(encoding='utf-8')
 
@@ -498,7 +498,7 @@ class API:
             await self.refresh_faq_cache()
 
         if query is None:
-            return await ctx.send('http://discordpy.readthedocs.io/en/rewrite/faq.html')
+            return await ctx.send('http://discordpy.readthedocs.io/en/latest/faq.html')
 
         matches = fuzzy.extract_matches(query, self.faq_entries, scorer=fuzzy.partial_ratio, score_cutoff=40)
         if len(matches) == 0:
