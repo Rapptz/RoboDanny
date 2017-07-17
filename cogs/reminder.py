@@ -182,24 +182,24 @@ class Reminder:
 
         return timer
 
-    @commands.command(aliases=['timer', 'remind'])
-    async def reminder(self, ctx, when: time.FutureTime, *, message: commands.clean_content = 'something'):
+    @commands.command(aliases=['timer', 'remind'], usage='<when>')
+    async def reminder(self, ctx, *, when: time.UserFriendlyTime(commands.clean_content, default='something')):
         """Reminds you of something after a certain amount of time.
 
-        The time can be any direct date (e.g. YYYY-MM-DD) or a human
+        The input can be any direct date (e.g. YYYY-MM-DD) or a human
         readable offset. Examples:
 
-        - "next thursday at 3pm"
-        - "tomorrow"
-        - "3 days"
-        - "2d"
+        - "next thursday at 3pm do something funny"
+        - "do the dishes tomorrow"
+        - "in 3 days do the thing"
+        - "2d unmute someone"
 
         Times are in UTC.
         """
 
-        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, message)
+        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg)
         delta = time.human_timedelta(when.dt)
-        await ctx.send(f"Alright {ctx.author.mention}, I'll remind you about {message} in {delta}.")
+        await ctx.send(f"Alright {ctx.author.mention}, I'll remind you about {when.arg} in {delta}.")
 
     async def on_reminder_timer_complete(self, timer):
         author_id, channel_id, message = timer.args

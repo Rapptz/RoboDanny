@@ -5,3 +5,4 @@ asyncpg>=0.12.0
 click
 parsedatetime
 lru_dict
+python-dateutil
