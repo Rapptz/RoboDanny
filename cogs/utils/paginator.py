@@ -413,7 +413,7 @@ class HelpPaginator(Pages):
     def get_bot_page(self, page):
         cog, description, commands = self.entries[page - 1]
         self.title = f'{cog} Commands'
-        self.description = f'{description}\nJoin the official bot support server for more help: https://discord.gg/pYuKF2Z'
+        self.description = f'{description}\n\n**Official bot support server**: https://discord.gg/pYuKF2Z'
         return commands
 
     async def show_page(self, page, *, first=False):
