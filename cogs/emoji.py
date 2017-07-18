@@ -257,6 +257,9 @@ class Emoji:
                    GROUP BY guild_id;
                 """
         record = await ctx.db.fetchrow(query, ctx.guild.id)
+        if record is None:
+            return await ctx.send('This server has no emoji stats...')
+
         total = record['Count']
         emoji_used = record['Emoji']
         per_day = usage_per_day(ctx.me.joined_at, total)
