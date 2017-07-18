@@ -45,6 +45,71 @@ def get_random_scrims(modes, maps, count):
 # Hopefully by completely dropping Splatoon 1 support in
 # the future.
 
+class BrandResults:
+    __slots__ = ('ability_name', 'info', 'buffs', 'nerfs')
+
+    def __init__(self, brand=None, ability_name=None, buffs=[], nerfs=[]):
+        self.info = brand
+        self.ability_name = ability_name
+        self.buffs = buffs
+        self.nerfs = nerfs
+
+    def is_brand(self):
+        return self.ability_name is None
+
+class BrandOrAbility(commands.Converter):
+    def __init__(self, splatoon2=True):
+        self.splatoon2 = splatoon2
+
+    async def convert(self, ctx, argument):
+        query = argument.lower()
+        if len(query) < 4:
+            raise commands.BadArgument('The query must be at least 5 characters long.')
+
+        data = ctx.cog.splat1_data if not self.splatoon2 else ctx.cog.splat2_data
+        brands = data.get('brands', [])
+
+        result = None
+
+        for brand in brands:
+            name = brand['name']
+
+            # basic case, direct brand name match
+            if fuzzy.partial_ratio(query, name.lower()) >= 60:
+                return BrandResults(brand=brand)
+
+            buffed = brand['buffed']
+            nerfed = brand['nerfed']
+
+            # if it's not matched up there, it's definitely not matched here
+            if not nerfed or not buffed:
+                continue
+
+            if fuzzy.partial_ratio(query, buffed.lower()) >= 60:
+                result = BrandResults(ability_name=buffed)
+                break
+
+            if fuzzy.partial_ratio(query, nerfed.lower()) >= 60:
+                result = BrandResults(ability_name=nerfed)
+                break
+
+        if result is None:
+            raise commands.BadArgument('Could not find anything.')
+
+        # check the brands that buff or nerf the ability we're looking for:
+        for brand in brands:
+            buffed = brand['buffed']
+            nerfed = brand['nerfed']
+            if not nerfed or not buffed:
+                continue
+
+            if buffed == result.ability_name:
+                result.buffs.append(brand['name'])
+            elif nerfed == result.ability_name:
+                result.nerfs.append(brand['name'])
+
+        return result
+
 class Splatoon:
     """Splatoon related commands."""
 
@@ -57,6 +122,10 @@ class Splatoon:
 
     def __unload(self):
         self.map_updater.cancel()
+
+    async def __error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            return await ctx.send(error)
 
     async def update_splatnet_cookie(self):
         username = self.splat1_data.get('username')
@@ -180,6 +249,19 @@ class Splatoon:
 
         await ctx.send('\n'.join(result))
 
+    async def _do_brand(self, ctx, brand):
+        e = discord.Embed(colour=0x19D719)
+        if brand.is_brand():
+            e.add_field(name='Name', value=brand.info['name'])
+            e.add_field(name='Common', value=brand.info['buffed'])
+            e.add_field(name='Uncommon', value=brand.info['nerfed'])
+            return await ctx.send(embed=e)
+
+        e.description = f'The following brands deal with {brand.ability_name}.'
+        e.add_field(name='Common', value='\n'.join(brand.buffs))
+        e.add_field(name='Uncommon', value='\n'.join(brand.nerfs))
+        await ctx.send(embed=e)
+
     @splat1.command(name='scrim')
     async def splat1_scrim(self, ctx, games=5, *, mode: str = None):
         """Generates Splatoon scrim map and mode combinations.
@@ -194,7 +276,7 @@ class Splatoon:
         await self.generate_scrims(ctx, maps, games, mode)
 
     @splat1.command(name='brand', invoke_without_command=True)
-    async def splat1_brand(self, ctx, *, query : str):
+    async def splat1_brand(self, ctx, *, query: BrandOrAbility(splatoon2=False)):
         """Shows Splatoon brand info based on either the name or the ability given.
 
         If the query is an ability then it attempts to find out what brands
@@ -202,54 +284,7 @@ class Splatoon:
 
         The query must be at least 4 characters long.
         """
-        query = query.strip().lower()
-
-        if len(query) < 4:
-            return await ctx.send('The query must be at least 5 characters long.')
-
-        brands = self.splat1_data.get('brands', [])
-
-        # First, attempt to figure out if it's a brand name.
-        def first_check(data):
-            lowered = data['name'].lower()
-            return fuzzy.partial_ratio(query, lowered) >= 60
-
-        def second_check(data):
-            buffed = data['buffed']
-            nerfed = data['nerfed']
-            if buffed is None or nerfed is None:
-                return False
-            return fuzzy.partial_ratio(query, buffed.lower()) >= 60 or \
-                   fuzzy.partial_ratio(query, nerfed.lower()) >= 60
-
-        result = list(filter(first_check, brands))
-        output = []
-        fmt = 'The brand "{}" has buffed {} and nerfed {} probabilities.'
-        if result:
-            # brands found
-            output.append('Found the following brands:')
-            for entry in result:
-                name = entry['name']
-                buffed = entry['buffed']
-                nerfed = entry['nerfed']
-
-                if buffed is None or nerfed is None:
-                    output.append(f'The brand "{name}" is neutral.')
-                    continue
-
-                output.append(fmt.format(name, buffed, nerfed))
-            output.append('')
-
-        abilities = list(filter(second_check, brands))
-        if abilities:
-            output.append('Found the following relevant abilities:')
-            for entry in abilities:
-                output.append(fmt.format(entry['name'], entry['buffed'], entry['nerfed']))
-
-        if not output:
-            await ctx.send('Your query returned nothing.')
-        else:
-            await ctx.send('\n'.join(output))
+        await self._do_brand(ctx, query)
 
     @commands.command(hidden=True)
     async def marie(self, ctx):
@@ -325,7 +360,7 @@ class Splatoon:
         await self.generate_scrims(ctx, maps, games, mode)
 
     @commands.group(invoke_without_command=True)
-    async def brand(self, ctx, *, query: str):
+    async def brand(self, ctx, *, query: BrandOrAbility):
         """Shows Splatoon 2 brand info
 
         This is based on either the name or the ability given.
@@ -335,7 +370,7 @@ class Splatoon:
 
         The query must be at least 4 characters long.
         """
-        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 brand" for Splatoon 1 instead.')
+        await self._do_brand(ctx, query)
 
     @commands.command(hidden=True)
     @commands.is_owner()
