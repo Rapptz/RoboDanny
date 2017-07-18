@@ -901,7 +901,7 @@ class Tags:
         took it for their own personal use.
         """
 
-        query = "UPDATE tags SET content = $1 WHERE LOWER(name)=$2 AND owner_id=$3 AND location_id IS NULL;"
+        query = "UPDATE tags SET content = $2 WHERE LOWER(name)=$1 AND owner_id=$3 AND location_id IS NULL;"
         status = await ctx.db.execute(query, name, content, ctx.author.id)
 
         if status[-1] == '0':
