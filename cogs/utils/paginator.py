@@ -405,6 +405,7 @@ class HelpPaginator(Pages):
 
         # swap the get_page implementation with one that supports our style of pagination
         self.get_page = self.get_bot_page
+        self._is_bot = True
 
         # replace the actual total
         self.total = sum(len(o) for _, _, o in nested_pages)
@@ -413,7 +414,7 @@ class HelpPaginator(Pages):
     def get_bot_page(self, page):
         cog, description, commands = self.entries[page - 1]
         self.title = f'{cog} Commands'
-        self.description = f'{description}\n\n**Official bot support server**: https://discord.gg/pYuKF2Z'
+        self.description = description
         return commands
 
     async def show_page(self, page, *, first=False):
@@ -423,6 +424,10 @@ class HelpPaginator(Pages):
         self.embed.clear_fields()
         self.embed.description = self.description
         self.embed.title = self.title
+
+        if hasattr(self, '_is_bot'):
+            value ='For more help, join the official bot support server: https://discord.gg/pYuKF2Z'
+            self.embed.add_field(name='Support', value=value, inline=False)
 
         self.embed.set_footer(text=f'Use "{self.prefix}help command" for more info on a command.')
 
