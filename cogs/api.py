@@ -243,7 +243,7 @@ class API:
         reason = f'Block by {ctx.author} (ID: {ctx.author.id})'
 
         try:
-            await ctx.channel.set_permissions(member, read_messages=False, reason=reason)
+            await ctx.channel.set_permissions(member, send_messages=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -271,7 +271,7 @@ class API:
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
         try:
-            await ctx.channel.set_permissions(member, read_messages=False, reason=reason)
+            await ctx.channel.set_permissions(member, send_messages=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -311,7 +311,7 @@ class API:
         reason = f'Automatic unblock from timer made on {timer.created_at} by {moderator}.'
 
         try:
-            await channel.set_permissions(to_unblock, read_messages=None, reason=reason)
+            await channel.set_permissions(to_unblock, send_messages=None, reason=reason)
         except:
             pass
 
