@@ -309,6 +309,7 @@ class Tags:
         await ctx.send('Hello. What would you like the name tag to be?')
 
         converter = TagName()
+        original = ctx.message
 
         def check(msg):
             return msg.author == ctx.author and ctx.channel == msg.channel
@@ -322,9 +323,12 @@ class Tags:
             return await ctx.send('You took long. Goodbye.')
 
         try:
+            ctx.message = name
             name = await converter.convert(ctx, name.content)
         except commands.BadArgument as e:
             return await ctx.send(f'{e}. Redo the command "{ctx.prefix}tag make" to retry.')
+        finally:
+            ctx.message = original
 
         # reacquire our connection since we need the query
         await ctx.acquire()
