@@ -198,7 +198,7 @@ class Reminder:
         """
 
         timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg)
-        delta = time.human_timedelta(when.dt)
+        delta = time.human_timedelta(when.dt, source=ctx.message.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, I'll remind you about {when.arg} in {delta}.")
 
     async def on_reminder_timer_complete(self, timer):

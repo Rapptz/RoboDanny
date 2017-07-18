@@ -150,37 +150,34 @@ class UserFriendlyTime(commands.Converter):
             traceback.print_exc()
             raise
 
-def human_timedelta(dt):
-    now = datetime.datetime.utcnow()
+def human_timedelta(dt, *, source=None):
+    now = source or datetime.datetime.utcnow()
     if dt > now:
-        delta = dt - now
+        delta = relativedelta(dt, now)
         suffix = ''
     else:
-        delta = now - dt
+        delta = relativedelta(now, dt)
         suffix = ' ago'
 
-    hours, remainder = divmod(int(delta.total_seconds()), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    days, hours = divmod(hours, 24)
-    years, days = divmod(days, 365)
+    if delta.microseconds and delta.seconds:
+        delta = delta + relativedelta(seconds=+1)
 
-    if years:
-        if days:
-            return f'{Plural(year=years)} and {Plural(day=days)}{suffix}'
-        return f'{Plural(year=years)}{suffix}'
+    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
 
-    if days:
-        if hours:
-            return f'{Plural(day=days)} and {Plural(hour=hours)}{suffix}'
-        return f'{Plural(day=days)}{suffix}'
+    output = []
+    for attr in attrs:
+        elem = getattr(delta, attr)
+        if not elem:
+            continue
 
-    if hours:
-        if minutes:
-            return f'{Plural(hour=hours)} and {Plural(minute=minutes)}{suffix}'
-        return f'{Plural(hour=hours)}{suffix}'
+        if elem > 1:
+            output.append(f'{elem} {attr}')
+        else:
+            output.append(f'{elem} {attr[:-1]}')
 
-    if minutes:
-        if seconds:
-            return f'{Plural(minute=minutes)} and {Plural(second=seconds)}{suffix}'
-        return f'{Plural(minute=minutes)}{suffix}'
-    return f'{Plural(second=seconds)}{suffix}'
+    if len(output) == 1:
+        return output[0] + suffix
+    elif len(output) == 2:
+        return f'{output[0]} and {output[1]}{suffix}'
+    else:
+        return ', '.join(output[:-1]) + f' and {output[-1]}{suffix}'
