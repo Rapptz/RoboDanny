@@ -334,15 +334,6 @@ class Stars:
             # ergo, when we add a reaction from starboard we want it to star
             # the original message
 
-            # first, let's remove the reaction, this requires using the
-            # lower level http client since we don't want to do a request
-            # to fetch the full Message object
-
-            try:
-                self.bot.http.remove_reaction(message_id, channel.id, '\N{WHITE MEDIUM STAR}', starrer_id)
-            except:
-                pass
-
             query = "SELECT channel_id, message_id FROM starboard_entries WHERE bot_message_id=$1;"
             record = await connection.fetchrow(query, message_id)
             if record is None:
@@ -459,7 +450,16 @@ class Stars:
             raise StarError('\N{NO ENTRY SIGN} Starboard is locked.')
 
         if channel.id == starboard.channel.id:
-            return
+            query = "SELECT channel_id, message_id FROM starboard_entries WHERE bot_message_id=$1;"
+            record = await connection.fetchrow(query, message_id)
+            if record is None:
+                raise StarError('Could not find message in the starboard.')
+
+            ch = channel.guild.get_channel(record['channel_id'])
+            if ch is None:
+                raise StarError('Could not find original channel.')
+
+            return await self._unstar_message(ch, record['message_id'], starrer_id, connection=connection)
 
         query = """DELETE FROM starrers USING starboard_entries entry
                    WHERE entry.message_id=$1
