@@ -230,6 +230,19 @@ class Stars:
             except StarError:
                 pass
 
+    async def on_guild_channel_delete(self, channel):
+        if not isinstance(channel, discord.TextChannel):
+            return
+
+        starboard = await self.get_starboard(channel.guild.id)
+        if starboard.channel is None or starboard.channel.id != channel.id:
+            return
+
+        # the starboard channel got deleted, so let's clear it from the database.
+        async with self.bot.pool.acquire() as con:
+            query = "DELETE FROM starboard WHERE id=$1;"
+            await con.execute(query, channel.guild.id)
+
     async def on_raw_reaction_add(self, emoji, message_id, channel_id, user_id):
         await self.reaction_action('star', emoji, message_id, channel_id, user_id)
 
