@@ -193,12 +193,11 @@ class Tags:
 
         row = await con.fetchrow(query, guild_id, name)
         if row is None:
-            query = """SELECT     tags.name, tags.content
+            query = """SELECT     tag_lookup.name
                        FROM       tag_lookup
-                       INNER JOIN tags ON tags.id = tag_lookup.tag_id
                        WHERE      tag_lookup.location_id=$1 AND tag_lookup.name % $2
                        ORDER BY   similarity(tag_lookup.name, $2) DESC
-                       LIMIT 5;
+                       LIMIT 3;
                     """
 
             return disambiguate(await con.fetch(query, guild_id, name), name)
