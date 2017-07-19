@@ -175,9 +175,11 @@ def human_timedelta(dt, *, source=None):
         else:
             output.append(f'{elem} {attr[:-1]}')
 
-    if len(output) == 1:
+    if len(output) == 0:
+        return 'now'
+    elif len(output) == 1:
         return output[0] + suffix
     elif len(output) == 2:
         return f'{output[0]} and {output[1]}{suffix}'
     else:
-        return ', '.join(output[:-1]) + f' and {output[-1]}{suffix}'
+        return f'{output[0]}, {output[1]} and {output[2]}{suffix}'
