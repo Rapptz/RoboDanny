@@ -923,7 +923,7 @@ class Tags:
         """
 
         query = "DELETE FROM tags WHERE LOWER(name)=$1 AND owner_id=$2 AND location_id IS NULL;"
-        status = await ctx.db.execute(query, name, content, ctx.author.id)
+        status = await ctx.db.execute(query, name, ctx.author.id)
 
         if status[-1] == '0':
             await ctx.send('This tag is either not in the box or you do not own it.')
