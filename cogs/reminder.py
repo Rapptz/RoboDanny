@@ -197,7 +197,7 @@ class Reminder:
         Times are in UTC.
         """
 
-        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg)
+        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg, connection=ctx.db)
         delta = time.human_timedelta(when.dt, source=ctx.message.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, I'll remind you about {when.arg} in {delta}.")
 

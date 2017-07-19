@@ -266,7 +266,9 @@ class API:
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
-        timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id, ctx.channel.id, member.id)
+        timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id,
+                                                                      ctx.channel.id, member.id,
+                                                                      connection=ctx.db)
 
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
