@@ -48,11 +48,11 @@ def get_random_scrims(modes, maps, count):
 class BrandResults:
     __slots__ = ('ability_name', 'info', 'buffs', 'nerfs')
 
-    def __init__(self, brand=None, ability_name=None, buffs=[], nerfs=[]):
+    def __init__(self, brand=None, ability_name=None):
         self.info = brand
         self.ability_name = ability_name
-        self.buffs = buffs
-        self.nerfs = nerfs
+        self.buffs = []
+        self.nerfs = []
 
     def is_brand(self):
         return self.ability_name is None
