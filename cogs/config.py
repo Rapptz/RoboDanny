@@ -415,7 +415,7 @@ class Config:
     @config.command(name='disable')
     @checks.is_mod()
     async def config_disable(self, ctx, *, command: CommandName):
-        """Enables a command for this server."""
+        """Disables a command for this server."""
         await ctx.invoke(self.server_disable, command=command)
 
 def setup(bot):
