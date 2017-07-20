@@ -37,6 +37,23 @@ class GuildConfig(db.Table, table_name='guild_mod_config'):
     mention_count = db.Column(db.Integer(small=True))
     safe_mention_channel_ids = db.Column(db.Array(db.Integer(big=True)))
 
+## Configuration
+
+class ModConfig:
+    __slots__ = ('raid_mode', 'broadcast_channel', 'mention_count', 'safe_mention_channel_ids')
+
+    @classmethod
+    async def from_record(cls, record, bot):
+        self = cls()
+
+        # the basic configuration
+        guild = bot.get_guild(record['id'])
+        self.raid_mode = record['raid_mode']
+        self.broadcast_channel = guild.get_channel(record['broadcast_channel'])
+        self.mention_count = record['mention_count']
+        self.safe_mention_channel_ids = set(record['safe_mention_channel_ids'] or [])
+        return self
+
 ## Converters
 
 class MemberID(commands.Converter):
@@ -106,13 +123,16 @@ class Mod:
                 await ctx.send('Somehow, an unexpected error occurred. Try again later?')
 
     @cache.cache()
-    async def get_guild_settings(self, guild_id):
+    async def get_guild_config(self, guild_id):
         query = """SELECT * FROM guild_mod_config WHERE id=$1;"""
         async with self.bot.pool.acquire() as con:
-            return await con.fetchrow(query, guild_id)
+            record = await con.fetchrow(query, guild_id)
+            if record is not None:
+                return await ModConfig.from_record(record, self.bot)
+            return None
 
-    async def check_raid(self, settings, guild, member, timestamp):
-        if settings['raid_mode'] != RaidMode.strict.value:
+    async def check_raid(self, config, guild, member, timestamp):
+        if config.raid_mode != RaidMode.strict.value:
             return
 
         delta  = (member.joined_at - member.created_at).total_seconds() // 60
@@ -170,27 +190,26 @@ class Mod:
             return
 
         guild_id = message.guild.id
-        settings = await self.get_guild_settings(guild_id)
-        if settings is None:
+        config = await self.get_guild_config(guild_id)
+        if config is None:
             return
 
         # check for raid mode stuff
-        await self.check_raid(settings, message.guild, author, message.created_at)
+        await self.check_raid(config, message.guild, author, message.created_at)
 
         # auto-ban tracking for mention spams begin here
         if len(message.mentions) <= 3:
             return
 
-        if not settings['mention_count']:
+        if not config.mention_count:
             return
 
         # check if it meets the thresholds required
         mention_count = sum(not m.bot for m in message.mentions)
-        if mention_count < settings['mention_count']:
+        if mention_count < config.mention_count:
             return
 
-        ignored_channels = settings['safe_mention_channel_ids'] or []
-        if message.channel.id in ignored_channels:
+        if message.channel.id in config.safe_mention_channel_ids:
             return
 
         try:
@@ -207,15 +226,15 @@ class Mod:
 
         # joined a voice channel
         if before.channel is None and after.channel is not None:
-            settings = await self.get_guild_settings(user.guild.id)
-            if settings is None:
+            config = await self.get_guild_config(user.guild.id)
+            if config is None:
                 return
 
-            await self.check_raid(settings, user.guild, after, datetime.datetime.utcnow())
+            await self.check_raid(config, user.guild, after, datetime.datetime.utcnow())
 
     async def on_member_join(self, member):
-        settings = await self.get_guild_settings(member.guild.id)
-        if settings is None or not settings['raid_mode']:
+        config = await self.get_guild_config(member.guild.id)
+        if config is None or not config.raid_mode:
             return
 
         now = datetime.datetime.utcnow()
@@ -224,7 +243,7 @@ class Mod:
         created = (now - member.created_at).total_seconds() // 60
         was_kicked = False
 
-        if settings['raid_mode'] == RaidMode.strict.value:
+        if config.raid_mode == RaidMode.strict.value:
             was_kicked = self._recently_kicked.get(member.server.id)
             if was_kicked is not None:
                 try:
@@ -252,8 +271,7 @@ class Mod:
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
         e.add_field(name='Created', value=time.human_timedelta(member.created_at), inline=False)
-        channel = self.bot.get_channel(settings['broadcast_channel'])
-        await channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     @commands.command(aliases=['newmembers'])
     @commands.guild_only()
@@ -635,7 +653,7 @@ class Mod:
         if count == 0:
             query = """UPDATE guild_mod_config SET mention_count = NULL WHERE id=$1;"""
             await ctx.db.execute(query, ctx.guild.id)
-            self.get_guild_settings.invalidate(self, ctx.guild.id)
+            self.get_guild_config.invalidate(self, ctx.guild.id)
             return await ctx.send('Auto-banning members has been disabled.')
 
         if count <= 3:
@@ -648,7 +666,7 @@ class Mod:
                        mention_count = $2;
                 """
         await ctx.db.execute(query, ctx.guild.id, count)
-        self.get_guild_settings.invalidate(self, ctx.guild.id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Now auto-banning members that mention more than {count} users.')
 
     @mentionspam.command(name='ignore', aliases=['bypass'])
@@ -674,7 +692,7 @@ class Mod:
 
         channel_ids = [c.id for c in channels]
         await ctx.db.execute(query, ctx.guild.id, channel_ids)
-        self.get_guild_settings.invalidate(self, ctx.guild.id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Mentions are now ignored on {", ".join(c.mention for c in channels)}.')
 
     @mentionspam.command(name='unignore', aliases=['protect'])
@@ -697,7 +715,7 @@ class Mod:
                 """
 
         await ctx.db.execute(query, ctx.guild.id, [c.id for c in channels])
-        self.get_guild_settings.invalidate(self, ctx.guild.id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send('Updated mentionspam ignore list.')
 
     @commands.group(aliases=['purge'])
