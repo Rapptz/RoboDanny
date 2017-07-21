@@ -1,13 +1,16 @@
 from discord.ext import commands
-from .utils import config, checks, maps, fuzzy
+from .utils import config, checks, maps, fuzzy, time
 from .utils.formats import Plural
 
 from urllib.parse import quote as urlquote
 from collections import namedtuple
 
+import datetime
 import random
 import asyncio
 import discord
+import aiohttp
+import yarl
 
 GameEntry = namedtuple('GameEntry', ('stage', 'mode'))
 
@@ -56,6 +59,23 @@ class BrandResults:
 
     def is_brand(self):
         return self.ability_name is None
+
+class Rotation:
+    def __init__(self, data):
+        self.mode = data['rule']['name']
+        self.stage_a = data['stage_a']['name']
+        self.stage_b = data['stage_b']['name']
+
+        self.start_time = datetime.datetime.utcfromtimestamp(data['start_time'])
+        self.end_time = datetime.datetime.utcfromtimestamp(data['end_time'])
+
+    @property
+    def current(self):
+        now = datetime.datetime.utcnow()
+        return self.start_time <= now <= self.end_time
+
+    def get_generic_value(self):
+        return f'{self.stage_a} and {self.stage_b}'
 
 class BrandOrAbility(commands.Converter):
     def __init__(self, splatoon2=True):
@@ -113,6 +133,8 @@ class BrandOrAbility(commands.Converter):
 class Splatoon:
     """Splatoon related commands."""
 
+    BASE_URL = yarl.URL('https://app.splatoon2.nintendo.net')
+
     def __init__(self, bot):
         self.bot = bot
         self.splat1_data = config.Config('splatoon.json', loop=bot.loop)
@@ -120,8 +142,20 @@ class Splatoon:
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
 
+        # temporary measure until fully reverse engineered
+        # I did not find out that the session cookie actually expired until later
+        # for now, these last 24 hours which is good enough
+        session_cookie = self.splat2_data.get('session')
+        bot.session.cookie_jar.update_cookies({ 'iksm_session': session_cookie }, response_url=self.BASE_URL)
+
+        self._splatnet2 = bot.loop.create_task(self.splatnet2())
+
+        # mode: List[Rotation]
+        self.sp2_map_data = {}
+
     def __unload(self):
         self.map_updater.cancel()
+        self._splatnet2.cancel()
 
     async def __error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -154,6 +188,62 @@ class Splatoon:
                 if entry.is_over:
                     continue
                 self.map_data.append(entry)
+
+    async def parse_splatnet2_schedule(self):
+        try:
+            self.sp2_map_data = {}
+            async with self.bot.session.get(self.BASE_URL / 'api/schedules') as resp:
+                if resp.status != 200:
+                    c = self.bot.get_cog('Stats')
+                    await c.log_error(extra=f'Splatnet responded with {resp.status}.')
+                    del c
+                    return 300.0 # try again in 5 minutes
+
+                data = await resp.json()
+                gachi = data.get('gachi', [])
+                self.sp2_map_data['Ranked Battle'] = [
+                    Rotation(d) for d in gachi
+                ]
+                regular = data.get('regular', [])
+                self.sp2_map_data['Regular Battle'] = [
+                    Rotation(d) for d in regular
+                ]
+
+                league = data.get('league', [])
+                self.sp2_map_data['League Battle'] = [
+                    Rotation(d) for d in league
+                ]
+
+                newest = []
+                for key, value in self.sp2_map_data.items():
+                    value.sort(key=lambda r: r.end_time)
+                    try:
+                        newest.append(value[0].end_time)
+                    except IndexError:
+                        pass
+
+                try:
+                    new = max(newest)
+                except ValueError:
+                    return 300.0 # try again in 5 minutes
+
+                now = datetime.datetime.utcnow()
+                return 300.0 if now > new else (new - now).total_seconds()
+        except Exception as e:
+            c = self.bot.get_cog('Stats')
+            await c.log_error(extra=f'Splatnet Error')
+            del c
+
+    async def splatnet2(self):
+        try:
+            while not self.bot.is_closed():
+                to_sleep = await self.parse_splatnet2_schedule()
+                await asyncio.sleep(to_sleep)
+        except asyncio.CancelledError:
+            pass
+        except (OSError, discord.ConnectionClosed):
+            self._splatnet2.cancel()
+            self._splatnet2 = self.bot.loop.create_task(self.splatnet2())
 
     def get_weapons_named(self, name, *, splatoon2=True):
         data = self.splat2_data if splatoon2 else self.splat1_data
@@ -306,15 +396,32 @@ class Splatoon:
             else:
                 await ctx.send(f'An error has occurred of status code {resp.status} happened.')
 
+    async def generic_splatoon2_schedule(self, ctx):
+        e = discord.Embed(colour=0x19D719)
+        end_time = None
+
+        for key, value in self.sp2_map_data.items():
+            try:
+                rotation = value[0]
+            except IndexError:
+                e.add_field(name=key, value='Nothing found...', inline=False)
+                continue
+            else:
+                end_time = rotation.end_time
+
+            e.add_field(name=f'{key}: {rotation.mode}',
+                        value=f'{rotation.stage_a} and {rotation.stage_b}',
+                        inline=False)
+
+        if end_time is not None:
+            e.title = f'For {time.human_timedelta(end_time)}...'
+
+        await ctx.send(embed=e)
+
     @commands.command()
     async def schedule(self, ctx):
         """Shows the current Splatoon 2 schedule."""
-        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 schedule" for Splatoon 1 instead.')
-
-    @commands.command()
-    async def maps(self, ctx):
-        """Shows the current maps in the Splatoon 2."""
-        await ctx.send(f'This command is coming soon! Try "{ctx.prefix}sp1 maps" for Splatoon 1 instead.')
+        await self.generic_splatoon2_schedule(ctx)
 
     @commands.command()
     async def weapon(self, ctx, *, query: str):
