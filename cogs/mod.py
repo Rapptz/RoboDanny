@@ -230,7 +230,7 @@ class Mod:
             if config is None:
                 return
 
-            await self.check_raid(config, user.guild, after, datetime.datetime.utcnow())
+            await self.check_raid(config, user.guild, user, datetime.datetime.utcnow())
 
     async def on_member_join(self, member):
         config = await self.get_guild_config(member.guild.id)
