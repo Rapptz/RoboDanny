@@ -3,14 +3,20 @@ from .utils import config, checks, maps, fuzzy, time
 from .utils.formats import Plural
 
 from urllib.parse import quote as urlquote
+from email.utils import parsedate_to_datetime
 from collections import namedtuple
 
 import datetime
 import random
 import asyncio
 import discord
+import logging
 import aiohttp
 import yarl
+import json
+import re
+
+log = logging.getLogger(__name__)
 
 GameEntry = namedtuple('GameEntry', ('stage', 'mode'))
 
@@ -149,6 +155,8 @@ class Splatoon:
         bot.session.cookie_jar.update_cookies({ 'iksm_session': session_cookie }, response_url=self.BASE_URL)
 
         self._splatnet2 = bot.loop.create_task(self.splatnet2())
+        self._authenticator = bot.loop.create_task(self.splatnet2_authenticator())
+        self._is_authenticated = asyncio.Event(loop=bot.loop)
 
         # mode: List[Rotation]
         self.sp2_map_data = {}
@@ -156,6 +164,7 @@ class Splatoon:
     def __unload(self):
         self.map_updater.cancel()
         self._splatnet2.cancel()
+        self._authenticator.cancel()
 
     async def __error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -188,6 +197,155 @@ class Splatoon:
                 if entry.is_over:
                     continue
                 self.map_data.append(entry)
+
+    async def splatnet2_authenticator(self):
+        try:
+            session_token = self.splat2_data.get('session_token')
+            while not self.bot.is_closed():
+                iksm = self.splat2_data.get('iksm_session')
+                if iksm is not None:
+                    self.bot.session.cookie_jar.update_cookies({ 'iksm_session': iksm }, response_url=self.BASE_URL)
+                    self._is_authenticated.set()
+
+                expires = datetime.datetime.utcfromtimestamp(self.splat2_data.get('iksm_expires', 0.0))
+                now = datetime.datetime.utcnow()
+
+                if now < expires:
+                    # our session is still valid, so let's wait a while before authenticating
+                    delta = (expires - now).total_seconds()
+                    await asyncio.sleep(delta)
+
+                # at this point our session is invalid so let's re-authenticate
+                self._is_authenticated.clear()
+                session = self.bot.session
+
+                url = 'https://accounts.nintendo.com/connect/1.0.0/api/token'
+                data = {
+                    'client_id': '71b963c1b7b6d119',
+                    'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer-session-token',
+                    'session_token': session_token
+                }
+                headers = {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'X-Platform': 'Android',
+                    'X-ProductVersion': '1.0.4',
+                    'User-Agent': 'com.nintendo.znca/1.0.4 (Android/4.4.2)'
+                }
+
+                # first, authenticate into the accounts.nintendo.com for our Bearer token and ID token.
+                async with session.post(url, headers=headers, data=json.dumps(data)) as resp:
+                    if resp.status != 200:
+                        extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    # we don't care when the token expires but we need our ID token
+                    js = await resp.json()
+                    id_token = js['id_token']
+
+                # authenticate to the nintendo.net API
+                data = {
+                    "parameter": {
+                        "language": "en-US",
+                        'naCountry': 'US',
+                        "naBirthday": "1989-04-06",
+                        "naIdToken": id_token
+                    }
+                }
+
+                url = 'https://api-lp1.znc.srv.nintendo.net/v1/Account/Login'
+                headers['Authorization'] = 'Bearer'
+
+                async with session.post(url, headers=headers, data=json.dumps(data)) as resp:
+                    if resp.status != 200:
+                        extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    js = await resp.json()
+                    if js['status'] != 0:
+                        extra = f'Firebase issue for {url}:\n```js\n{json.dumps(js, indent=4)}\n```'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    token = js['result'].get('webApiServerCredential', {}).get('accessToken')
+                    if token is None:
+                        extra = f'SplatNet 2 authentication error: No accessToken for {url}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                # get the web service token
+                data = {
+                    "parameter": {
+                        "id": 5741031244955648 # SplatNet 2 ID
+                    }
+                }
+                url = 'https://api-lp1.znc.srv.nintendo.net/v1/Game/GetWebServiceToken'
+                headers['Authorization'] = f'Bearer {token}'
+                async with session.post(url, headers=headers, data=json.dumps(data)) as resp:
+                    if resp.status != 200:
+                        extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    js = await resp.json()
+                    if js['status'] != 0:
+                        extra = f'Firebase issue for {url}:\n```js\n{json.dumps(js, indent=4)}\n```'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    access_token = js['result'].get('accessToken')
+                    if access_token is None:
+                        extra = f'SplatNet 2 authentication error: No accessToken for {url}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                # Now we can **finally** access SplatNet 2
+                headers.pop('Authorization')
+                headers['x-gamewebtoken'] = access_token
+                headers['x-isappanalyticsoptedin'] = 'false'
+                headers['X-Requested-With'] = 'com.nintendo.znca'
+                async with session.get(self.BASE_URL, params={'lang': 'en-US'}, headers=headers) as resp:
+                    if resp.status != 200:
+                        extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    # finally our shit
+                    # SimpleCookie API is cancer
+                    m = re.search(r'iksm_session=(?P<session>.+?);.+?expires=(?P<expires>.+?);', str(resp.cookies))
+                    if m is None:
+                        extra = f'Regex fucked up. See {resp.cookie}'
+                        await self.bot.get_cog('Stats').log_error(extra=extra)
+                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        continue
+
+                    iksm = m.group('session')
+                    try:
+                        expires = parsedate_to_datetime(m.group('expires'))
+                    except:
+                        expires = now.timestamp() + 300.0
+                    else:
+                        expires = expires.timestamp()
+
+                    await self.splat2_data.put('iksm_session', iksm)
+                    await self.splat2_data.put('iksm_expires', expires)
+
+                log.info('Authenticated to SplatNet 2. Session: %s Expires: %s', iksm, expires)
+                self._is_authenticated.set()
+        except asyncio.CancelledError:
+            pass
+        except (OSError, discord.ConnectionClosed):
+            self._authenticator.cancel()
+            self._authenticator = self.bot.loop.create_task(self.splatnet2_authenticator())
 
     async def parse_splatnet2_schedule(self):
         try:
@@ -237,6 +395,7 @@ class Splatoon:
     async def splatnet2(self):
         try:
             while not self.bot.is_closed():
+                await self._is_authenticated.wait()
                 to_sleep = await self.parse_splatnet2_schedule()
                 await asyncio.sleep(to_sleep)
         except asyncio.CancelledError:
