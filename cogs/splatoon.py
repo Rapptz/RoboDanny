@@ -1,6 +1,7 @@
 from discord.ext import commands
 from .utils import config, checks, maps, fuzzy, time
 from .utils.formats import Plural
+from .utils.paginator import FieldPages
 
 from urllib.parse import quote as urlquote
 from email.utils import parsedate_to_datetime
@@ -82,6 +83,17 @@ class Rotation:
 
     def get_generic_value(self):
         return f'{self.stage_a} and {self.stage_b}'
+
+def mode_key(argument):
+    lower = argument.lower().strip('"')
+    if lower.startswith('rank'):
+        return 'Ranked Battle'
+    elif lower.startswith('turf') or lower.startswith('regular'):
+        return 'Regular Battle'
+    elif lower == 'league':
+        return 'League Battle'
+    else:
+        raise commands.BadArgument('Unknown schedule type, try: "ranked", "regular", or "league"')
 
 class BrandOrAbility(commands.Converter):
     def __init__(self, splatoon2=True):
@@ -577,10 +589,32 @@ class Splatoon:
 
         await ctx.send(embed=e)
 
+    async def paginated_splatoon2_schedule(self, ctx, mode):
+        try:
+            data = self.sp2_map_data[mode]
+        except KeyError:
+            return await ctx.send('Sorry, no map data found...')
+
+        entries = [
+            (f'Now: {r.mode}' if r.current else f'In {time.human_timedelta(r.start_time)}: {r.mode}',
+            f'{r.stage_a} and {r.stage_b}')
+            for r in data
+        ]
+
+        try:
+            p = FieldPages(ctx, entries=entries, per_page=4)
+            p.embed.colour = 0xF02D7D
+            await p.paginate()
+        except Exception as e:
+            await ctx.send(e)
+
     @commands.command()
-    async def schedule(self, ctx):
+    async def schedule(self, ctx, *, type: mode_key = None):
         """Shows the current Splatoon 2 schedule."""
-        await self.generic_splatoon2_schedule(ctx)
+        if type is None:
+            await self.generic_splatoon2_schedule(ctx)
+        else:
+            await self.paginated_splatoon2_schedule(ctx, type)
 
     @commands.command()
     async def weapon(self, ctx, *, query: str):
