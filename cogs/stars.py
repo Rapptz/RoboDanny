@@ -110,7 +110,7 @@ class Stars:
 
     async def clean_message_cache(self):
         try:
-            while not self.bot.is_closed:
+            while not self.bot.is_closed():
                 self._message_cache.clear()
                 await asyncio.sleep(3600)
         except asyncio.CancelledError:
