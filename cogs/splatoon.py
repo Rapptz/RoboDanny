@@ -84,6 +84,29 @@ class Rotation:
     def get_generic_value(self):
         return f'{self.stage_a} and {self.stage_b}'
 
+class Gear:
+    __slots__ = ('kind', 'brand', 'name', 'rarity', 'frequent_skill', 'image')
+
+    def __init__(self, data):
+        self.kind = data['kind']
+        brand = data['brand']
+        self.brand = brand['name']
+        self.name = data['name']
+        self.rarity = data['rarity']
+        self.image = data['image']
+
+        try:
+            self.frequent_skill = brand['frequent_skill']['name']
+        except KeyError:
+            self.frequent_skill = None
+
+class SalmonRun:
+    def __init__(self, data):
+        schedule = data['schedule']
+        self.start_time = datetime.datetime.utcfromtimestamp(schedule['start_time'])
+        self.end_time = datetime.datetime.utcfromtimestamp(schedule['end_time'])
+        self.gear = Gear(data['reward_gear']['gear'])
+
 def mode_key(argument):
     lower = argument.lower().strip('"')
     if lower.startswith('rank'):
@@ -172,6 +195,7 @@ class Splatoon:
 
         # mode: List[Rotation]
         self.sp2_map_data = {}
+        self.sp2_salmon_run = None
 
     def __unload(self):
         self.map_updater.cancel()
@@ -364,9 +388,7 @@ class Splatoon:
             self.sp2_map_data = {}
             async with self.bot.session.get(self.BASE_URL / 'api/schedules') as resp:
                 if resp.status != 200:
-                    c = self.bot.get_cog('Stats')
-                    await c.log_error(extra=f'Splatnet responded with {resp.status}.')
-                    del c
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
                     return 300.0 # try again in 5 minutes
 
                 data = await resp.json()
@@ -400,16 +422,37 @@ class Splatoon:
                 now = datetime.datetime.utcnow()
                 return 300.0 if now > new else (new - now).total_seconds()
         except Exception as e:
-            c = self.bot.get_cog('Stats')
-            await c.log_error(extra=f'Splatnet Error')
-            del c
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            return 300.0
+
+    async def parse_splatnet2_salmon_run(self):
+        try:
+            self.sp2_salmon_run = None
+            async with self.bot.session.get(self.BASE_URL / 'api/timeline') as resp:
+                if resp.status != 200:
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    return 300.0 # try again in 5 minutes
+
+                data = await resp.json()
+                salmon = data.get('coop')
+                if salmon:
+                    self.sp2_salmon_run = SalmonRun(salmon)
+                    now = datetime.datetime.utcnow()
+                    end = self.sp2_salmon_run.end_time
+                    return 300.0 if now > end else (end - now).total_seconds()
+                return 300.0
+        except Exception as e:
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            return 300.0
 
     async def splatnet2(self):
         try:
             while not self.bot.is_closed():
+                seconds = []
                 await self._is_authenticated.wait()
-                to_sleep = await self.parse_splatnet2_schedule()
-                await asyncio.sleep(to_sleep)
+                seconds.append(await self.parse_splatnet2_schedule())
+                seconds.append(await self.parse_splatnet2_salmon_run())
+                await asyncio.sleep(min(seconds))
         except asyncio.CancelledError:
             pass
         except (OSError, discord.ConnectionClosed):
@@ -615,6 +658,25 @@ class Splatoon:
             await self.generic_splatoon2_schedule(ctx)
         else:
             await self.paginated_splatoon2_schedule(ctx, type)
+
+    @commands.command()
+    async def salmonrun(self, ctx):
+        """Shows the Salmon Run schedule, if any."""
+        salmon = self.sp2_salmon_run
+        if salmon is None:
+            return await ctx.send('No Salmon Run schedule reported.')
+
+        e = discord.Embed(title='Salmon Run', colour=0xff7500)
+        now = datetime.datetime.utcnow()
+        if now < salmon.start_time:
+            e.add_field(name='Starts In', value=time.human_timedelta(salmon.start_time), inline=False)
+        elif now < salmon.end_time:
+            e.add_field(name='Ends In', value=time.human_timedelta(salmon.end_time), inline=False)
+
+        e.add_field(name='Reward Name', value=salmon.gear.name)
+        e.add_field(name='Reward Brand', value=salmon.gear.brand)
+        e.set_thumbnail(url=str(self.BASE_URL) + salmon.gear.image)
+        await ctx.send(embed=e)
 
     @commands.command()
     async def weapon(self, ctx, *, query: str):
