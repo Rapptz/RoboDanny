@@ -1,7 +1,7 @@
 from discord.ext import commands
 from .utils import config, checks, maps, fuzzy, time
 from .utils.formats import Plural
-from .utils.paginator import FieldPages
+from .utils.paginator import FieldPages, Pages
 
 from urllib.parse import quote as urlquote
 from email.utils import parsedate_to_datetime
@@ -49,6 +49,38 @@ def get_random_scrims(modes, maps, count):
 
     return result
 
+RESOURCE_TO_EMOJI = {
+    # Some of these names can be finnicky.
+    'Ability Doubler': '<:abilitydoubler:338814715088338957>',
+    'Bomb Defense Up': '<:bombdefup:338814715184807957>',
+    'Sub Power Up': '<:subpowerup:338814716669329410>',
+    'Swim Speed Up': '<:swimspeedup:338814717009068034>',
+    'Cold Blooded': '<:coldblooded:338814717340418069>',
+    'Ink Saver (Main)': '<:inksavermain:338814717353263128>',
+    'Ink Recovery Up': '<:inkrecoveryup:338814717411721216>',
+    'Ink Saver (Sub)': '<:inksaversub:338814717470703616>',
+    'Stealth Jump': '<:stealthjump:338814717483024395>',
+    'Last-Ditch Effort': '<:lastditcheffort:338814717483155458>',
+    'Special Saver': '<:specialsaver:338814717500063746>',
+    'Tenacity': '<:tenacity:338814717525098499>',
+    'Opening Gambit': '<:openinggambit:338814717529292802>',
+    'Quick Respawn': '<:quickrespawn:338814717537812481>',
+    'Respawn Punisher': '<:respawnpunisher:338814717562978304>',
+    'Drop Roller': '<:droproller:338814717579755520>',
+    'Ink Resistance': '<:inkresistance:338814717592076289>',
+    'Comeback': '<:comeback:338814717663379456>',
+    'Thermal Ink': '<:thermal_ink:338814717663641600>',
+    'Ninja Squid': '<:ninjasquid:338814717743202304>',
+    'Haunt': '<:haunt:338814717755654144>',
+    'Object Shredder': '<:objectshredder:338814717780951050>',
+    'Quick Super Jump': '<:quicksuperjump:338814717789208576>',
+    'Special Charge Up': '<:specialchargeup:338814717793665024>',
+    'Run Speed Up': '<:runspeedup:338814717823025152>',
+    'Special Power Up': '<:specialpowerup:338815052234752000>',
+    'Money': '<:money:338815193305972736>',
+    'Unknown': '<:unknown:338815018101506049>',
+}
+
 # There's going to be some code duplication here because it's more
 # straightforward than trying to be clever, I guess.
 # I hope at one day to fix this and make it not-so-ugly.
@@ -92,7 +124,7 @@ class Gear:
         brand = data['brand']
         self.brand = brand['name']
         self.name = data['name']
-        self.rarity = data['rarity']
+        self.rarity = data['rarity'] + 1
         self.image = data['image']
 
         try:
@@ -106,6 +138,60 @@ class SalmonRun:
         self.start_time = datetime.datetime.utcfromtimestamp(schedule['start_time'])
         self.end_time = datetime.datetime.utcfromtimestamp(schedule['end_time'])
         self.gear = Gear(data['reward_gear']['gear'])
+
+class Merchandise:
+    def __init__(self, data):
+        self.gear = Gear(data['gear'])
+        self.skill = data['skill']['name']
+        self.price = data['price']
+        self.end_time = datetime.datetime.utcfromtimestamp(data['end_time'])
+
+class Merchandises(Pages):
+    def __init__(self, ctx, entries):
+        super().__init__(ctx, entries=entries, per_page=1)
+        # remove help reaction
+        self.reaction_emojis.pop()
+
+    async def show_page(self, page, *, first=False):
+        self.current_page = page
+        merch = self.entries[page - 1]
+
+        self.embed = e = discord.Embed(colour=0x19D719, title=merch.gear.name)
+        e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{merch.gear.image}')
+        e.description = f'{time.human_timedelta(merch.end_time)} left to buy'
+
+        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {merch.price}')
+
+        try:
+            main_slot = RESOURCE_TO_EMOJI[merch.skill]
+        except KeyError:
+            main_slot = RESOURCE_TO_EMOJI['Unknown']
+
+        remaining = RESOURCE_TO_EMOJI['Unknown'] * merch.gear.rarity
+
+        e.add_field(name='Slots', value=f'{main_slot} | {remaining}')
+        e.add_field(name='Brand', value=merch.gear.brand)
+
+        if self.maximum_pages > 1:
+            e.set_footer(text=f'Gear {page}/{self.maximum_pages}')
+
+        if not self.paginating:
+            return await self.channel.send(embed=self.embed)
+
+        if not first:
+            await self.message.edit(embed=self.embed)
+            return
+
+        self.message = await self.channel.send(embed=self.embed)
+        for (reaction, _) in self.reaction_emojis:
+            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
+                # no |<< or >>| buttons if we only have two pages
+                # we can't forbid it if someone ends up using it but remove
+                # it from the default set
+                continue
+
+            await self.message.add_reaction(reaction)
+
 
 def mode_key(argument):
     lower = argument.lower().strip('"')
@@ -196,6 +282,7 @@ class Splatoon:
         # mode: List[Rotation]
         self.sp2_map_data = {}
         self.sp2_salmon_run = None
+        self.sp2_shop = []
 
     def __unload(self):
         self.map_updater.cancel()
@@ -449,6 +536,38 @@ class Splatoon:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
             return 300.0
 
+    async def parse_splatnet2_onlineshop(self):
+        try:
+            self.sp2_shop = []
+            async with self.bot.session.get(self.BASE_URL / 'api/onlineshop/merchandises') as resp:
+                if resp.status != 200:
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    return 300.0 # try again in 5 minutes
+
+                data = await resp.json()
+                merch = data.get('merchandises')
+                if not merch:
+                    return 300.0
+
+                for elem in merch:
+                    try:
+                        value = Merchandise(elem)
+                    except KeyError:
+                        pass
+                    else:
+                        self.sp2_shop.append(value)
+
+                self.sp2_shop.sort(key=lambda m: m.end_time)
+                now = datetime.datetime.utcnow()
+                try:
+                    end = self.sp2_shop[0]
+                    return 300.0 if now > end else (end - now).total_seconds()
+                except:
+                    return 300.0
+        except Exception as e:
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            return 300.0
+
     async def splatnet2(self):
         try:
             while not self.bot.is_closed():
@@ -456,6 +575,7 @@ class Splatoon:
                 await self._is_authenticated.wait()
                 seconds.append(await self.parse_splatnet2_schedule())
                 seconds.append(await self.parse_splatnet2_salmon_run())
+                seconds.append(await self.parse_splatnet2_onlineshop())
                 await asyncio.sleep(min(seconds))
         except asyncio.CancelledError:
             pass
@@ -705,6 +825,18 @@ class Splatoon:
         e.add_field(name='Reward Brand', value=salmon.gear.brand)
         e.set_thumbnail(url=str(self.BASE_URL) + salmon.gear.image)
         await ctx.send(embed=e)
+
+    @commands.command(aliases=['splatnetshop'])
+    async def splatshop(self, ctx):
+        """Shows the currently running SplatNet 2 merchandise."""
+        if not self.sp2_shop:
+            return await ctx.send('Nothing currently being sold...')
+
+        try:
+            p = Merchandises(ctx, self.sp2_shop)
+            await p.paginate()
+        except Exception as e:
+            await ctx.send(e)
 
     @commands.command()
     async def weapon(self, ctx, *, query: str):
