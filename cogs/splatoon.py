@@ -664,13 +664,37 @@ class Splatoon:
             await self.paginated_splatoon2_schedule(ctx, type)
 
     @commands.command()
+    async def nextmaps(self, ctx):
+        """Shows the next Splatoon 2 maps."""
+        e = discord.Embed(colour=0x19D719)
+
+        start_time = None
+        for key, value in self.sp2_map_data.items():
+            try:
+                rotation = value[1]
+            except IndexError:
+                e.add_field(name=key, value='Nothing found...', inline=False)
+                continue
+            else:
+                start_time = rotation.start_time
+
+            e.add_field(name=f'{key}: {rotation.mode}',
+                        value=f'{rotation.stage_a} and {rotation.stage_b}',
+                        inline=False)
+
+        if start_time is not None:
+            e.title = f'In {time.human_timedelta(start_time)}'
+
+        await ctx.send(embed=e)
+
+    @commands.command()
     async def salmonrun(self, ctx):
         """Shows the Salmon Run schedule, if any."""
         salmon = self.sp2_salmon_run
         if salmon is None:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        e = discord.Embed(title='Salmon Run', colour=0xff7500)
+        e = discord.Embed(title='Salmon Run', colour=0xFF7500)
         now = datetime.datetime.utcnow()
         if now < salmon.start_time:
             e.add_field(name='Starts In', value=time.human_timedelta(salmon.start_time), inline=False)
