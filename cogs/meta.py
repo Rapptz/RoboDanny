@@ -224,7 +224,7 @@ class Meta:
         e.add_field(name='Servers', value=f'{shared} shared')
         e.add_field(name='Created', value=member.created_at)
         e.add_field(name='Voice', value=voice)
-        e.add_field(name='Roles', value=', '.join(roles))
+        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
         e.colour = member.colour
 
         if member.avatar:
