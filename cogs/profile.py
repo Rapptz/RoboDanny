@@ -107,6 +107,9 @@ def valid_rank(argument, *, _rank=_rank):
         raise commands.BadArgument(f'Unknown Splatoon 2 mode: {mode}') from None
 
     rank = m.group('rank').upper()
+    if rank == 'S-':
+        rank = 'S'
+
     number = m.group('number')
     if number:
         number = int(number)
