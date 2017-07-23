@@ -418,9 +418,9 @@ class API:
         role = discord.utils.find(lambda r: r.id == role_id, ctx.guild.roles)
         if role is not None:
             await action(role)
-            await ctx.send(ctx.tick(True), delete_after=8.0)
+            await ctx.message.add_reaction(ctx.tick(True).strip('<:>'))
         else:
-            await ctx.send(ctx.tick(False), delete_after=8.0)
+            await ctx.message.add_reaction(ctx.tick(False).strip('<:>'))
 
     @commands.command()
     @commands.guild_only()
