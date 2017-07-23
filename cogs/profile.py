@@ -178,7 +178,8 @@ class Profile:
         if record is None:
             if member == ctx.author:
                 await ctx.send('You did not set up a profile.' \
-                              f' To set one up check {ctx.prefix}help profile')
+                              f' If you want to input a switch friend code, type {ctx.prefix}profile switch 1234-5678-9012' \
+                              f' or check {ctx.prefix}help profile')
             else:
                 await ctx.send('This member did not set up a profile.')
             return
@@ -210,12 +211,12 @@ class Profile:
         if rank:
             value = '\n'.join(f'{mode}: {data["rank"]}{data["number"]}' for mode, data in rank.items())
 
-        e.add_field(name='Splatoon 2 Rank', value=value)
+        e.add_field(name='Splatoon 2 Ranks', value=value)
 
         weapon = extra.get('sp2_weapon')
         e.add_field(name='Splatoon 2 Weapon', value=weapon and weapon['name'])
 
-        e.add_field(name='Squad', value=record['squad'])
+        e.add_field(name='Squad', value=record['squad'] or 'N/A')
         await ctx.send(embed=e)
 
     async def edit_fields(self, ctx, **fields):
