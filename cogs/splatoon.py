@@ -436,10 +436,14 @@ class Splatoon:
                 data = await resp.json()
                 salmon = data.get('coop')
                 if salmon:
-                    self.sp2_salmon_run = SalmonRun(salmon)
-                    now = datetime.datetime.utcnow()
-                    end = self.sp2_salmon_run.end_time
-                    return 300.0 if now > end else (end - now).total_seconds()
+                    try:
+                        self.sp2_salmon_run = SalmonRun(salmon)
+                        now = datetime.datetime.utcnow()
+                        end = self.sp2_salmon_run.end_time
+                        return 300.0 if now > end else (end - now).total_seconds()
+                    except KeyError:
+                        await self.bot.get_cog('Stats').log_error(extra=f'```js\n{json.dumps(salmon, indent=2)}\n```')
+                        return 300.0
                 return 300.0
         except Exception as e:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
