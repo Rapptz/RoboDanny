@@ -270,13 +270,6 @@ class Splatoon:
         self.splat2_data = config.Config('splatoon2.json', loop=bot.loop)
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
-
-        # temporary measure until fully reverse engineered
-        # I did not find out that the session cookie actually expired until later
-        # for now, these last 24 hours which is good enough
-        session_cookie = self.splat2_data.get('session')
-        bot.session.cookie_jar.update_cookies({ 'iksm_session': session_cookie }, response_url=self.BASE_URL)
-
         self._splatnet2 = bot.loop.create_task(self.splatnet2())
         self._authenticator = bot.loop.create_task(self.splatnet2_authenticator())
         self._is_authenticated = asyncio.Event(loop=bot.loop)
