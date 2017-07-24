@@ -526,17 +526,19 @@ class Splatoon:
                 salmon = data.get('coop')
                 if salmon:
                     try:
+                        if salmon['importance'] < 0:
+                            return 3600.0
+
                         self.sp2_salmon_run = SalmonRun(salmon)
                         now = datetime.datetime.utcnow()
                         end = self.sp2_salmon_run.end_time
-                        return 300.0 if now > end else (end - now).total_seconds()
+                        return 3600.0 if now > end else (end - now).total_seconds()
                     except KeyError:
-                        await self.bot.get_cog('Stats').log_error(extra=f'```js\n{json.dumps(salmon, indent=2)}\n```')
-                        return 300.0
-                return 300.0
+                        return 3600.0
+                return 3600.0
         except Exception as e:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
-            return 300.0
+            return 3600.0
 
     async def parse_splatnet2_onlineshop(self):
         try:
