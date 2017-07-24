@@ -222,9 +222,11 @@ class BrandOrAbility(commands.Converter):
             name = brand['name']
 
             # basic case, direct brand name match
-            if fuzzy.partial_ratio(query, name.lower()) >= 60:
+            if fuzzy.partial_ratio(query, name.lower()) >= 80:
                 return BrandResults(brand=brand)
 
+        # now check if it matches an ability instead
+        for brand in brands:
             buffed = brand['buffed']
             nerfed = brand['nerfed']
 
