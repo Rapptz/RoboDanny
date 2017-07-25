@@ -232,7 +232,7 @@ class Admin:
 
         rows = len(results)
         if is_multistatement or rows == 0:
-            return await ctx.send(f'*Returned 0 rows in {dt:.2f}ms*')
+            return await ctx.send(f'`{dt:.2f}ms: {results}`')
 
         headers = list(results[0].keys())
         table = TabularData()
