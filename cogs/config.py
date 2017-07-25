@@ -70,8 +70,6 @@ class CommandName(commands.Converter):
             if c.cog_name not in ('Config', 'Admin')
         }
 
-        print(valid_commands)
-
         if lowered not in valid_commands:
             raise commands.BadArgument('That command name is not valid.')
 

@@ -48,7 +48,6 @@ async def get_new_splatnet_cookie(session, username, password):
     async with session.post(NINTENDO_LOGIN_PAGE, data=parameters) as response:
         cookie = response.history[-1].cookies.get('_wag_session')
         if cookie is None:
-            print(req)
             raise Exception("Couldn't retrieve cookie")
         url = response.url
 
