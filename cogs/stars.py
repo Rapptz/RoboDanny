@@ -577,13 +577,11 @@ class Stars:
     async def star(self, ctx, message: int):
         """Stars a message via message ID.
 
-        To star a message you should right click on the
-        on a message and then click "Copy ID". You must have
-        Developer Mode enabled to get that functionality.
+        To star a message you should right click on the on a message and then
+        click "Copy ID". You must have Developer Mode enabled to get that
+        functionality.
 
-        It is recommended that you react to a message with
-        '\N{WHITE MEDIUM STAR}' instead since this is a lot
-        easier to use.
+        It is recommended that you react to a message with \N{WHITE MEDIUM STAR} instead.
 
         You can only star a message once.
         """
@@ -600,12 +598,9 @@ class Stars:
     async def unstar(self, ctx, message: int):
         """Unstars a message via message ID.
 
-        To unstar a message you should right click on the
-        on a message and then click "Copy ID". You must have
-        Developer Mode enabled to get that functionality.
-
-        If you reacted to a message with '\N{WHITE MEDIUM STAR}' you should
-        remove the reaction to do this instead, since it is much easier.
+        To unstar a message you should right click on the on a message and then
+        click "Copy ID". You must have Developer Mode enabled to get that
+        functionality.
         """
         try:
             await self.unstar_message(ctx.channel, message, ctx.author.id, connection=ctx.db)
