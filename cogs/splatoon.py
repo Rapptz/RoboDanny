@@ -55,7 +55,7 @@ RESOURCE_TO_EMOJI = {
     'Bomb Defense Up': '<:bombdefup:338814715184807957>',
     'Sub Power Up': '<:subpowerup:338814716669329410>',
     'Swim Speed Up': '<:swimspeedup:338814717009068034>',
-    'Cold Blooded': '<:coldblooded:338814717340418069>',
+    'Cold-Blooded': '<:coldblooded:338814717340418069>',
     'Ink Saver (Main)': '<:inksavermain:338814717353263128>',
     'Ink Recovery Up': '<:inkrecoveryup:338814717411721216>',
     'Ink Saver (Sub)': '<:inksaversub:338814717470703616>',
@@ -67,7 +67,7 @@ RESOURCE_TO_EMOJI = {
     'Quick Respawn': '<:quickrespawn:338814717537812481>',
     'Respawn Punisher': '<:respawnpunisher:338814717562978304>',
     'Drop Roller': '<:droproller:338814717579755520>',
-    'Ink Resistance': '<:inkresistance:338814717592076289>',
+    'Ink Resistance Up': '<:inkresistance:338814717592076289>',
     'Comeback': '<:comeback:338814717663379456>',
     'Thermal Ink': '<:thermal_ink:338814717663641600>',
     'Ninja Squid': '<:ninjasquid:338814717743202304>',
@@ -270,6 +270,7 @@ class Splatoon:
         self.splat2_data = config.Config('splatoon2.json', loop=bot.loop)
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
+
         self._splatnet2 = bot.loop.create_task(self.splatnet2())
         self._authenticator = bot.loop.create_task(self.splatnet2_authenticator())
         self._is_authenticated = asyncio.Event(loop=bot.loop)
