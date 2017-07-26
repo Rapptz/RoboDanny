@@ -5,7 +5,7 @@ from .utils.paginator import FieldPages, Pages
 
 from urllib.parse import quote as urlquote
 from email.utils import parsedate_to_datetime
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 import datetime
 import random
@@ -13,6 +13,7 @@ import asyncio
 import discord
 import logging
 import aiohttp
+import pathlib
 import yarl
 import json
 import re
@@ -117,20 +118,35 @@ class Rotation:
         return f'{self.stage_a} and {self.stage_b}'
 
 class Gear:
-    __slots__ = ('kind', 'brand', 'name', 'rarity', 'frequent_skill', 'image')
+    __slots__ = ('kind', 'brand', 'name', 'stars', 'main', 'frequent_skill', 'price', 'image')
 
     def __init__(self, data):
         self.kind = data['kind']
         brand = data['brand']
         self.brand = brand['name']
         self.name = data['name']
-        self.rarity = data['rarity'] + 1
+        self.stars = data['rarity'] + 1
         self.image = data['image']
 
         try:
             self.frequent_skill = brand['frequent_skill']['name']
         except KeyError:
             self.frequent_skill = None
+
+    @classmethod
+    def from_json(cls, data):
+        """Load from our JSON file."""
+        self = cls.__new__(cls)
+
+        self.kind = None
+        self.brand = data['brand']
+        self.name = data['name']
+        self.price = data['price']
+        self.main = data['main']
+        self.stars = data['stars']
+        self.image = data.get('image')
+        self.frequent_skill = data.get('frequent_skill')
+        return self
 
 class SalmonRun:
     def __init__(self, data):
@@ -167,7 +183,7 @@ class Merchandises(Pages):
         except KeyError:
             main_slot = RESOURCE_TO_EMOJI['Unknown']
 
-        remaining = RESOURCE_TO_EMOJI['Unknown'] * merch.gear.rarity
+        remaining = RESOURCE_TO_EMOJI['Unknown'] * merch.gear.stars
 
         e.add_field(name='Slots', value=f'{main_slot} | {remaining}')
         e.add_field(name='Brand', value=merch.gear.brand)
@@ -192,6 +208,23 @@ class Merchandises(Pages):
 
             await self.message.add_reaction(reaction)
 
+# JSON stuff
+
+class GearEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Gear):
+            payload = {
+                attr: getattr(obj, attr)
+                for attr in Gear.__slots__
+            }
+            payload['__gear__'] = True
+            return payload
+        return super().default(obj)
+
+def gear_decoder(obj):
+    if '__gear__' in obj:
+        return Gear.from_json(obj)
+    return obj
 
 def mode_key(argument):
     lower = argument.lower().strip('"')
@@ -267,7 +300,7 @@ class Splatoon:
     def __init__(self, bot):
         self.bot = bot
         self.splat1_data = config.Config('splatoon.json', loop=bot.loop)
-        self.splat2_data = config.Config('splatoon2.json', loop=bot.loop)
+        self.splat2_data = config.Config('splatoon2.json', loop=bot.loop, object_hook=gear_decoder, encoder=GearEncoder)
         self.map_data = []
         self.map_updater = bot.loop.create_task(self.update_maps())
 
@@ -555,6 +588,14 @@ class Splatoon:
                     else:
                         self.sp2_shop.append(value)
 
+                        # update our image cache
+                        kind = self.splat2_data.get(value.gear.kind, [])
+                        for gear in kind:
+                            if gear.name == value.gear.name:
+                                gear.image = value.gear.image
+                                break
+
+                await self.splat2_data.save()
                 self.sp2_shop.sort(key=lambda m: m.end_time)
                 now = datetime.datetime.utcnow()
                 try:
@@ -562,6 +603,98 @@ class Splatoon:
                     return 300.0 if now > end else (end - now).total_seconds()
                 except:
                     return 300.0
+        except Exception as e:
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            return 300.0
+
+    def scrape_data_from_player(self, player, bulk):
+        for kind in ('shoes', 'head', 'clothes'):
+            try:
+                gear = Gear(player[kind])
+            except KeyError:
+                continue
+            else:
+                bulk[kind][gear.name] = gear.image
+
+    async def scrape_splatnet_stats_and_images(self):
+        try:
+            bulk_lookup = defaultdict(dict)
+            async with self.bot.session.get(self.BASE_URL / 'api/results') as resp:
+                if resp.status != 200:
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    return 300.0 # try again in 5 minutes
+
+                data = await resp.json()
+                results = data['results']
+                base_path = pathlib.Path('splatoon2_stats')
+
+                newest = base_path / f'{results[0]["battle_number"]}.json'
+
+                # we already scraped, so try again in an hour
+                if newest.exists():
+                    log.info('No Splatoon 2 result data to scrape, retrying in an hour.')
+                    return 3600.0
+
+                # I am sorry papa nintendo
+                pre_existing_statistics = sorted([int(p.stem) for p in base_path.iterdir()])
+                if pre_existing_statistics:
+                    largest = pre_existing_statistics[-1]
+                else:
+                    largest = 0
+
+                added = 0
+                for result in results:
+                    try:
+                        number = result['battle_number']
+                    except KeyError:
+                        continue
+
+                    if int(number) <= largest:
+                        continue
+
+                    # request the full information:
+                    async with self.bot.session.get(resp.url / number) as r:
+                        if r.status != 200:
+                            extra = f'Splatoon Stat {number} responded with {r.status}.'
+                            await self.bot.get_cog('Stats').log_error(extra=extra)
+                            continue
+
+                        js = await r.json()
+
+                        # save our statistics
+                        path = base_path / f'{number}.json'
+                        with path.open('w', encoding='utf-8') as fp:
+                            json.dump(js, fp, indent=2)
+
+                        added += 1
+
+                        # add stuff to image cache
+                        for enemy in js.get('other_team_members', []):
+                            self.scrape_data_from_player(enemy.get('player', {}), bulk_lookup)
+
+                        me = js.get('player_result', {}).get('player', {})
+                        self.scrape_data_from_player(me, bulk_lookup)
+
+                        for team in js.get('my_team_members', []):
+                            self.scrape_data_from_player(team.get('player', {}), bulk_lookup)
+
+                    await asyncio.sleep(1) # one request a second so we don't abuse
+
+                log.info('Scraped Splatoon 2 results from %s games.', added)
+
+                # done with bulk lookups so actually change and save now:
+                for kind, data in bulk_lookup.items():
+                    old = self.splat2_data.get(kind, [])
+                    for gear in old:
+                        try:
+                            image = data[gear.name]
+                        except KeyError:
+                            continue
+                        else:
+                            gear.image = image
+
+                await self.splat2_data.save()
+                return 3600.0 # redo in an hour
         except Exception as e:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
             return 300.0
@@ -574,6 +707,7 @@ class Splatoon:
                 seconds.append(await self.parse_splatnet2_schedule())
                 seconds.append(await self.parse_splatnet2_salmon_run())
                 seconds.append(await self.parse_splatnet2_onlineshop())
+                seconds.append(await self.scrape_splatnet_stats_and_images())
                 await asyncio.sleep(min(seconds))
         except asyncio.CancelledError:
             pass
