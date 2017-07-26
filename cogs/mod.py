@@ -843,32 +843,31 @@ class Mod:
     async def custom(self, ctx, *, args: str):
         """A more advanced purge command.
 
-        Allows you to specify more complex purge commands with multiple
-        conditions and search criteria. The criteria are passed in the
-        syntax of `--criteria value`. Most criteria support multiple
-        values to indicate 'any' match. A flag does not have a value.
+        This command uses a powerful "command line" syntax.
+        Most options support multiple values to indicate 'any' match.
         If the value has spaces it must be quoted.
 
-        The messages are only deleted if all criteria are met unless
-        the `--or` flag is passed.
+        The messages are only deleted if all options are met unless
+        the `--or` flag is passed, in which case only if any is met.
 
-        Criteria:
+        The following options are valid.
 
-        ```
-          user      A mention or name of the user to remove.
-          contains  A substring to search for in the message.
-          starts    A substring to search if the message starts with.
-          ends      A substring to search if the message ends with.
-          bot       A flag indicating if it's a bot user.
-          embeds    A flag indicating if the message has embeds.
-          files     A flag indicating if the message has attachments.
-          emoji     A flag indicating if the message has custom emoji.
-          search    How many messages to search. Default 100. Max 2000.
-          or        A flag indicating to use logical OR for all criteria.
-          not       A flag indicating to use logical NOT for all criteria.
-          after     Messages must come after this message ID.
-          before    Messages must come before this message ID.
-        ```
+        `--user`: A mention or name of the user to remove.
+        `--contains`: A substring to search for in the message.
+        `--starts`: A substring to search if the message starts with.
+        `--ends`: A substring to search if the message ends with.
+        `--search`: How many messages to search. Default 100. Max 2000.
+        `--after`: Messages must come after this message ID.
+        `--before`: Messages must come before this message ID.
+
+        Flag options (no arguments):
+
+        `--bot`: Check if it's a bot user.
+        `--embeds`: Check if the message has embeds.
+        `--files`: Check if the message has attachments.
+        `--emoji`: Check if the message has custom emoji.
+        `--or`: Use logical OR for all options.
+        `--not`: Use logical NOT for all options.
         """
         parser = Arguments(add_help=False, allow_abbrev=False)
         parser.add_argument('--user', nargs='+')
