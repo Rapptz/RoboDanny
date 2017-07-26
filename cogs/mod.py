@@ -736,12 +736,20 @@ class Mod:
             help_cmd = self.bot.get_command('help')
             await ctx.invoke(help_cmd, command='remove')
 
-    async def do_removal(self, ctx, limit, predicate):
+    async def do_removal(self, ctx, limit, predicate, *, before=None, after=None):
         if limit > 2000:
             return await ctx.send(f'Too many messages to search given ({limit}/2000)')
 
+        if before is None:
+            before = ctx.message
+        else:
+            before = discord.Object(id=before)
+
+        if after is not None:
+            after = discord.Object(id=after)
+
         try:
-            deleted = await ctx.channel.purge(limit=limit, before=ctx.message, check=predicate)
+            deleted = await ctx.channel.purge(limit=limit, before=before, after=after, check=predicate)
         except discord.Forbidden as e:
             return await ctx.send('I do not have permissions to delete messages.')
         except discord.HTTPException as e:
@@ -833,9 +841,9 @@ class Mod:
 
     @remove.command()
     async def custom(self, ctx, *, args: str):
-        """A more advanced prune command.
+        """A more advanced purge command.
 
-        Allows you to specify more complex prune commands with multiple
+        Allows you to specify more complex purge commands with multiple
         conditions and search criteria. The criteria are passed in the
         syntax of `--criteria value`. Most criteria support multiple
         values to indicate 'any' match. A flag does not have a value.
@@ -845,6 +853,8 @@ class Mod:
         the `--or` flag is passed.
 
         Criteria:
+
+        ```
           user      A mention or name of the user to remove.
           contains  A substring to search for in the message.
           starts    A substring to search if the message starts with.
@@ -856,6 +866,9 @@ class Mod:
           search    How many messages to search. Default 100. Max 2000.
           or        A flag indicating to use logical OR for all criteria.
           not       A flag indicating to use logical NOT for all criteria.
+          after     Messages must come after this message ID.
+          before    Messages must come before this message ID.
+        ```
         """
         parser = Arguments(add_help=False, allow_abbrev=False)
         parser.add_argument('--user', nargs='+')
@@ -869,6 +882,8 @@ class Mod:
         parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
         parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
         parser.add_argument('--search', type=int, default=100)
+        parser.add_argument('--after', type=int)
+        parser.add_argument('--before', type=int)
 
         try:
             args = parser.parse_args(shlex.split(args))
@@ -920,7 +935,7 @@ class Mod:
             return r
 
         args.search = max(0, min(2000, args.search)) # clamp from 0-2000
-        await self.do_removal(ctx, args.search, predicate)
+        await self.do_removal(ctx, args.search, predicate, before=args.before, after=args.after)
 
 def setup(bot):
     bot.add_cog(Mod(bot))
