@@ -42,9 +42,12 @@ class Stats:
             destination = f'#{message.channel} ({message.guild})'
             guild_id = ctx.guild.id
 
+        query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command)
+                   VALUES ($1, $2, $3, $4, $5, $6)
+                """
+
         log.info(f'{message.created_at}: {message.author} in {destination}: {message.content}')
-        await Commands.insert(guild_id=guild_id, channel_id=ctx.channel.id, author_id=ctx.author.id,
-                              used=message.created_at, prefix=ctx.prefix, command=command)
+        await self.bot.pool.execute(query, guild_id, ctx.channel.id, ctx.author.id, message.created_at, ctx.prefix, command)
 
     async def on_socket_response(self, msg):
         self.bot.socket_stats[msg.get('t')] += 1
