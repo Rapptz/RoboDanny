@@ -405,7 +405,7 @@ class GearQuery(commands.Converter):
 
         for gear in iterator:
             important = max(scorer(query, gear.name), scorer(query, gear.main), scorer(query, gear.brand))
-            if important >= 75:
+            if important >= 70:
                 # apply filters:
                 if frequent and frequent != gear.brand:
                     continue
