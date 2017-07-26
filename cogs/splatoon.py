@@ -7,6 +7,7 @@ from urllib.parse import quote as urlquote
 from email.utils import parsedate_to_datetime
 from collections import namedtuple, defaultdict
 
+import itertools
 import datetime
 import random
 import asyncio
@@ -138,7 +139,7 @@ class Gear:
         """Load from our JSON file."""
         self = cls.__new__(cls)
 
-        self.kind = None
+        self.kind = data.get('kind')
         self.brand = data['brand']
         self.name = data['name']
         self.price = data['price']
@@ -162,31 +163,66 @@ class Merchandise:
         self.price = data['price']
         self.end_time = datetime.datetime.utcfromtimestamp(data['end_time'])
 
-class Merchandises(Pages):
+class GearPages(Pages):
     def __init__(self, ctx, entries):
         super().__init__(ctx, entries=entries, per_page=1)
         # remove help reaction
         self.reaction_emojis.pop()
+        self.splat2_data = ctx.cog.splat2_data
 
     async def show_page(self, page, *, first=False):
         self.current_page = page
         merch = self.entries[page - 1]
 
-        self.embed = e = discord.Embed(colour=0x19D719, title=merch.gear.name)
-        e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{merch.gear.image}')
-        e.description = f'{time.human_timedelta(merch.end_time)} left to buy'
+        if isinstance(merch, Merchandise):
+            price, gear, skill = merch.price, merch.gear, merch.skill
+            description = f'{time.human_timedelta(merch.end_time)} left to buy'
+        elif isinstance(merch, Gear):
+            price, gear, skill = merch.price, merch, merch.main
+            description = discord.Embed.Empty
 
-        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {merch.price}')
+        self.embed = e = discord.Embed(colour=0x19D719, title=gear.name, description=description)
 
-        try:
-            main_slot = RESOURCE_TO_EMOJI[merch.skill]
-        except KeyError:
-            main_slot = RESOURCE_TO_EMOJI['Unknown']
+        if gear.image:
+            e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{gear.image}')
+        else:
+            e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
 
-        remaining = RESOURCE_TO_EMOJI['Unknown'] * merch.gear.stars
+        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {price}')
 
+        UNKNOWN = RESOURCE_TO_EMOJI['Unknown']
+
+        main_slot = RESOURCE_TO_EMOJI.get(skill, UNKNOWN)
+        remaining = UNKNOWN * gear.stars
         e.add_field(name='Slots', value=f'{main_slot} | {remaining}')
-        e.add_field(name='Brand', value=merch.gear.brand)
+        e.add_field(name='Brand', value=gear.brand)
+
+        if isinstance(merch, Merchandise):
+            # find the original piece of gear
+            data = self.splat2_data.get(gear.kind, [])
+            for elem in data:
+                if elem.name == gear.name:
+                    original = RESOURCE_TO_EMOJI.get(elem.main, UNKNOWN)
+                    original_remaining = UNKNOWN * elem.stars
+                    break
+            else:
+                original = UNKNOWN
+                original_remaining = remaining
+
+            e.add_field(name='Original Slots', value=f'{original} | {original_remaining}')
+
+        if isinstance(merch, Gear):
+            if merch.frequent_skill is not None:
+                common = merch.frequent_skill
+            else:
+                brands = self.splat2_data.get('brands', [])
+                for brand in brands:
+                    if brand['name'] == merch.brand:
+                        common = brand['buffed']
+                        break
+                else:
+                    common = 'Not found...'
+            e.add_field(name='Common Gear Ability', value=common)
 
         if self.maximum_pages > 1:
             e.set_footer(text=f'Gear {page}/{self.maximum_pages}')
@@ -292,6 +328,106 @@ class BrandOrAbility(commands.Converter):
 
         return result
 
+class GearQuery(commands.Converter):
+    async def convert(self, ctx, argument):
+        import shlex
+
+        # parse our pseudo CLI
+        args = shlex.split(argument.lower(), posix=False)
+        iterator = iter(args)
+
+        # check if flags is one of --brand, --ability, or --frequent
+        info = {
+            'query': None,
+            '--brand': None,
+            '--ability': None,
+            '--frequent': None,
+            '--type': None
+        }
+
+        current = 'query'
+        temp = []
+        for argument in args:
+            if argument[0] == '-':
+                if argument not in ('--brand', '--ability', '--frequent', '--type'):
+                    msg = f'Invalid flag passed, received {argument} expected --brand, --ability, --frequent, or --type'
+                    raise commands.BadArgument(msg)
+
+                info[current] = ' '.join(temp)
+                temp = []
+                current = argument
+                continue
+
+            temp.append(argument)
+
+        if temp:
+            info[current] = ' '.join(temp)
+
+        query = info['query']
+        if len(query) < 4:
+            raise commands.BadArgument('The query must be at least 5 characters long.')
+
+        data = ctx.cog.splat2_data
+        importance = []
+
+        frequent_lookup = {
+            x['buffed'].lower(): x['name']
+            for x in data['brands']
+            if x['buffed']
+        }
+
+        # search by name, main ability or brand
+        # sort by importance
+        scorer = fuzzy.partial_ratio
+        brand = info['--brand']
+        ability = info['--ability']
+        frequent = info['--frequent']
+        if frequent:
+            m = fuzzy.extract_one(frequent, frequent_lookup, scorer=scorer, score_cutoff=70)
+            if m is None:
+                raise commands.BadArgument('Could not figure out the frequent ability requested.')
+            _, _, frequent = m
+
+        kind = info['--type']
+        if kind == ('hat', 'hats'):
+            kind = 'head'
+
+        if kind in ('shirt', 'shirts'):
+            kind = 'clothes'
+
+        if kind == 'shoe':
+            kind = 'shoes'
+
+        if kind is None:
+            iterator = itertools.chain(data['head'], data['shoes'], data['clothes'])
+        else:
+            iterator = data[kind]
+
+        for gear in iterator:
+            important = max(scorer(query, gear.name), scorer(query, gear.main), scorer(query, gear.brand))
+            if important >= 75:
+                # apply filters:
+                if frequent and frequent != gear.brand:
+                    continue
+
+                if brand and scorer(brand, gear.brand) < 70:
+                    continue
+
+                if ability and scorer(ability, gear.main) < 70:
+                    continue
+
+                importance.append((gear, important))
+
+
+        importance.sort(key=lambda t: t[1], reverse=True)
+        if len(importance) == 0:
+            raise commands.BadArgument('Could not find anything.')
+
+        top, score = importance[0]
+        if score == 100:
+            return [top]
+
+        return [g for g, _ in importance]
 class Splatoon:
     """Splatoon related commands."""
 
@@ -965,7 +1101,7 @@ class Splatoon:
             return await ctx.send('Nothing currently being sold...')
 
         try:
-            p = Merchandises(ctx, self.sp2_shop)
+            p = GearPages(ctx, self.sp2_shop)
             await p.paginate()
         except Exception as e:
             await ctx.send(e)
@@ -1000,6 +1136,32 @@ class Splatoon:
         e.add_field(name='Sub', value=subs)
         e.add_field(name='Special', value=special)
         await ctx.send(embed=e)
+
+    @commands.command()
+    async def gear(self, ctx, *, query: GearQuery):
+        """Searches for Splatoon 2 gear that matches your query.
+
+        The query can be a main ability, a brand, or a name.
+
+        For advanced queries to reduce results you can pass some filters:
+
+        `--brand` with the brand name.
+        `--ability` with the main ability.
+        `--frequent` with the buffed main ability probability
+        `--type` with the type of clothing (head, hat, shoes, or clothes)
+
+        For example, a query like `ink resist --brand splash mob` will give all
+        gear with Ink Resistance Up and Splash Mob as the brand.
+
+        **Note**: you must pass a query before passing a filter.
+        """
+
+        try:
+            print(len(query))
+            p = GearPages(ctx, query)
+            await p.paginate()
+        except Exception as e:
+            await ctx.send(e)
 
     @commands.command()
     async def scrim(self, ctx, games=5, *, mode: str = None):
