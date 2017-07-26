@@ -866,6 +866,7 @@ class Mod:
         `--embeds`: Check if the message has embeds.
         `--files`: Check if the message has attachments.
         `--emoji`: Check if the message has custom emoji.
+        `--reactions`: Check if the message has reactions
         `--or`: Use logical OR for all options.
         `--not`: Use logical NOT for all options.
         """
@@ -880,6 +881,7 @@ class Mod:
         parser.add_argument('--bot', action='store_const', const=lambda m: m.author.bot)
         parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
         parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
+        parser.add_argument('--reactions', action='store_const', const=lambda m: len(m.reactions))
         parser.add_argument('--search', type=int, default=100)
         parser.add_argument('--after', type=int)
         parser.add_argument('--before', type=int)
@@ -899,6 +901,9 @@ class Mod:
 
         if args.files:
             predicates.append(args.files)
+
+        if args.reactions:
+            predicates.append(args.reactions)
 
         if args.emoji:
             custom_emoji = re.compile(r'<:(\w+):(\d+)>')
