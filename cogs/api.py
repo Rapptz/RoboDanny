@@ -45,6 +45,7 @@ class API:
     def __init__(self, bot):
         self.bot = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
+        self._recently_blocked = set()
 
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_API_ID:
@@ -63,6 +64,7 @@ class API:
 
         if author.status is discord.Status.offline:
             fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible'
+            self._recently_blocked.add(author.id)
             await channel.set_permissions(author, read_messages=False, reason='invisible block')
             await channel.send(fmt)
 
@@ -77,6 +79,7 @@ class API:
                 pass
 
             await asyncio.sleep(300)
+            self._recently_blocked.discard(author.id)
             await channel.set_permissions(author, overwrite=None, reason='invisible unblock')
             return
 
@@ -84,6 +87,16 @@ class API:
         if m is not None:
             url = 'https://github.com/Rapptz/discord.py/issues/'
             await channel.send(url + m.group('number'))
+
+    async def on_member_update(self, before, after):
+        if after.guild.id != DISCORD_API_ID:
+            return
+
+        if before.status is discord.Status.offline and after.status is not discord.Status.offline:
+            if after.id in self._recently_blocked:
+                self._recently_blocked.discard(after.id)
+                channel = after.guild.get_channel(DISCORD_PY_ID)
+                await channel.set_permissions(after, overwrite=None, reason='invisible unblock')
 
     async def build_rtfm_lookup_table(self):
         cache = {}
