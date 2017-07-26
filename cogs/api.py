@@ -63,7 +63,7 @@ class API:
             return
 
         if author.status is discord.Status.offline:
-            fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible'
+            fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible.'
             self._recently_blocked.add(author.id)
             await channel.set_permissions(author, read_messages=False, reason='invisible block')
             await channel.send(fmt)
@@ -139,6 +139,9 @@ class API:
         if not hasattr(self, '_rtfm_cache'):
             await ctx.trigger_typing()
             await self.build_rtfm_lookup_table()
+
+        # identifiers don't have spaces
+        obj = obj.replace(' ', '_')
 
         if key == 'rewrite':
             pit_of_success_helpers = {
