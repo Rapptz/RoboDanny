@@ -173,10 +173,16 @@ class GearPages(Pages):
     async def show_page(self, page, *, first=False):
         self.current_page = page
         merch = self.entries[page - 1]
+        original_gear = None
 
         if isinstance(merch, Merchandise):
             price, gear, skill = merch.price, merch.gear, merch.skill
             description = f'{time.human_timedelta(merch.end_time)} left to buy'
+            data = self.splat2_data.get(gear.kind, [])
+            for elem in data:
+                if elem.name == gear.name:
+                    original_gear = elem
+                    break
         elif isinstance(merch, Gear):
             price, gear, skill = merch.price, merch, merch.main
             description = discord.Embed.Empty
@@ -188,7 +194,12 @@ class GearPages(Pages):
         else:
             e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
 
-        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {price}')
+        if original_gear is not None:
+            value = f'{RESOURCE_TO_EMOJI["Money"]} {price} (original {RESOURCE_TO_EMOJI["Money"]} {original_gear.price})'
+        else:
+            value = f'{RESOURCE_TO_EMOJI["Money"]} {price}'
+
+        e.add_field(name='Price', value=value)
 
         UNKNOWN = RESOURCE_TO_EMOJI['Unknown']
 
@@ -198,31 +209,25 @@ class GearPages(Pages):
         e.add_field(name='Brand', value=gear.brand)
 
         if isinstance(merch, Merchandise):
-            # find the original piece of gear
-            data = self.splat2_data.get(gear.kind, [])
-            for elem in data:
-                if elem.name == gear.name:
-                    original = RESOURCE_TO_EMOJI.get(elem.main, UNKNOWN)
-                    original_remaining = UNKNOWN * elem.stars
-                    break
+            if original_gear is not None:
+                original = RESOURCE_TO_EMOJI.get(original_gear.main, UNKNOWN)
+                original_remaining = UNKNOWN * original_gear.stars
             else:
                 original = UNKNOWN
                 original_remaining = remaining
-
             e.add_field(name='Original Slots', value=f'{original} | {original_remaining}')
 
-        if isinstance(merch, Gear):
-            if merch.frequent_skill is not None:
-                common = merch.frequent_skill
+        if merch.frequent_skill is not None:
+            common = merch.frequent_skill
+        else:
+            brands = self.splat2_data.get('brands', [])
+            for brand in brands:
+                if brand['name'] == merch.brand:
+                    common = brand['buffed']
+                    break
             else:
-                brands = self.splat2_data.get('brands', [])
-                for brand in brands:
-                    if brand['name'] == merch.brand:
-                        common = brand['buffed']
-                        break
-                else:
-                    common = 'Not found...'
-            e.add_field(name='Common Gear Ability', value=common)
+                common = 'Not found...'
+        e.add_field(name='Common Gear Ability', value=common)
 
         if self.maximum_pages > 1:
             e.set_footer(text=f'Gear {page}/{self.maximum_pages}')
@@ -428,6 +433,7 @@ class GearQuery(commands.Converter):
             return [top]
 
         return [g for g, _ in importance]
+
 class Splatoon:
     """Splatoon related commands."""
 
