@@ -194,35 +194,34 @@ class GearPages(Pages):
         else:
             e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
 
-        if original_gear is not None:
-            value = f'{RESOURCE_TO_EMOJI["Money"]} {price} (original {RESOURCE_TO_EMOJI["Money"]} {original_gear.price})'
-        else:
-            value = f'{RESOURCE_TO_EMOJI["Money"]} {price}'
-
-        e.add_field(name='Price', value=value)
+        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {price}')
 
         UNKNOWN = RESOURCE_TO_EMOJI['Unknown']
 
         main_slot = RESOURCE_TO_EMOJI.get(skill, UNKNOWN)
         remaining = UNKNOWN * gear.stars
         e.add_field(name='Slots', value=f'{main_slot} | {remaining}')
-        e.add_field(name='Brand', value=gear.brand)
 
         if isinstance(merch, Merchandise):
             if original_gear is not None:
                 original = RESOURCE_TO_EMOJI.get(original_gear.main, UNKNOWN)
                 original_remaining = UNKNOWN * original_gear.stars
+                original_price = original_gear.price
             else:
                 original = UNKNOWN
                 original_remaining = remaining
+                original_price = '???'
+
+            e.add_field(name='Original Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {original_price}')
             e.add_field(name='Original Slots', value=f'{original} | {original_remaining}')
 
-        if merch.frequent_skill is not None:
-            common = merch.frequent_skill
+        e.add_field(name='Brand', value=gear.brand)
+        if gear.frequent_skill is not None:
+            common = gear.frequent_skill
         else:
             brands = self.splat2_data.get('brands', [])
             for brand in brands:
-                if brand['name'] == merch.brand:
+                if brand['name'] == gear.brand:
                     common = brand['buffed']
                     break
             else:
