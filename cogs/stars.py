@@ -34,6 +34,12 @@ def requires_starboard():
         return True
     return commands.check(predicate)
 
+def MessageID(argument):
+    try:
+        return int(argument, base=10)
+    except ValueError:
+        raise StarError(f'"{argument}" is not a valid message ID. Use Developer Mode to get the Copy ID option.')
+
 class Starboard(db.Table):
     id = db.Column(db.Integer(big=True), primary_key=True)
 
@@ -572,9 +578,9 @@ class Stars:
             self.get_starboard.invalidate(self, ctx.guild.id)
             await ctx.send(f'\N{GLOWING STAR} Starboard created at {channel.mention}.')
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True, ignore_extra=False)
     @commands.guild_only()
-    async def star(self, ctx, message: int):
+    async def star(self, ctx, message: MessageID):
         """Stars a message via message ID.
 
         To star a message you should right click on the on a message and then
@@ -595,7 +601,7 @@ class Stars:
 
     @commands.command()
     @commands.guild_only()
-    async def unstar(self, ctx, message: int):
+    async def unstar(self, ctx, message: MessageID):
         """Unstars a message via message ID.
 
         To unstar a message you should right click on the on a message and then
@@ -659,7 +665,7 @@ class Stars:
 
     @star.command(name='show')
     @requires_starboard()
-    async def star_show(self, ctx, message: int):
+    async def star_show(self, ctx, message: MessageID):
         """Shows a starred message via its ID.
 
         To get the ID of a message you should right click on the
@@ -712,7 +718,7 @@ class Stars:
 
     @star.command(name='who')
     @requires_starboard()
-    async def star_who(self, ctx, message: int):
+    async def star_who(self, ctx, message: MessageID):
         """Show who starred a message.
 
         The ID can either be the starred message ID
@@ -1251,14 +1257,6 @@ class Stars:
             age = f'{number} {units}'
 
         await ctx.send(f'Messages must now be less than {age} old to be starred.')
-
-    @star.error
-    @unstar.error
-    @star_show.error
-    @star_who.error
-    async def star_error(self, ctx, error):
-        if isinstance(error, commands.BadArgument):
-            await ctx.send('That is not a valid message ID. Use Developer Mode to get the Copy ID option.')
 
     @commands.command(hidden=True)
     @commands.is_owner()
