@@ -63,14 +63,14 @@ class API:
             return
 
         if author.status is discord.Status.offline:
-            fmt = f'{author} (ID: {author.id}) has been automatically blocked for 5 minutes for being invisible.'
+            fmt = f'{author.mention} has been blocked for being invisible until they change their status or for 5 minutes.'
             self._recently_blocked.add(author.id)
             await channel.set_permissions(author, read_messages=False, reason='invisible block')
             await channel.send(fmt)
 
             try:
                 msg = f'Heya. You have been automatically blocked from <#{DISCORD_PY_ID}> for 5 minutes for being ' \
-                       'invisible.\nTry chatting again in 5 minutes when you change your status. If you\'re curious ' \
+                       'invisible.\nTry chatting again in 5 minutes or when you change your status. If you\'re curious ' \
                        'why invisible users are blocked, it is because they tend to break the client and cause them to ' \
                        'be hard to mention. Since we want to help you usually, we expect mentions to work without ' \
                        'headaches.\n\nSorry for the trouble.'
