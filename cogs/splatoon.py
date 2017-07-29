@@ -156,6 +156,57 @@ class SalmonRun:
         self.end_time = datetime.datetime.utcfromtimestamp(schedule['end_time'])
         self.gear = Gear(data['reward_gear']['gear'])
 
+class Splatfest:
+    def __init__(self, data):
+        names = data['names']
+        self.alpha = names['alpha_short'] # Pearl
+        self.bravo = names['bravo_short'] # Marina
+        self.alpha_long = names['alpha_long']
+        self.bravo_long = names['bravo_long']
+
+        times = data['times']
+        fromutc = datetime.datetime.utcfromtimestamp
+        self.start = fromutc(times['start'])
+        self.end = fromutc(times['end'])
+        self.result = fromutc(times['result'])
+        self.announce = fromutc(times['announce'])
+
+        self.image = data['images']['panel']
+        self.id = data['festival_id']
+
+        colours = data['colors']
+
+        def to_colour(d):
+            return discord.Colour.from_rgb(int(d['r'] * 255), int(d['g'] * 255), int(d['b'] * 255))
+
+        self.alpha_colour = to_colour(colours['alpha'])
+        self.bravo_colour = to_colour(colours['bravo'])
+        self.colour = to_colour(colours['middle'])
+
+    def embed(self):
+        e = discord.Embed(colour=self.colour, title=f'{self.alpha} vs {self.bravo}')
+        now = datetime.datetime.utcnow()
+
+        e.add_field(name='Pearl', value=self.alpha_long)
+        e.add_field(name='Marina', value=self.bravo_long)
+
+        if self.start > now:
+            state = 'Starting'
+            value = f'In {time.human_timedelta(self.start, source=now)}'
+        elif self.end > now > self.start:
+            state = 'Ending'
+            value = f'In {time.human_timedelta(self.end, source=now)}'
+        elif self.result > now:
+            state = 'Waiting For Results'
+            value = f'In {time.human_timedelta(self.result, source=now)}'
+        else:
+            state = 'Ended'
+            value = time.human_timedelta(self.end, source=now)
+
+        e.add_field(name=state, value=value, inline=False)
+        e.set_image(url=f'https://app.splatoon2.nintendo.net{self.image}')
+        return e
+
 class Merchandise:
     def __init__(self, data):
         self.gear = Gear(data['gear'])
@@ -453,6 +504,7 @@ class Splatoon:
         self.sp2_map_data = {}
         self.sp2_salmon_run = None
         self.sp2_shop = []
+        self.sp2_festival = None
 
     def __unload(self):
         self.map_updater.cancel()
@@ -840,6 +892,26 @@ class Splatoon:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
             return 300.0
 
+    async def parse_splatnet2_splatfest(self):
+        try:
+            self.sp2_festival = None
+            async with self.bot.session.get(self.BASE_URL / 'api/festivals/active') as resp:
+                if resp.status != 200:
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+                    return 300.0
+
+                js = await resp.json()
+                festivals = js['festivals']
+                if len(festivals) == 0:
+                    return 3600.0
+
+                current = festivals[0]
+                self.sp2_festival = Splatfest(current)
+                return 3600.0
+        except Exception as e:
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            return 300.0
+
     async def splatnet2(self):
         try:
             while not self.bot.is_closed():
@@ -849,6 +921,7 @@ class Splatoon:
                 seconds.append(await self.parse_splatnet2_salmon_run())
                 seconds.append(await self.parse_splatnet2_onlineshop())
                 seconds.append(await self.scrape_splatnet_stats_and_images())
+                seconds.append(await self.parse_splatnet2_splatfest())
                 await asyncio.sleep(min(seconds))
         except asyncio.CancelledError:
             pass
@@ -1110,6 +1183,14 @@ class Splatoon:
             await p.paginate()
         except Exception as e:
             await ctx.send(e)
+
+    @commands.command()
+    async def splatfest(self, ctx):
+        """Shows information about the currently running NA Splatfest, if any."""
+        if self.sp2_festival is None:
+            return await ctx.send('No Splatfest has been announced.')
+
+        await ctx.send(embed=self.sp2_festival.embed())
 
     @commands.command()
     async def weapon(self, ctx, *, query: str):
