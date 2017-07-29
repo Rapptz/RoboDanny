@@ -342,6 +342,12 @@ class BrandOrAbility(commands.Converter):
 
         result = None
 
+        # check for exact match
+        for brand in brands:
+            if brand['name'].lower() == query:
+                return BrandResults(brand=brand)
+
+        # check for fuzzy match
         for brand in brands:
             name = brand['name']
 
