@@ -703,7 +703,7 @@ class Splatoon:
             self.sp2_map_data = {}
             async with self.bot.session.get(self.BASE_URL / 'api/schedules') as resp:
                 if resp.status != 200:
-                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet schedule responded with {resp.status}.')
                     return 300.0 # try again in 5 minutes
 
                 data = await resp.json()
@@ -737,7 +737,7 @@ class Splatoon:
                 now = datetime.datetime.utcnow()
                 return 300.0 if now > new else (new - now).total_seconds()
         except Exception as e:
-            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet schedule Error')
             return 300.0
 
     async def parse_splatnet2_salmon_run(self):
@@ -745,7 +745,7 @@ class Splatoon:
             self.sp2_salmon_run = None
             async with self.bot.session.get(self.BASE_URL / 'api/timeline') as resp:
                 if resp.status != 200:
-                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet salmon responded with {resp.status}.')
                     return 300.0 # try again in 5 minutes
 
                 data = await resp.json()
@@ -763,7 +763,7 @@ class Splatoon:
                         return 3600.0
                 return 3600.0
         except Exception as e:
-            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet salmon Error')
             return 3600.0
 
     async def parse_splatnet2_onlineshop(self):
@@ -771,7 +771,7 @@ class Splatoon:
             self.sp2_shop = []
             async with self.bot.session.get(self.BASE_URL / 'api/onlineshop/merchandises') as resp:
                 if resp.status != 200:
-                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Shop responded with {resp.status}.')
                     return 300.0 # try again in 5 minutes
 
                 data = await resp.json()
@@ -803,7 +803,7 @@ class Splatoon:
                 except:
                     return 300.0
         except Exception as e:
-            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Shop Error')
             return 300.0
 
     def scrape_data_from_player(self, player, bulk):
@@ -820,7 +820,7 @@ class Splatoon:
             bulk_lookup = defaultdict(dict)
             async with self.bot.session.get(self.BASE_URL / 'api/results') as resp:
                 if resp.status != 200:
-                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet responded with {resp.status}.')
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Stats responded with {resp.status}.')
                     return 300.0 # try again in 5 minutes
 
                 data = await resp.json()
@@ -895,7 +895,7 @@ class Splatoon:
                 await self.splat2_data.save()
                 return 3600.0 # redo in an hour
         except Exception as e:
-            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Stat Error')
             return 300.0
 
     async def parse_splatnet2_splatfest(self):
@@ -903,7 +903,7 @@ class Splatoon:
             self.sp2_festival = None
             async with self.bot.session.get(self.BASE_URL / 'api/festivals/active') as resp:
                 if resp.status != 200:
-                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Splatfest Error')
                     return 300.0
 
                 js = await resp.json()
@@ -915,7 +915,7 @@ class Splatoon:
                 self.sp2_festival = Splatfest(current)
                 return 3600.0
         except Exception as e:
-            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Error')
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Splatfest Error')
             return 300.0
 
     async def splatnet2(self):
