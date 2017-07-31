@@ -182,7 +182,7 @@ class Reminder:
 
         return timer
 
-    @commands.command(aliases=['timer', 'remind'], usage='<when>')
+    @commands.group(aliases=['timer', 'remind'], usage='<when>', invoke_without_command=True)
     async def reminder(self, ctx, *, when: time.UserFriendlyTime(commands.clean_content, default='something')):
         """Reminds you of something after a certain amount of time.
 
@@ -200,6 +200,34 @@ class Reminder:
         timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg, connection=ctx.db)
         delta = time.human_timedelta(when.dt, source=ctx.message.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, I'll remind you about {when.arg} in {delta}.")
+
+    @reminder.command(name='list')
+    async def reminder_list(self, ctx):
+        """Shows the 5 latest currently running reminders."""
+        query = """SELECT expires, extra #>> '{args,2}'
+                   FROM reminders
+                   WHERE event = 'reminder'
+                   AND extra #>> '{args,0}' = $1
+                   ORDER BY expires
+                   LIMIT 5;
+                """
+
+        records = await ctx.db.fetch(query, str(ctx.author.id))
+
+        if len(records) == 0:
+            return await ctx.send('No currently running reminders.')
+
+        e = discord.Embed(colour=discord.Colour.blurple(), title='Reminders')
+
+        if len(records) == 5:
+            e.set_footer(text='Only showing up to 5 reminders.')
+        else:
+            e.set_footer(text=f'{len(records)} reminder{"s" if len(records) > 1 else ""}')
+
+        for expires, message in records:
+            e.add_field(name=f'In {time.human_timedelta(expires)}', value=message, inline=False)
+
+        await ctx.send(embed=e)
 
     async def on_reminder_timer_complete(self, timer):
         author_id, channel_id, message = timer.args
