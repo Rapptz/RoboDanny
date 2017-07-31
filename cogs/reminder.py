@@ -69,24 +69,24 @@ class Reminder:
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
-    async def get_active_timers(self, *, connection=None, days=7):
-        query = "SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval) ORDER BY expires;"
+    async def get_active_timer(self, *, connection=None, days=7):
+        query = "SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval) ORDER BY expires LIMIT 1;"
         con = connection or self.bot.pool
 
-        records = await con.fetch(query, datetime.timedelta(days=days))
-        return [Timer(record=a) for a in records]
+        record = await con.fetchrow(query, datetime.timedelta(days=days))
+        return Timer(record=record) if record else None
 
     async def wait_for_active_timers(self, *, connection=None, days=7):
         async with db.MaybeAcquire(connection=connection, pool=self.bot.pool) as con:
-            timers = await self.get_active_timers(connection=con, days=days)
-            if len(timers):
+            timer = await self.get_active_timer(connection=con, days=days)
+            if timer is not None:
                 self._have_data.set()
-                return timers
+                return timer
 
             self._have_data.clear()
             self._current_timer = None
             await self._have_data.wait()
-            return await self.get_active_timers(connection=con, days=days)
+            return await self.get_active_timer(connection=con, days=days)
 
     async def call_timer(self, timer):
         # delete the timer
@@ -103,8 +103,7 @@ class Reminder:
                 # can only asyncio.sleep for up to ~48 days reliably
                 # so we're gonna cap it off at 40 days
                 # see: http://bugs.python.org/issue20493
-                timers = await self.wait_for_active_timers(days=40)
-                timer = self._current_timer = timers[0]
+                timer = self._current_timer = await self.wait_for_active_timers(days=40)
                 now = datetime.datetime.utcnow()
 
                 if timer.expires >= now:
@@ -172,7 +171,9 @@ class Reminder:
         row = await connection.fetchrow(query, event, { 'args': args, 'kwargs': kwargs }, when)
         timer.id = row[0]
 
-        self._have_data.set()
+        # only set the data check if it can be waited on
+        if delta <= (86400 * 40): # 40 days
+            self._have_data.set()
 
         # check if this timer is earlier than our currently run timer
         if self._current_timer and when < self._current_timer.expires:
