@@ -450,7 +450,7 @@ class GearQuery(commands.Converter):
             _, _, frequent = m
 
         kind = info['--type']
-        if kind == ('hat', 'hats'):
+        if kind in ('hat', 'hats'):
             kind = 'head'
 
         if kind in ('shirt', 'shirts'):
