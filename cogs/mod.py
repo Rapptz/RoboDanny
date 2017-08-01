@@ -148,7 +148,6 @@ class Mod:
             return
 
         try:
-            invite = await guild.create_invite(max_uses=1, unique=True)
             fmt = f"""Howdy. The server {guild.name} is currently in a raid mode lockdown.
 
                    A raid is when a server is being bombarded with trolls or low effort posts.
@@ -156,8 +155,6 @@ class Mod:
                    meeting the suspicious thresholds currently set.
 
                    **Do not worry though, as you will be able to join again in the future!**
-
-                   Please use this invite in an hour or so when things have cooled down! {invite}
                    """
 
             fmt = cleandoc(fmt)
@@ -284,7 +281,6 @@ class Mod:
         The count parameter can only be up to 25.
         """
         count = max(min(count, 25), 5)
-
         members = sorted(ctx.guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
 
         e = discord.Embed(title='New Members', colour=discord.Colour.green())
@@ -387,17 +383,15 @@ class Mod:
         - Joining a voice channel within 30 minutes of joining.
 
         Members who meet these requirements will get a private message saying that the
-        server is currently in lock down and if they are legitimate to join back at a
-        later time via a created one-time use invite.
+        server is currently in lock down.
 
         If this is considered too strict, it is recommended to fall back to regular
         raid mode.
         """
         channel = channel or ctx.channel
-        my_permissions = ctx.guild.default_channel.permissions_for(ctx.guild.me)
 
-        if not (my_permissions.kick_members and my_permissions.create_instant_invite):
-            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick members or create invites.')
+        if not ctx.me.guild_permissions.kick_members:
+            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick members.')
 
         try:
             await ctx.guild.edit(verification_level=discord.VerificationLevel.high)
