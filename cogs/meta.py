@@ -38,7 +38,8 @@ class Meta:
                 entity = self.bot.get_cog(command) or self.bot.get_command(command)
 
                 if entity is None:
-                    return await ctx.send(f'Command "{command}" not found.')
+                    clean = command.replace('@', '@\u200b')
+                    return await ctx.send(f'Command or category "{clean}" not found.')
                 elif isinstance(entity, commands.Command):
                     p = await HelpPaginator.from_command(ctx, entity)
                 else:
