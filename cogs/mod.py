@@ -241,7 +241,7 @@ class Mod:
         was_kicked = False
 
         if config.raid_mode == RaidMode.strict.value:
-            was_kicked = self._recently_kicked.get(member.server.id)
+            was_kicked = self._recently_kicked.get(member.guild.id)
             if was_kicked is not None:
                 try:
                     was_kicked.remove(member.id)
