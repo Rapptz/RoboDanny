@@ -342,6 +342,7 @@ class Mod:
                 """
 
         await ctx.db.execute(query, ctx.guild.id, RaidMode.on.value, channel.id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled. Broadcasting join messages to {channel.mention}.')
 
     @raid.command(name='off', aliases=['disable', 'disabled'])
@@ -368,6 +369,7 @@ class Mod:
 
         await ctx.db.execute(query, ctx.guild.id, RaidMode.off.value)
         self._recently_kicked.pop(ctx.guild.id, None)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
 
     @raid.command(name='strict')
@@ -406,6 +408,7 @@ class Mod:
                 """
 
         await ctx.db.execute(query, ctx.guild.id, RaidMode.strict.value, ctx.channel.id)
+        self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled strictly. Broadcasting join messages to {channel.mention}.')
 
     async def _basic_cleanup_strategy(self, ctx, search):
