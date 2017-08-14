@@ -244,6 +244,8 @@ class FieldPages(Pages):
         entries = self.get_page(page)
 
         self.embed.clear_fields()
+        self.embed.description = discord.Embed.Empty
+
         for key, value in entries:
             self.embed.add_field(name=key, value=value, inline=False)
 
