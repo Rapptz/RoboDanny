@@ -180,6 +180,7 @@ class Pages:
             messages.append(f'{emoji} {func.__doc__}')
 
         self.embed.description = '\n'.join(messages)
+        self.embed.clear_fields()
         self.embed.set_footer(text=f'We were on page {self.current_page} before this message.')
         await self.message.edit(embed=self.embed)
 
