@@ -17,17 +17,17 @@ BLOB_GUILD_ID = 272885620769161216
 EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
 
 class BlobEmoji(commands.Converter):
-    def convert(self):
-        guild = self.ctx.bot.get_server(BLOB_GUILD_ID)
+    async def convert(self, ctx, argument):
+        guild = ctx.bot.get_server(BLOB_GUILD_ID)
         emojis = {e.id: e for e in guild.emojis}
 
-        m = EMOJI_REGEX.match(self.argument)
+        m = EMOJI_REGEX.match(argument)
         if m is not None:
             emoji = emojis.get(m.group(1))
-        elif self.argument.isdigit():
-            emoji = emojis.get(self.argument)
+        elif argument.isdigit():
+            emoji = emojis.get(argument)
         else:
-            emoji = discord.utils.find(lambda e: e.name == self.argument, emojis.values())
+            emoji = discord.utils.find(lambda e: e.name == argument, emojis.values())
 
         if emoji is None:
             raise commands.BadArgument('Not a valid blob emoji.')
