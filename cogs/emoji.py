@@ -18,14 +18,14 @@ EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
 
 class BlobEmoji(commands.Converter):
     async def convert(self, ctx, argument):
-        guild = ctx.bot.get_server(BLOB_GUILD_ID)
+        guild = ctx.bot.get_guild(BLOB_GUILD_ID)
         emojis = {e.id: e for e in guild.emojis}
 
         m = EMOJI_REGEX.match(argument)
         if m is not None:
-            emoji = emojis.get(m.group(1))
+            emoji = emojis.get(int(m.group(1)))
         elif argument.isdigit():
-            emoji = emojis.get(argument)
+            emoji = emojis.get(int(argument))
         else:
             emoji = discord.utils.find(lambda e: e.name == argument, emojis.values())
 
