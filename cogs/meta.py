@@ -46,7 +46,7 @@ class Meta:
                     p = await HelpPaginator.from_cog(ctx, entity)
 
             await p.paginate()
-        except CannotPaginate as e:
+        except Exception as e:
             await ctx.send(e)
 
     @commands.command(hidden=True)
