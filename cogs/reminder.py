@@ -235,8 +235,12 @@ class Reminder:
 
         channel = self.bot.get_channel(channel_id)
         if channel is None:
-            # peculiar
-            return
+            # Check if it's a DM channel
+            author = self.bot.get_user(author_id)
+            try:
+                channel = await author.dm_channel()
+            except:
+                return
 
         await channel.send(f'<@{author_id}>, {timer.human_delta} you asked to be reminded of {message}.')
 
