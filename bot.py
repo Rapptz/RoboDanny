@@ -128,6 +128,10 @@ class RoboDanny(commands.AutoShardedBot):
     def run(self):
         super().run(config.token, reconnect=True)
 
+    @property
+    def config(self):
+        return __import__('config')
+
     @commands.command(hidden=True)
     @commands.is_owner()
     async def do(self, ctx, times: int, *, command):

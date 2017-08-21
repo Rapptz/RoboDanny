@@ -52,6 +52,12 @@ class Stats:
     async def on_socket_response(self, msg):
         self.bot.socket_stats[msg.get('t')] += 1
 
+    @property
+    def webhook(self):
+        wh_id, wh_token = self.bot.config.stat_webhook
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.bot.session))
+        return hook
+
     async def log_error(self, *, ctx=None, extra=None):
         e = discord.Embed(title='Error', colour=0xdd5f53)
         e.description = f'```py\n{traceback.format_exc()}\n```'
@@ -68,8 +74,7 @@ class Stats:
             e.add_field(name='Channel', value=channel)
             e.add_field(name='Guild', value=guild)
 
-        channel = self.bot.get_channel(LOGGING_CHANNEL)
-        await channel.send(embed=e)
+        await self.webhook.send(embed=e)
 
     @commands.command(hidden=True)
     @commands.is_owner()
@@ -188,8 +193,7 @@ class Stats:
         if guild.me:
             e.timestamp = guild.me.joined_at
 
-        ch = self.bot.get_channel(LOGGING_CHANNEL)
-        await ch.send(embed=e)
+        await self.webhook.send(embed=e)
 
     async def on_guild_join(self, guild):
         e = discord.Embed(colour=0x53dda4, title='New Guild') # green colour
@@ -220,8 +224,7 @@ class Stats:
         exc = ''.join(traceback.format_exception(type(error), error, error.__traceback__, chain=False))
         e.description = f'```py\n{exc}\n```'
         e.timestamp = datetime.datetime.utcnow()
-        ch = self.bot.get_channel(LOGGING_CHANNEL)
-        await ch.send(embed=e)
+        await self.webhook.send(embed=e)
 
 old_on_error = commands.Bot.on_error
 
@@ -230,9 +233,10 @@ async def on_error(self, event, *args, **kwargs):
     e.add_field(name='Event', value=event)
     e.description = f'```py\n{traceback.format_exc()}\n```'
     e.timestamp = datetime.datetime.utcnow()
-    ch = self.get_channel(LOGGING_CHANNEL)
+
+    hook = self.get_cog('Stats').webhook
     try:
-        await ch.send(embed=e)
+        await hook.send(embed=e)
     except:
         pass
 

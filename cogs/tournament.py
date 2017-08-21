@@ -180,7 +180,6 @@ def valid_logo(message):
 
 BOOYAH_GUILD_ID = 333799317385117699
 TOURNEY_ORG_ROLE = 333812806887538688
-LOGGING_CHANNEL = 343098817039695872
 PARTICIPANT_ROLE = 343137581564952587
 NOT_CHECKED_IN_ROLE = 343137740889522177
 ANNOUNCEMENT_CHANNEL = 342925685729263616
@@ -451,9 +450,9 @@ class Tournament:
 
         e.timestamp = datetime.datetime.utcnow()
 
-        ch = self.bot.get_guild(BOOYAH_GUILD_ID).get_channel(LOGGING_CHANNEL)
-        if ch:
-            await ch.send(embed=e)
+        wh_id, wh_token = self.bot.config.tourney_webhook
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.bot.session))
+        await hook.send(embed=e)
 
     @property
     def tournament_state(self):
