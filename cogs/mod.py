@@ -268,7 +268,9 @@ class Mod:
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
         e.add_field(name='Created', value=time.human_timedelta(member.created_at), inline=False)
-        await config.broadcast_channel.send(embed=e)
+
+        if config.broadcast_channel:
+            await config.broadcast_channel.send(embed=e)
 
     @commands.command(aliases=['newmembers'])
     @commands.guild_only()
