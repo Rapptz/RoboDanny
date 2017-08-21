@@ -554,20 +554,13 @@ class Tournament:
         if not_checked_in is None:
             return await ctx.send('Could not find the Not Checked In role.')
 
-        # base = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
-        # durations = (
-        #     (base, 0),
-        #     (base - datetime.timedelta(hours=1), 60),
-        #     (base - datetime.timedelta(minutes=30), 30),
-        #     (base - datetime.timedelta(minutes=15), 15),
-        #     (base - datetime.timedelta(minutes=5), 5),
-        # )
-
-        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=10)
+        base = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
         durations = (
             (base, 0),
+            (base - datetime.timedelta(hours=1), 60),
+            (base - datetime.timedelta(minutes=30), 30),
+            (base - datetime.timedelta(minutes=15), 15),
             (base - datetime.timedelta(minutes=5), 5),
-            (base - datetime.timedelta(minutes=1), 1),
         )
 
         for when, remaining in durations:
@@ -576,11 +569,11 @@ class Tournament:
         await self.config.put('state', TournamentState.checking_in)
         await ctx.send(f'Check-ins are now being processed. When complete and ready, use {ctx.prefix}tourney start')
 
-        # await not_checked_in.edit(mentionable=True)
+        await not_checked_in.edit(mentionable=True)
         msg = f"<@&{NOT_CHECKED_IN_ROLE}> check-ins are now being processed. " \
               f"To check-in please go to <#{BOT_SPAM_CHANNEL}> and use the `?checkin` command."
         await announcement.send(msg)
-        # await not_checked_in.edit(mentionable=False)
+        await not_checked_in.edit(mentionable=False)
 
     async def on_tournament_checkin_timer_complete(self, timer):
         minutes_remaining, = timer.args
@@ -610,9 +603,9 @@ class Tournament:
             msg = f'<@&{role.id}> Reminder: You have **{minutes_remaining} minutes** left to check-in.\n\n' \
                   f'To check-in please go to <#{BOT_SPAM_CHANNEL}> and use the `?checkin` command.'
 
-            # await role.edit(mentionable=True)
+            await role.edit(mentionable=True)
             await announcement.send(msg)
-            # await role.edit(mentionable=False)
+            await role.edit(mentionable=False)
             return
 
         # Check-in period is complete, so just terminate everyone who hasn't checked-in.
@@ -813,10 +806,10 @@ class Tournament:
         conf['round_info'] = round_info
         await self.config.save()
 
-        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=10) # real: 45
+        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=45)
         times = (
             (base, 0),
-            (base - datetime.timedelta(minutes=5), 5) # real: 20
+            (base - datetime.timedelta(minutes=20), 20)
         )
 
         reminder = self.bot.get_cog('Reminder')
@@ -911,18 +904,18 @@ class Tournament:
 
         if remaining != 0:
             # A reminder that the round is almost over
-            # await role.edit(mentionable=True)
+            await role.edit(mentionable=True)
             msg = f'<@&{role.id}>, round {round_num} will conclude in {remaining} minutes. ' \
                    'Please contact a TO if you have any issues.'
             await announcement.send(msg)
-            # await role.edit(mentionable=False)
+            await role.edit(mentionable=False)
             return
 
         # Round has concluded
         msg = f'<@&{role.id}>, round {round_num} has concluded! Please contact a TO if you require more time.'
-        # await role.edit(mentionable=True)
+        await role.edit(mentionable=True)
         await announcement.send(msg)
-        # await role.edit(mentionable=False)
+        await role.edit(mentionable=False)
 
         await self.config.put('round_complete', True)
 
