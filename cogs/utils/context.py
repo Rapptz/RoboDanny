@@ -81,7 +81,7 @@ class Context(commands.Context):
         finally:
             await self.acquire()
 
-    async def prompt(self, message, *, timeout=60.0, delete_after=True, reacquire=True):
+    async def prompt(self, message, *, timeout=60.0, delete_after=True, reacquire=True, author_id=None):
         """An interactive reaction confirmation dialog.
 
         Parameters
@@ -95,6 +95,9 @@ class Context(commands.Context):
         reacquire: bool
             Whether to release the database connection and then acquire it
             again when we're done.
+        author_id: Optional[int]
+            The member who should respond to the prompt. Defaults to the author of the
+            Context's message.
 
         Returns
         --------
@@ -109,7 +112,7 @@ class Context(commands.Context):
 
         fmt = f'{message}\n\nReact with \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.'
 
-        author_id = self.author.id
+        author_id = author_id or self.author.id
         msg = await self.send(fmt)
 
         confirm = None
