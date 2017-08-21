@@ -998,7 +998,6 @@ class Splatoon:
 
     async def generate_scrims(self, ctx, maps, games, mode):
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control']
-        game_count = max(min(games, len(maps)), 3)
 
         if mode is not None:
             mode = mode.lower()
@@ -1020,9 +1019,11 @@ class Splatoon:
                     return await ctx.send('Could not figure out what mode you meant.')
 
             result = [f'The following games will be played in {real_mode}.']
+            game_count = max(min(games, len(maps)), 3)
             for index, stage in enumerate(random.sample(maps, game_count), 1):
                 result.append(f'Game {index}: {stage}')
         else:
+            game_count = max(min(games, len(maps) * 3), 3)
             random.shuffle(modes)
             scrims = get_random_scrims(modes, maps, game_count)
             result = [f'Game {game}: {scrim.mode} on {scrim.stage}' for game, scrim in enumerate(scrims, 1)]
