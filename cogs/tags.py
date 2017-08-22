@@ -398,15 +398,16 @@ class Tags:
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
 
-        emoji = 129351 # ord(':first_place:')
 
-        for (offset, (name, uses, _, _)) in enumerate(records):
-            if name:
-                value = f'{name} ({uses} uses)'
-            else:
-                value = 'Nothing!'
+        def emojize(seq):
+            emoji = 129351 # ord(':first_place:')
+            for index, value in enumerate(seq):
+                yield chr(emoji + index), value
 
-            e.add_field(name=f'{chr(emoji + offset)} Tag', value=value)
+        value = '\n'.join(f'{emoji}: {name} ({uses} uses)' if name else f'{emoji}: Nothing!'
+                          for (emoji, (name, uses, _, _)) in emojize(records))
+
+        e.add_field(name='Top Tags', value=value, inline=False)
 
         # tag users
         query = """SELECT
@@ -425,13 +426,9 @@ class Tags:
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None) for i in range(0, 3 - len(records)))
 
-        for (offset, (uses, author_id)) in enumerate(records):
-            if author_id is not None:
-                value = f'<@{author_id}> ({uses} times)'
-            else:
-                value = 'No one!'
-
-            e.add_field(name=f'{chr(emoji + offset)} Tag User', value=value)
+        value = '\n'.join(f'{emoji}: <@{author_id}> ({uses} times)' if author_id else f'{emoji}: No one!'
+                          for (emoji, (uses, author_id)) in emojize(records))
+        e.add_field(name='Top Tag Users', value=value, inline=False)
 
         # tag creators
 
@@ -451,13 +448,9 @@ class Tags:
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None) for i in range(0, 3 - len(records)))
 
-        for (offset, (count, owner_id)) in enumerate(records):
-            if owner_id is not None:
-                value = f'<@{owner_id}> ({count} tags)'
-            else:
-                value = 'No one!'
-
-            e.add_field(name=f'{chr(emoji + offset)} Tag Creator', value=value)
+        value = '\n'.join(f'{emoji}: <@{owner_id}> ({count} tags)' if owner_id else f'{emoji}: No one!'
+                          for (emoji, (count, owner_id)) in emojize(records))
+        e.add_field(name='Top Tag Creators', value=value, inline=False)
 
         await ctx.send(embed=e)
 
