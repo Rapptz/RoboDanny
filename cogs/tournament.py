@@ -1099,8 +1099,7 @@ class Tournament:
 
         msg = f"{ctx.author.mention}, you have been successfully invited to the tournament.\n" \
               f"1. Go to {challonge.url}\n" \
-               "2. Click the Invitation: (image: <http://i.imgur.com/S0lPH8t.png>)\n" \
-              f"3. Reply to this message with: {participant_id}"
+              f"2. Reply to this message with: {participant_id}"
 
         await ctx.send(msg)
         await ctx.release()
@@ -1306,8 +1305,7 @@ class Tournament:
             # wait for accepting
             msg =  "You have been invited to the tournament.\n" \
                   f"1. Go to {challonge.url}\n" \
-                   "2. Click the Invitation: http://i.imgur.com/S0lPH8t.png\n" \
-                  f"3. Reply to this message with: {team_id}"
+                  f"2. Reply to this message with: {team_id}"
 
             def verify(m):
                 return m.content == str(team_id)
