@@ -202,7 +202,10 @@ ChallongeTeamInfo = namedtuple('ChallongeTeamInfo', 'name members')
 ParticipantInfo = namedtuple('ParticipantInfo', 'name logo members')
 
 class Challonge:
-    _validate = re.compile(r'(?:https?\:\/\/)?(?:(?P<subdomain>[A-Za-z]+)\.)?challonge.com\/(?:teams\/)?(?P<slug>[^\/]+)')
+    _validate = re.compile("""(?:https?\:\/\/)?(?:(?P<subdomain>[A-Za-z]+)\.)?challonge\.com\/    # Main URL
+                              (?:(?:de|en|es|fr|hu|it|ja|ko|no|pl|pt|pt_BR|ru|sk|sv|tr|zh_CN)\/)? # Language selection
+                              (?:teams\/)?(?P<slug>[^\/]+)                                        # Slug
+                           """, re.VERBOSE)
 
     BASE_API = 'https://api.challonge.com/v1/tournaments'
 
