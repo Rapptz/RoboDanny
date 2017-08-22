@@ -27,7 +27,7 @@ def setup_logging():
     try:
         # __enter__
         logging.getLogger('discord').setLevel(logging.INFO)
-        logging.getLogger('discord.http').setLevel(logging.DEBUG)
+        logging.getLogger('discord.http').setLevel(logging.WARNING)
 
         log = logging.getLogger()
         log.setLevel(logging.INFO)
