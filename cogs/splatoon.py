@@ -1250,7 +1250,6 @@ class Splatoon:
         """
 
         try:
-            print(len(query))
             p = GearPages(ctx, query)
             await p.paginate()
         except Exception as e:
