@@ -455,7 +455,8 @@ class Tags:
         await ctx.send(embed=e)
 
     async def member_tag_stats(self, ctx, member):
-        e = discord.Embed(colour=discord.Colour.blurple(), title=f'{member.display_name} Stats')
+        e = discord.Embed(colour=discord.Colour.blurple())
+        e.set_author(name=str(member), icon_url=member.avatar_url)
         e.set_footer(text='These statistics are server-specific.')
 
         query = """SELECT COUNT(*)
