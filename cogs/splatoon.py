@@ -1128,7 +1128,7 @@ class Splatoon:
         except Exception as e:
             await ctx.send(e)
 
-    @commands.command()
+    @commands.command(aliases=['maps'])
     async def schedule(self, ctx, *, type: mode_key = None):
         """Shows the current Splatoon 2 schedule."""
         if type is None:
