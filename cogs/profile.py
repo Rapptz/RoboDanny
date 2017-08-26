@@ -114,6 +114,11 @@ def valid_rank(argument, *, _rank=_rank):
     if number:
         number = int(number)
 
+        if number and rank != 'S+':
+            raise commands.BadArgument('Only S+ can input numbers.')
+        if number > 50:
+            raise commands.BadArgument('S+50 is the current cap.')
+
     return mode, { 'rank': rank, 'number': number }
 
 def valid_squad(argument):
