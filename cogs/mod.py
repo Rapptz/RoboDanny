@@ -40,19 +40,25 @@ class GuildConfig(db.Table, table_name='guild_mod_config'):
 ## Configuration
 
 class ModConfig:
-    __slots__ = ('raid_mode', 'broadcast_channel', 'mention_count', 'safe_mention_channel_ids')
+    __slots__ = ('raid_mode', 'id', 'bot', 'broadcast_channel_id', 'mention_count', 'safe_mention_channel_ids')
 
     @classmethod
     async def from_record(cls, record, bot):
         self = cls()
 
         # the basic configuration
-        guild = bot.get_guild(record['id'])
+        self.bot = bot
         self.raid_mode = record['raid_mode']
-        self.broadcast_channel = guild.get_channel(record['broadcast_channel'])
+        self.id = record['id']
+        self.broadcast_channel_id = record['broadcast_channel']
         self.mention_count = record['mention_count']
         self.safe_mention_channel_ids = set(record['safe_mention_channel_ids'] or [])
         return self
+
+    @property
+    def broadcast_channel(self):
+        guild = self.bot.get_guild(self.id)
+        return guild and guild.get_channel(self.broadcast_channel_id)
 
 ## Converters
 

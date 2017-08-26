@@ -69,12 +69,14 @@ class Starrers(db.Table):
         return statement + '\n' + sql
 
 class StarboardConfig:
-    __slots__ = ('channel', 'threshold', 'locked', 'needs_migration', 'max_age')
+    __slots__ = ('bot', 'id', 'channel_id', 'threshold', 'locked', 'needs_migration', 'max_age')
 
-    def __init__(self, *, channel, record=None):
-        self.channel = channel
+    def __init__(self, *, guild_id, bot, record=None):
+        self.id = guild_id
+        self.bot = bot
 
         if record:
+            self.channel_id = record['channel_id']
             self.threshold = record['threshold']
             self.locked = record['locked']
             self.needs_migration = self.locked is None
@@ -82,6 +84,13 @@ class StarboardConfig:
                 self.locked = True
 
             self.max_age = record['max_age']
+        else:
+            self.channel_id = None
+
+    @property
+    def channel(self):
+        guild = self.bot.get_guild(self.id)
+        return guild and guild.get_channel(self.channel_id)
 
 class Stars:
     """A starboard to upvote posts obviously.
@@ -126,17 +135,8 @@ class Stars:
     async def get_starboard(self, guild_id, *, connection=None):
         connection = connection or self.bot.pool
         query = "SELECT * FROM starboard WHERE id=$1;"
-
-        guild = self.bot.get_guild(guild_id)
-        if guild is None:
-            return StarboardConfig(channel=None)
-
         record = await connection.fetchrow(query, guild_id)
-        if record is None:
-            return StarboardConfig(channel=None)
-
-        channel = guild.get_channel(record['channel_id'])
-        return StarboardConfig(channel=channel, record=record)
+        return StarboardConfig(guild_id=guild_id, bot=self.bot, record=record)
 
     def star_emoji(self, stars):
         if 5 > stars >= 0:
