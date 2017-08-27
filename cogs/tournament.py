@@ -1321,6 +1321,7 @@ class Tournament:
 
         if isinstance(verified, PromptResult):
             await transaction.rollback()
+            await challonge.remove_participant(participant_id)
             return
 
         participant_id = participant['id']
