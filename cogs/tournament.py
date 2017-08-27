@@ -1319,17 +1319,19 @@ class Tournament:
             await dm.send('An error happened while trying to register.')
             return
 
-        if isinstance(verified, PromptResult):
-            await transaction.rollback()
-            await challonge.remove_participant(participant_id)
-            return
-
-        participant_id = participant['id']
+        participant_id = participant.get('id')
         fields = {
             'Team ID': team_id,
             'Team Name': team.name,
             'Participant ID': participant_id,
         }
+
+        if isinstance(verified, PromptResult):
+            await transaction.rollback()
+            await challonge.remove_participant(participant_id)
+            await self.log('Took too long to accept invite', ctx, error=None, **fields)
+            return
+
 
         try:
             participant = await challonge.get_participant(participant_id)
