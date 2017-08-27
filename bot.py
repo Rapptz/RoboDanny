@@ -138,5 +138,9 @@ class RoboDanny(commands.AutoShardedBot):
         """Repeats a command a specified number of times."""
         msg = copy.copy(ctx.message)
         msg.content = command
+
+        new_ctx = await self.get_context(msg, cls=context.Context)
+        new_ctx.db = ctx.db
+
         for i in range(times):
-            await self.process_commands(msg)
+            await new_ctx.reinvoke()
