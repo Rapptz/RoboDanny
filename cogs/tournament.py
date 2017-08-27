@@ -1296,8 +1296,8 @@ class Tournament:
         try:
             team_id = await result.execute_sql(ctx.db)
         except:
-            traceback.print_exc()
             await transaction.rollback()
+            await self.log('Registration SQL Failure', ctx, error=True)
             return
 
         try:
@@ -1316,6 +1316,7 @@ class Tournament:
         except:
             await transaction.rollback()
             await self.log("Registration failure", ctx, error=True)
+            await dm.send('An error happened while trying to register.')
             return
 
         if isinstance(verified, PromptResult):
