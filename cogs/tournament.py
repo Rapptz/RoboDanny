@@ -1332,7 +1332,6 @@ class Tournament:
             await self.log('Took too long to accept invite', ctx, error=None, **fields)
             return
 
-
         try:
             participant = await challonge.get_participant(participant_id)
         except ChallongeError as e:
@@ -1374,6 +1373,7 @@ class Tournament:
         if self.config.get('strict', False):
             if not any(role.id == TOP_PARTICIPANT_ROLE for role in ctx.author.roles):
                 return await ctx.send('You do not have the Top Participant role.')
+
         try:
             team = await self.challonge.get_team_info(url.slug)
         except ChallongeError:
@@ -1382,14 +1382,29 @@ class Tournament:
         query = """SELECT id FROM teams WHERE challonge=$1;"""
         pre_existing = await ctx.db.fetchrow(query, url.slug)
         if pre_existing is not None:
-            await self.register_pre_existing(ctx, pre_existing['id'], team)
-        else:
-            if ctx.author.id in self._already_running_registration:
-                return await ctx.send('You are already running a registration right now...')
-            try:
-                await self.new_registration(ctx, url, team)
-            finally:
-                self._already_running_registration.discard(ctx.author.id)
+            return await self.register_pre_existing(ctx, pre_existing['id'], team)
+
+        if ctx.author.id in self._already_running_registration:
+            return await ctx.send('You are already running a registration right now...')
+
+        query = """SELECT team_id
+                   FROM team_members
+                   INNER JOIN teams
+                           ON teams.id = team_members.team_id
+                   INNER JOIN players
+                           ON players.id = team_members.player_id
+                   WHERE teams.active
+                   AND   players.discord_id=$1;
+                """
+
+        team_id = await ctx.db.fetchrow(query, ctx.author.id)
+        if team_id is not None:
+            return await ctx.send('You are already part of another team.')
+
+        try:
+            await self.new_registration(ctx, url, team)
+        finally:
+            self._already_running_registration.discard(ctx.author.id)
 
     @commands.command()
     @in_booyah_guild()
