@@ -36,6 +36,7 @@ initial_extensions = (
     'cogs.reminder',
     'cogs.stats',
     'cogs.emoji',
+    'cogs.config',
     'cogs.tournament',
 )
 
