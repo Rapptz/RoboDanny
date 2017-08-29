@@ -103,6 +103,11 @@ class UserFriendlyTime(commands.Converter):
             if argument.endswith('from now'):
                 argument = argument[:-8].strip()
 
+            if argument[0:2] == 'me':
+                # starts with "me to" or "me in"
+                if argument[0:6] in ('me to ', 'me in '):
+                    argument = argument[6:]
+
             elements = calendar.nlp(argument, sourceTime=now)
             if elements is None or len(elements) == 0:
                 raise commands.BadArgument('Invalid time provided, try e.g. "tomorrow" or "3 days".')
