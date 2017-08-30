@@ -45,6 +45,10 @@ postgresql = 'postgresql://user:password@host/database' # your postgresql info f
 challonge_api_key = '...' # for tournament cog
 ```
 
+6. **Configuration of database**
+
+To configure the PostgreSQL database for use by the bot, go to the directory where `launcher.py` is located, and run the script by doing `python3.6 launcher.py db init`
+
 ## Requirements
 
 - Python 3.6+
