@@ -175,11 +175,7 @@ class Stats:
         embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
         await ctx.send(embed=embed)
 
-    @commands.group(invoke_without_command=True)
-    @commands.guild_only()
-    async def stats(self, ctx):
-        """Tells you command usage stats."""
-
+    async def show_guild_stats(self, ctx):
         lookup = (
             '\N{FIRST PLACE MEDAL}',
             '\N{SECOND PLACE MEDAL}',
@@ -211,7 +207,25 @@ class Stats:
         value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
                           for (index, (command, uses)) in enumerate(records))
 
-        embed.add_field(name='Top Commands', value=value, inline=False)
+        embed.add_field(name='Top Commands', value=value, inline=True)
+
+        query = """SELECT command,
+                          COUNT(*) as "uses"
+                   FROM commands
+                   WHERE guild_id=$1
+                   AND used > (CURRENT_TIMESTAMP - INTERVAL '1 day')
+                   GROUP BY command
+                   ORDER BY "uses" DESC
+                   LIMIT 5;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id)
+
+        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
+                          for (index, (command, uses)) in enumerate(records))
+
+        embed.add_field(name='Top Commands Today', value=value, inline=True)
+        embed.add_field(name='\u200b', value='\u200b', inline=True)
 
         query = """SELECT author_id,
                           COUNT(*) AS "uses"
@@ -228,8 +242,90 @@ class Stats:
         value = '\n'.join(f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)'
                           for (index, (author_id, uses)) in enumerate(records))
 
-        embed.add_field(name='Top Command Users', value=value, inline=False)
+        embed.add_field(name='Top Command Users', value=value, inline=True)
+
+        query = """SELECT author_id,
+                          COUNT(*) AS "uses"
+                   FROM commands
+                   WHERE guild_id=$1
+                   AND used > (CURRENT_TIMESTAMP - INTERVAL '1 day')
+                   GROUP BY author_id
+                   ORDER BY "uses" DESC
+                   LIMIT 5;
+                """
+
+
+        records = await ctx.db.fetch(query, ctx.guild.id)
+
+        value = '\n'.join(f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)'
+                          for (index, (author_id, uses)) in enumerate(records))
+
+        embed.add_field(name='Top Command Users Today', value=value, inline=True)
         await ctx.send(embed=embed)
+
+    async def show_member_stats(self, ctx, member):
+        lookup = (
+            '\N{FIRST PLACE MEDAL}',
+            '\N{SECOND PLACE MEDAL}',
+            '\N{THIRD PLACE MEDAL}',
+            '\N{SPORTS MEDAL}',
+            '\N{SPORTS MEDAL}'
+        )
+
+        embed = discord.Embed(title='Command Stats', colour=member.colour)
+        embed.set_author(name=str(member), icon_url=member.avatar_url)
+
+        # total command uses
+        query = "SELECT COUNT(*), MIN(used) FROM commands WHERE guild_id=$1 AND author_id=$2;"
+        count = await ctx.db.fetchrow(query, ctx.guild.id, member.id)
+
+        embed.description = f'{count[0]} commands used.'
+        embed.set_footer(text='First command used').timestamp = count[1]
+
+        query = """SELECT command,
+                          COUNT(*) as "uses"
+                   FROM commands
+                   WHERE guild_id=$1 AND author_id=$2
+                   GROUP BY command
+                   ORDER BY "uses" DESC
+                   LIMIT 5;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id, member.id)
+
+        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
+                          for (index, (command, uses)) in enumerate(records))
+
+        embed.add_field(name='Most Used Commands', value=value, inline=False)
+
+        query = """SELECT command,
+                          COUNT(*) as "uses"
+                   FROM commands
+                   WHERE guild_id=$1
+                   AND author_id=$2
+                   AND used > (CURRENT_TIMESTAMP - INTERVAL '1 day')
+                   GROUP BY command
+                   ORDER BY "uses" DESC
+                   LIMIT 5;
+                """
+
+        records = await ctx.db.fetch(query, ctx.guild.id, member.id)
+
+        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
+                          for (index, (command, uses)) in enumerate(records))
+
+        embed.add_field(name='Most Used Commands Today', value=value, inline=False)
+        await ctx.send(embed=embed)
+
+    @commands.group(invoke_without_command=True)
+    @commands.guild_only()
+    async def stats(self, ctx, *, member: discord.Member = None):
+        """Tells you command usage stats for the server or a member."""
+
+        if member is None:
+            await self.show_guild_stats(ctx)
+        else:
+            await self.show_member_stats(ctx, member)
 
     @stats.command(name='global')
     async def stats_global(self, ctx):
@@ -270,7 +366,11 @@ class Stats:
         records = await ctx.db.fetch(query)
         value = []
         for (index, (guild_id, uses)) in enumerate(records):
-            guild = self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>'
+            if guild_id is None:
+                guild = 'Private Message'
+            else:
+                guild = self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>'
+
             emoji = lookup[index]
             value.append(f'{emoji}: {guild} ({uses} uses)')
 
@@ -334,7 +434,10 @@ class Stats:
         records = await ctx.db.fetch(query)
         value = []
         for (index, (guild_id, uses)) in enumerate(records):
-            guild = self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>'
+            if guild_id is None:
+                guild = 'Private Message'
+            else:
+                guild = self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>'
             emoji = lookup[index]
             value.append(f'{emoji}: {guild} ({uses} uses)')
 
