@@ -5,6 +5,7 @@ from .utils import checks
 from lxml import etree
 import random
 import logging
+from urllib.parse import quote as uriquote
 
 log = logging.getLogger(__name__)
 
@@ -307,8 +308,8 @@ class Buttons:
         return e
 
     async def get_google_entries(self, query):
+        url = f'https://www.google.com/search?q={uriquote(query)}'
         params = {
-            'q': query,
             'safe': 'on',
             'lr': 'lang_en',
             'hl': 'en'
@@ -324,7 +325,7 @@ class Buttons:
         # the result of a google card, an embed
         card = None
 
-        async with self.bot.session.get('https://www.google.com/search', params=params, headers=headers) as resp:
+        async with self.bot.session.get(url, params=params, headers=headers) as resp:
             if resp.status != 200:
                 log.info('Google failed to respond with %s status code.', resp.status)
                 raise RuntimeError('Google has failed to respond.')
