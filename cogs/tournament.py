@@ -439,7 +439,7 @@ class Tournament:
             else:
                 e = discord.Embed(colour=0xb69f42, title='Warning')
 
-            exc = traceback.format_exc()
+            exc = traceback.format_exc(chain=False, limit=10)
             if exc != 'NoneType: None\n':
                 e.description = f'```py\n{exc}\n```'
             e.add_field(name='Reason', value=message, inline=False)
