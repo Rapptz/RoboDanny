@@ -1101,8 +1101,11 @@ class Tournament:
         }
 
         msg = f"{ctx.author.mention}, you have been successfully invited to the tournament.\n" \
-              f"1. Go to {challonge.url}\n" \
-              f"2. Reply to this message with: {participant_id}"
+               "**Please follow these steps in order**\n" \
+               "1. Go to <http://challonge.com/notifications>\n" \
+               "2. Click on the newest \"You have been challonged\" invitation.\n" \
+               "3. Follow the steps in the invitation.\n" \
+              f"4. Reply to this message with: {participant_id}"
 
         await ctx.send(msg)
         await ctx.release()
@@ -1306,9 +1309,12 @@ class Tournament:
             participant = await challonge.add_participant(team.name, misc=team_id)
 
             # wait for accepting
-            msg =  "You have been invited to the tournament.\n" \
-                  f"1. Go to {challonge.url}\n" \
-                  f"2. Reply to this message with: {team_id}"
+            msg = f"You have been successfully invited to the tournament.\n" \
+                   "**Please follow these steps in order**\n" \
+                   "1. Go to <http://challonge.com/notifications>\n" \
+                   "2. Click on the newest \"You have been challonged\" invitation.\n" \
+                   "3. Follow the steps in the invitation.\n" \
+                  f"4. Reply to this message with: {team_id}"
 
             def verify(m):
                 return m.content == str(team_id)
