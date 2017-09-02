@@ -860,7 +860,7 @@ class Tournament:
 
         del self._participants
         await self.log("Participant Clean-up", **fields)
-        await self.prepare_participant_cache()
+        await self.prepare_participant_cache
 
     async def on_tournament_round_timer_complete(self, timer):
         round_num, remaining = timer.args
@@ -1524,6 +1524,9 @@ class Tournament:
 
         info = self.config.get('round_info', {})
         ours = info.get(str(ctx.channel.id))
+        if ours is None:
+            ours = info.get(ctx.channel.id)
+
 
         if ours is None:
             return await ctx.send('This channel is not a currently running group channel.')
