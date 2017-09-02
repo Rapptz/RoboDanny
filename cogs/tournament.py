@@ -1118,8 +1118,11 @@ class Tournament:
         if tournament.get('state') != 'complete':
             return await ctx.send('This tournament is incomplete.')
 
-        participants = [p for p in tournament['participants'] if p['final_rank'] >= cut_off]
-        team_ids = [int(p['misc']) for p in participants]
+        team_ids = []
+        for p in tournament['participants']:
+            participant = p['participant']
+            if participant['final_rank'] >= cut_off:
+                team_ids.append(int(participant['misc']))
 
         query = """SELECT players.discord_id, team_members.team_id
                    FROM team_members
