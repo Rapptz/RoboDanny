@@ -792,7 +792,8 @@ class Tournament:
                 to_beat = (best_of // 2) + 1
                 msg =  "@here Please use this channel to communicate!\n" \
                        "When your match is complete, **both teams must report their own scores**.\n" \
-                      f"Reporting your score is done via the `?score` command. For example: `?score {to_beat}`"
+                      f"Reporting your score is done via the `?score` command. For example: `?score {to_beat}`\n" \
+                       "**The ?score command can only be done in this channel.**"
 
                 await channel.send(msg)
             except:
