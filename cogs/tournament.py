@@ -1040,6 +1040,48 @@ class Tournament:
         await channel.delete(reason='Score confirmation by TO.')
         await ctx.send('Confirmed.')
 
+    @tourney.command(name='dq', aliases=['DQ', 'disqualify'])
+    @is_to()
+    async def tourney_dq(self, ctx, *, team: Challonge):
+        """Disqualifies a team from the tournament.
+
+        This removes their roles and stuff for you.
+        """
+
+        # get every member in the team
+
+        query = """SELECT id FROM teams WHERE challonge=$1;"""
+        team_id = await ctx.db.fetchrow(query, team.slug)
+        if team_id is None:
+            return await ctx.send('This team is not in the database.')
+
+        # remove from challonge
+        challonge = self.challonge
+        participants = await challonge.participants()
+
+        participant_id = next((p['id'] for p in participants if p['misc'] == str(team_id)), None)
+        if participant_id is None:
+            return await ctx.send('This team is not in the bracket.')
+
+        await challonge.remove_participant(participant_id)
+
+        members = await self.get_discord_users_from_team(ctx.db, team_id=team_id[0])
+
+        for member in members:
+            try:
+                await member.remove_roles(discord.Object(id=PARTICIPANT_ROLE), discord.Object(id=NOT_CHECKED_IN_ROLE))
+            except:
+                pass
+
+        fields = {
+            'Members': '\n'.join(member.mention for member in members),
+            'Participant ID': participant_id,
+            'Team': f'Team ID: {team_id}\nURL: {team.url}',
+        }
+
+        await self.log('Disqualified', error=None, **fields)
+        await ctx.send(f'Successfully disqualified <{team.url}>.')
+
     @tourney.command(name='close')
     @is_to()
     async def tourney_close(self, ctx):
