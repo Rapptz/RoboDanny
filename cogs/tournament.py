@@ -1040,6 +1040,21 @@ class Tournament:
         await channel.delete(reason='Score confirmation by TO.')
         await ctx.send('Confirmed.')
 
+    @tourney.command(name='room')
+    @is_to()
+    async def tourney_room(self, ctx, *, channel: discord.TextChannel):
+        """Opens a room for the TO."""
+
+        if self.tournament_state is not TournamentState.underway:
+            return await ctx.send('The tournament has not started yet.')
+
+        round_info = self.config.get('round_info', {})
+        if str(channel.id) not in round_info:
+            return await ctx.send('This channel is not a group discussion channel.')
+
+        await channel.set_permissions(ctx.author, read_messages=True)
+        await ctx.send('Done.')
+
     @tourney.command(name='dq', aliases=['DQ', 'disqualify'])
     @is_to()
     async def tourney_dq(self, ctx, *, team: Challonge):
