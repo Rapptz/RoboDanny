@@ -1057,6 +1057,7 @@ class Tournament:
 
         # remove from challonge
         challonge = self.challonge
+        team_id = team_id[0]
         participants = await challonge.participants()
 
         participant_id = next((p['id'] for p in participants if p['misc'] == str(team_id)), None)
