@@ -1159,13 +1159,14 @@ class Tournament:
         tourney = await self.challonge.finalize()
 
         # Remove participant roles
-        await self.clean_tournament_participants()
+        async with ctx.typing():
+            await self.clean_tournament_participants()
 
-        # Delete lingering match channels
-        for channel_id in self.config.get('round_info', {}):
-            channel = ctx.guild.get_channel(channel_id)
-            if channel is not None:
-                await channel.delete(reason='Closing tournament.')
+            # Delete lingering match channels
+            for channel_id in self.config.get('round_info', {}):
+                channel = ctx.guild.get_channel(channel_id)
+                if channel is not None:
+                    await channel.delete(reason='Closing tournament.')
 
         # Clear state
         self.config._db = {}
