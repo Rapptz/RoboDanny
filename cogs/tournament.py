@@ -12,7 +12,7 @@ import asyncpg
 import enum
 import re
 
-from .utils import db, config
+from .utils import db, config, time
 
 class Players(db.Table):
     id = db.PrimaryKeyColumn()
@@ -492,7 +492,16 @@ class Tournament:
                 attendance = f'{attendance}\n{not_checked_in} not checked in'
 
         e.add_field(name='Attendance', value=attendance)
-        e.add_field(name='Current Round', value=self.config.get('current_round'))
+
+        current_round = self.config.get('round')
+        if current_round is None:
+            value = 'None'
+            e.add_field(name='Current Round', value=None)
+        else:
+            round_ends = datetime.datetime.fromtimestamp(self.config.get('round_ends', 0.0))
+            value = f'Round {current_round}\nEnds in {time.human_timedelta(round_ends)}'
+
+        e.add_field(name='Current Round', value=value)
 
         state = self.tournament_state.name.replace('_', ' ').title()
         e.add_field(name='State', value=state)
@@ -800,6 +809,8 @@ class Tournament:
                 await self.log("Failure when creating channel", error=True, **fields)
 
 
+        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+
         conf = self.config.all()
         conf['round'] = round_num
         conf['best_of'] = best_of
@@ -807,9 +818,9 @@ class Tournament:
         conf['round_complete'] = False
         conf['total_matches'] = len(matches)
         conf['round_info'] = round_info
+        conf['round_ends'] = base.timestamp()
         await self.config.save()
 
-        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
         times = (
             (base, 0),
             (base - datetime.timedelta(minutes=15), 15)
