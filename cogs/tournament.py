@@ -1821,6 +1821,28 @@ class Tournament:
         await ctx.db.execute(query, team['id'], record[0], team['owner_id'])
         await ctx.send('Successfully transferred ownership.')
 
+    @team.command(name='show')
+    async def team_show(self, ctx, *, url: Challonge):
+        """Shows a team's info."""
+
+        query = "SELECT * FROM teams WHERE challonge=$1;"
+        record = await ctx.db.fetchrow(query, url.slug)
+
+        if record is None:
+            return await ctx.send('No info for this team!')
+
+        team_info = await self.challonge.get_team_info(url.slug)
+        e = discord.Embed(title=team_info.name, url=url.url)
+
+        if record['logo']:
+            e.set_thumbnail(url=record['logo'])
+
+        members = await self.get_discord_users_from_team(ctx.db, team_id=record['id'])
+
+        e.add_field(name='Active?', value='Yes' if record['active'] else 'No')
+        e.add_field(name='Members', value='\n'.join(member.mention for member in members))
+        await ctx.send(embed=e)
+
     @commands.group()
     @in_booyah_guild()
     async def player(self, ctx):
