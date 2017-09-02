@@ -1843,13 +1843,42 @@ class Tournament:
         e.add_field(name='Members', value='\n'.join(member.mention for member in members))
         await ctx.send(embed=e)
 
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     @in_booyah_guild()
-    async def player(self, ctx):
+    async def player(self, ctx, *, member: discord.Member):
         """Manages your player profile."""
-        pass
+
+        query = """SELECT * FROM players WHERE discord_id=$1;"""
+        record = await ctx.db.fetchrow(query, member.id)
+
+        if record is None:
+            return await ctx.send('No info for this player.')
+
+        query = """SELECT teams.challonge, team_members.captain
+                   FROM team_members
+                   INNER JOIN teams
+                           ON teams.id = team_members.team_id
+                   INNER JOIN players
+                           ON players.id = team_members.player_id
+                   WHERE teams.active
+                   AND players.discord_id=$1
+                """
+
+        info = await ctx.db.fetchrow(query, member.id)
+        e = discord.Embed()
+        e.set_author(name=str(member), icon_url=member.avatar_url)
+
+        if record['challonge']:
+            e.url = f'https://challonge.com/users/{record["challonge"]}'
+
+        challonge_url = f'https://challonge.com/teams/{info["challonge"]}' if info else 'None'
+        e.add_field(name='Switch', value=record['switch'])
+        e.add_field(name='Active Team', value=challonge_url)
+        e.add_field(name='Captain?', value='Yes' if info and info['captain'] else 'No')
+        await ctx.send(embed=e)
 
     @player.command(name='switch')
+    @in_booyah_guild()
     async def player_switch(self, ctx, *, fc: fc_converter):
         """Sets your Nintendo Switch code for your player profile."""
 
