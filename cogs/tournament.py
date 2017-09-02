@@ -1697,7 +1697,7 @@ class Tournament:
             return await ctx.send('Aborting.')
 
         query = """INSERT INTO team_members (player_id, team_id) VALUES ($1, $2)"""
-        await ctx.db.execute(query, player_id, team_id)
+        await ctx.db.execute(query, player_id, team['id'])
         await ctx.send('Successfully added member.')
 
         # transparently try to add roles depending on the tournament state
