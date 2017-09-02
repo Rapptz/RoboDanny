@@ -1700,6 +1700,37 @@ class Tournament:
         await ctx.db.execute(query, player_id, team_id)
         await ctx.send('Successfully added member.')
 
+        # transparently try to add roles depending on the tournament state
+        participants = await self.challonge.participants()
+        team_id = str(team['id'])
+        participant_id = next((p['id'] for p in participants if p['misc'] == team_id and p['final_rank'] is None), None)
+        if participant_id is None:
+            return
+
+        await member.add_roles(discord.Object(id=PARTICIPANT_ROLE))
+        if self.tournament_state is TournamentState.pending:
+            await member.add_roles(discord.Object(id=NOT_CHECKED_IN_ROLE))
+
+        if self.tournament_state is TournamentState.underway:
+            # see if they have a room active and add them there
+            if not hasattr(self, '_participants'):
+                await self.prepare_participant_cache()
+
+            try:
+                info = self._participants[participant_id]
+            except KeyError:
+                pass
+            else:
+                # add to the cache
+                self._member_participants[member.id] = participant_id
+
+            # add to the channel
+            for channel_id, obj in self.config.get('round_info', {}).items():
+                if obj['player1_id'] == participant_id or obj['player2_id'] == participant_id:
+                    channel = ctx.guild.get_channel(int(channel_id))
+                    if channel:
+                        await channel.set_permissions(member, read_messages=True)
+
     @team.command(name='remove')
     async def team_remove(self, ctx, *, member: discord.Member):
         """Removes a member from your team."""
@@ -1717,11 +1748,24 @@ class Tournament:
                 """
 
         deleted = await ctx.db.fetchrow(query, team['id'], member.id)
-        if deleted:
-            await ctx.send('Removed member successfully.')
-        else:
-            await ctx.send('This member could not be removed. They might not be in your team.')
+        if not deleted:
+            return await ctx.send('This member could not be removed. They might not be in your team.')
 
+        await ctx.send('Removed member successfully.')
+
+        # transparently try to remove roles depending on the tournament state
+        participants = await self.challonge.participants()
+        team_id = str(team['id'])
+        participant_id = next((p['id'] for p in participants if p['misc'] == team_id and p['final_rank'] is None), None)
+        if participant_id is None:
+            return
+
+        await member.remove_roles(discord.Object(id=PARTICIPANT_ROLE))
+        if self.tournament_state is TournamentState.pending:
+            await member.remove_roles(discord.Object(id=NOT_CHECKED_IN_ROLE))
+
+        # we'll leave them in the room for now
+        return
 
     @team.command(name='logo')
     async def team_logo(self, ctx, *, url=None):
