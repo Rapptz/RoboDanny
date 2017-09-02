@@ -184,7 +184,7 @@ PARTICIPANT_ROLE = 343137581564952587
 NOT_CHECKED_IN_ROLE = 343137740889522177
 ANNOUNCEMENT_CHANNEL = 342925685729263616
 BOT_SPAM_CHANNEL = 343191203686252548
-TOP_PARTICIPANT_ROLE = 344334665517105165
+TOP_PARTICIPANT_ROLE = 353646321028169729
 
 def is_to():
     def predicate(ctx):
@@ -1121,7 +1121,7 @@ class Tournament:
         team_ids = []
         for p in tournament['participants']:
             participant = p['participant']
-            if participant['final_rank'] >= cut_off:
+            if participant['final_rank'] <= cut_off:
                 team_ids.append(int(participant['misc']))
 
         query = """SELECT players.discord_id, team_members.team_id
