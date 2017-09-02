@@ -1128,7 +1128,7 @@ class Tournament:
                    FROM team_members
                    INNER JOIN players
                            ON players.id = team_members.player_id
-                   WHERE team_members.team_id = ANY($2::int[]);
+                   WHERE team_members.team_id = ANY($1::int[]);
                 """
 
         members = await ctx.db.fetch(query, team_ids)
