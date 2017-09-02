@@ -1109,6 +1109,41 @@ class Tournament:
         await self.log('Disqualified', error=None, **fields)
         await ctx.send(f'Successfully disqualified <{team.url}>.')
 
+    @tourney.command(name='top')
+    @is_to()
+    async def tourney_top(self, ctx, cut_off: int, *, url: Challonge):
+        """Adds Top Participant roles based on the cut off for a URL."""
+
+        tournament = await url.show(include_participants=True)
+        if tournament.get('state') != 'complete':
+            return await ctx.send('This tournament is incomplete.')
+
+        participants = [p for p in tournament['participants'] if p['final_rank'] >= cut_off]
+        team_ids = [int(p['misc']) for p in participants]
+
+        query = """SELECT players.discord_id, team_members.team_id
+                   FROM team_members
+                   INNER JOIN players
+                           ON players.id = team_members.player_id
+                   WHERE team_members.team_id = ANY($2::int[]);
+                """
+
+        members = await ctx.db.fetch(query, team_ids)
+        role = discord.Object(id=TOP_PARTICIPANT_ROLE)
+
+        async with ctx.typing():
+            good = 0
+            for discord_id, team_id in members:
+                member = ctx.guild.get_member(discord_id)
+                try:
+                    await member.add_roles(role, reason=f'Top {cut_off} Team ID: {team_id}')
+                except:
+                    pass
+                else:
+                    good += 1
+
+        await ctx.send(f'Successfully applied {good} roles out of {len(members)} for top {cut_off} in <{url.url}>.')
+
     @tourney.command(name='close')
     @is_to()
     async def tourney_close(self, ctx):
