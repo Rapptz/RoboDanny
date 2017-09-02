@@ -775,7 +775,7 @@ class Tournament:
 
             try:
                 channel = await guild.create_text_channel(f'group-{identifier}', overwrites=overwrites)
-                round_info[channel.id] = {
+                round_info[str(channel.id)] = {
                     'match_id': match['id'],
                     'player1_id': player1_id,
                     'player2_id': player2_id,
@@ -1524,10 +1524,6 @@ class Tournament:
 
         info = self.config.get('round_info', {})
         ours = info.get(str(ctx.channel.id))
-        if ours is None:
-            ours = info.get(ctx.channel.id)
-
-
         if ours is None:
             return await ctx.send('This channel is not a currently running group channel.')
 
