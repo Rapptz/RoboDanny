@@ -809,10 +809,10 @@ class Tournament:
         conf['round_info'] = round_info
         await self.config.save()
 
-        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=45)
+        base = datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
         times = (
             (base, 0),
-            (base - datetime.timedelta(minutes=20), 20)
+            (base - datetime.timedelta(minutes=15), 15)
         )
 
         reminder = self.bot.get_cog('Reminder')
