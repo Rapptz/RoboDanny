@@ -790,7 +790,7 @@ class Tournament:
                 await asyncio.sleep(0.5)
 
                 to_beat = (best_of // 2) + 1
-                msg =  "Please use this channel to communicate!\n" \
+                msg =  "@here Please use this channel to communicate!\n" \
                        "When your match is complete, **both teams must report their own scores**.\n" \
                       f"Reporting your score is done via the `?score` command. For example: `?score {to_beat}`"
 
