@@ -1901,15 +1901,25 @@ class Tournament:
             return await ctx.send('No info for this team!')
 
         team_info = await self.challonge.get_team_info(url.slug)
-        e = discord.Embed(title=team_info.name, url=url.url)
+        e = discord.Embed(title=team_info.name, url=url.url, colour=0x19D719)
 
         if record['logo']:
             e.set_thumbnail(url=record['logo'])
 
-        members = await self.get_discord_users_from_team(ctx.db, team_id=record['id'])
+        query = """SELECT players.discord_id, players.switch
+                   FROM team_members
+                   INNER JOIN players ON players.id = team_members.player_id
+                   WHERE team_id=$1;
+                """
 
+        players = await ctx.db.fetch(query, record['id'])
         e.add_field(name='Active?', value='Yes' if record['active'] else 'No')
-        e.add_field(name='Members', value='\n'.join(member.mention for member in members))
+
+        for member_id, switch in players:
+            member = ctx.guild.get_member(member_id)
+            if member:
+                e.add_field(name=str(member), value=switch, inline=False)
+
         await ctx.send(embed=e)
 
     @commands.group(invoke_without_command=True)
