@@ -860,6 +860,7 @@ class Tournament:
 
         del self._participants
         await self.log("Participant Clean-up", **fields)
+        await self.prepare_participant_cache()
 
     async def on_tournament_round_timer_complete(self, timer):
         round_num, remaining = timer.args
