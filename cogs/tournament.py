@@ -430,7 +430,7 @@ class Tournament:
             traceback.print_exc()
             await ctx.send(error)
 
-    async def log(self, message, ctx=None, *, error=False, **fields):
+    async def log(self, message, ctx=None, *, ping=False, error=False, **fields):
         if error is False:
             e = discord.Embed(colour=0x59b642, title=message)
         else:
@@ -455,7 +455,7 @@ class Tournament:
 
         wh_id, wh_token = self.bot.config.tourney_webhook
         hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.bot.session))
-        await hook.send(embed=e)
+        await hook.send(embed=e, content='@here' if ping else None)
 
     @property
     def tournament_state(self):
@@ -1554,6 +1554,7 @@ class Tournament:
         }
 
         changed_score = False
+        ping = False
         round_complete = self.config.get('round_complete', False)
         if our_score is None:
             fields['Reporter Score'] = wins
@@ -1578,13 +1579,14 @@ class Tournament:
 
             ours[str(our_participant_id)] = wins
             title = 'Changed complete score submission' if changed_score else 'Complete Score Submission'
+            ping = True
 
         await ctx.send('Score reported.')
         if round_complete:
             fields['Info'] = title
-            await self.log('Submission After Round Complete', ctx, error=None, **fields)
+            await self.log('Submission After Round Complete', ctx, ping=ping, error=None, **fields)
         else:
-            await self.log(title, ctx, **fields)
+            await self.log(title, ctx, ping=ping, **fields)
 
         await self.config.put('round_info', info)
 
