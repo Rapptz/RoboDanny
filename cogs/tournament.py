@@ -465,7 +465,7 @@ class Tournament:
     def challonge(self):
         return Challonge.from_url(self.bot, self.config.get('url', ''))
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True, aliases=['tournament'])
     @in_booyah_guild()
     async def tourney(self, ctx):
         """Shows you information about the currently tournament."""
