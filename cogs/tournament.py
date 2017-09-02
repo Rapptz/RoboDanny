@@ -556,10 +556,10 @@ class Tournament:
         if not_checked_in is None:
             return await ctx.send('Could not find the Not Checked In role.')
 
-        base = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+        base = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
         durations = (
             (base, 0),
-            (base - datetime.timedelta(hours=1), 60),
+            # (base - datetime.timedelta(hours=1), 60),
             (base - datetime.timedelta(minutes=30), 30),
             (base - datetime.timedelta(minutes=15), 15),
             (base - datetime.timedelta(minutes=5), 5),
@@ -1060,10 +1060,8 @@ class Tournament:
         participants = await challonge.participants()
 
         participant_id = next((p['id'] for p in participants if p['misc'] == str(team_id)), None)
-        if participant_id is None:
-            return await ctx.send('This team is not in the bracket.')
-
-        await challonge.remove_participant(participant_id)
+        if participant_id is not None:
+            await challonge.remove_participant(participant_id)
 
         members = await self.get_discord_users_from_team(ctx.db, team_id=team_id[0])
 
