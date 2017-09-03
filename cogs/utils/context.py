@@ -145,13 +145,14 @@ class Context(commands.Context):
         except asyncio.TimeoutError:
             confirm = None
 
-        if reacquire:
-            await self.acquire()
+        try:
+            if reacquire:
+                await self.acquire()
 
-        if delete_after:
-            await msg.delete()
-
-        return confirm
+            if delete_after:
+                await msg.delete()
+        finally:
+            return confirm
 
     def tick(self, opt, label=None):
         emoji = '<:greenTick:330090705336664065>' if opt else '<:redTick:330090723011592193>'
