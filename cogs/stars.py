@@ -548,11 +548,15 @@ class Stars:
             return await ctx.send(f'This server already has a starboard ({starboard.channel.mention}).')
 
         if hasattr(starboard, 'locked'):
-            confirm = await ctx.prompt('Apparently, a previously configured starboard channel was deleted. Is this true?')
-            if confirm:
-                await ctx.db.execute('DELETE FROM starboard WHERE id=$1;', ctx.guild.id)
+            try:
+                confirm = await ctx.prompt('Apparently, a previously configured starboard channel was deleted. Is this true?')
+            except RuntimeError as e:
+                await ctx.send(e)
             else:
-                return await ctx.send('Aborting starboard creation. Join the bot support server for more questions.')
+                if confirm:
+                    await ctx.db.execute('DELETE FROM starboard WHERE id=$1;', ctx.guild.id)
+                else:
+                    return await ctx.send('Aborting starboard creation. Join the bot support server for more questions.')
 
         perms = ctx.channel.permissions_for(ctx.me)
 
