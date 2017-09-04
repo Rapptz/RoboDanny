@@ -226,6 +226,7 @@ class Config:
 
     @commands.group()
     async def config(self, ctx):
+        """Handles the server or channel permission configuration for the bot."""
         if ctx.invoked_subcommand is None:
             await ctx.show_help('config')
 
