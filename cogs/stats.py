@@ -222,8 +222,7 @@ class Stats:
         records = await ctx.db.fetch(query, ctx.guild.id)
 
         value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records))
-
+                          for (index, (command, uses)) in enumerate(records)) or 'No Commands.'
         embed.add_field(name='Top Commands Today', value=value, inline=True)
         embed.add_field(name='\u200b', value='\u200b', inline=True)
 
@@ -258,7 +257,7 @@ class Stats:
         records = await ctx.db.fetch(query, ctx.guild.id)
 
         value = '\n'.join(f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)'
-                          for (index, (author_id, uses)) in enumerate(records))
+                          for (index, (author_id, uses)) in enumerate(records)) or 'No command users.'
 
         embed.add_field(name='Top Command Users Today', value=value, inline=True)
         await ctx.send(embed=embed)
