@@ -301,10 +301,10 @@ class Meta:
 
     async def say_permissions(self, ctx, member, channel):
         permissions = channel.permissions_for(member)
-        e = discord.Embed()
+        e = discord.Embed(colour=member.colour)
         allowed, denied = [], []
         for name, value in permissions:
-            name = name.replace('_', ' ').title()
+            name = name.replace('_', ' ').replace('guild', 'server').title()
             if value:
                 allowed.append(name)
             else:
@@ -316,23 +316,27 @@ class Meta:
 
     @commands.command()
     @commands.guild_only()
-    async def permissions(self, ctx, *, member: discord.Member = None):
-        """Shows a member's permissions.
+    async def permissions(self, ctx, member: discord.Member = None, channel: discord.TextChannel = None):
+        """Shows a member's permissions in a specific channel.
+
+        If no channel is given then it uses the current one.
 
         You cannot use this in private messages. If no member is given then
         the info returned will be yours.
         """
-        channel = ctx.message.channel
+        channel = channel or ctx.channel
         if member is None:
-            member = ctx.message.author
+            member = ctx.author
 
         await self.say_permissions(ctx, member, channel)
 
     @commands.command()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_roles=True)
-    async def botpermissions(self, ctx):
-        """Shows the bot's permissions.
+    async def botpermissions(self, ctx, *, channel: discord.TextChannel = None):
+        """Shows the bot's permissions in a specific channel.
+
+        If no channel is given then it uses the current one.
 
         This is a good way of checking if the bot has the permissions needed
         to execute the commands it wants to execute.
@@ -340,7 +344,7 @@ class Meta:
         To execute this command you must have Manage Roles permission.
         You cannot use this in private messages.
         """
-        channel = ctx.channel
+        channel = channel or ctx.channel
         member = ctx.guild.me
         await self.say_permissions(ctx, member, channel)
 
