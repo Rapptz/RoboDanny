@@ -391,8 +391,11 @@ class Tags:
                 """
 
         records = await ctx.db.fetch(query, ctx.guild.id)
-        total = records[0]
-        e.description = f'{total["Count"]} tags, {total["Total Uses"]} tag uses'
+        if not records:
+            e.description = 'No tag statistics here.'
+        else:
+            total = records[0]
+            e.description = f'{total["Count"]} tags, {total["Total Uses"]} tag uses'
 
         if len(records) < 3:
             # fill with data to ensure that we have a minimum of 3
