@@ -1171,8 +1171,10 @@ class Splatoon:
         now = datetime.datetime.utcnow()
         if now < salmon.start_time:
             e.add_field(name='Starts In', value=time.human_timedelta(salmon.start_time), inline=False)
+            e.set_footer(text='Starts').timestamp = salmon.start_time
         elif now < salmon.end_time:
             e.add_field(name='Ends In', value=time.human_timedelta(salmon.end_time), inline=False)
+            e.set_footer(text='Ends').timestamp = salmon.end_time
 
         e.add_field(name='Reward Name', value=salmon.gear.name)
         e.add_field(name='Reward Brand', value=salmon.gear.brand)
