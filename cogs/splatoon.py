@@ -579,8 +579,8 @@ class Splatoon:
                 headers = {
                     'Content-Type': 'application/json; charset=utf-8',
                     'X-Platform': 'Android',
-                    'X-ProductVersion': '1.0.4',
-                    'User-Agent': 'com.nintendo.znca/1.0.4 (Android/4.4.2)'
+                    'X-ProductVersion': '1.1.0',
+                    'User-Agent': 'com.nintendo.znca/1.1.0 (Android/4.4.2)'
                 }
 
                 # first, authenticate into the accounts.nintendo.com for our Bearer token and ID token.
