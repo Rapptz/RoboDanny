@@ -151,10 +151,72 @@ class Gear:
 
 class SalmonRun:
     def __init__(self, data):
-        schedule = data['schedule']
-        self.start_time = datetime.datetime.utcfromtimestamp(schedule['start_time'])
-        self.end_time = datetime.datetime.utcfromtimestamp(schedule['end_time'])
-        self.gear = Gear(data['reward_gear']['gear'])
+        fromutc = datetime.datetime.utcfromtimestamp
+        self.start_time = fromutc(data['start_time'])
+        self.end_time = fromutc(data['end_time'])
+        stage = data.get('stage')
+        if stage:
+            self.stage = stage.get('name')
+            self.image = stage.get('image')
+        else:
+            self.stage = None
+            self.image = None
+
+        self.weapons = []
+        for weapon in data.get('weapons', []):
+            self.weapons.append(weapon['name'])
+
+class SalmonRunPages(Pages):
+    def __init__(self, ctx, entries):
+        super().__init__(ctx, entries=entries, per_page=1)
+        self.reaction_emojis = [
+            ('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.first_page),
+            ('\N{BLACK LEFT-POINTING TRIANGLE}', self.previous_page),
+            ('\N{BLACK RIGHT-POINTING TRIANGLE}', self.next_page),
+            ('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.last_page),
+            ('\N{BLACK SQUARE FOR STOP}', self.stop_pages),
+        ]
+
+        self.splat2_data = ctx.cog.splat2_data
+
+    async def show_page(self, page, *, first=False):
+        self.current_page = page
+        salmon = self.entries[page - 1]
+        self.embed = e = discord.Embed(colour=0xFF7500, title='Salmon Run')
+
+        if salmon.image:
+            e.set_image(url=f'https://splatoon2.ink/{salmon.image}')
+
+        now = datetime.datetime.utcnow()
+        if now <= salmon.start_time:
+            e.set_footer(text='Starts').timestamp = salmon.start_time
+            e.description = f'Starts in {time.human_timedelta(salmon.start_time)}'
+        elif now <= salmon.end_time:
+            e.set_footer(text='Ends').timestamp = salmon.end_time
+            e.description = f'Ends in {time.human_timedelta(salmon.end_time)}'
+
+        e.add_field(name='Weapons', value='\n'.join(salmon.weapons) or 'Unknown')
+        e.add_field(name='Map', value=salmon.stage or 'Unknown')
+
+        if self.maximum_pages > 1:
+            e.title = f'Salmon Run {page} out of {self.maximum_pages}'
+
+        if not self.paginating:
+            return await self.channel.send(embed=self.embed)
+
+        if not first:
+            await self.message.edit(embed=self.embed)
+            return
+
+        self.message = await self.channel.send(embed=self.embed)
+        for (reaction, _) in self.reaction_emojis:
+            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
+                # no |<< or >>| buttons if we only have two pages
+                # we can't forbid it if someone ends up using it but remove
+                # it from the default set
+                continue
+
+            await self.message.add_reaction(reaction)
 
 class Splatfest:
     def __init__(self, data):
@@ -508,7 +570,7 @@ class Splatoon:
 
         # mode: List[Rotation]
         self.sp2_map_data = {}
-        self.sp2_salmon_run = None
+        self.sp2_salmon_run = []
         self.sp2_shop = []
         self.sp2_festival = None
 
@@ -741,29 +803,29 @@ class Splatoon:
             return 300.0
 
     async def parse_splatnet2_salmon_run(self):
+        # This method is a lie. It does not actually parse SPlatNet 2 for this.
         try:
-            self.sp2_salmon_run = None
-            async with self.bot.session.get(self.BASE_URL / 'api/timeline') as resp:
+            self.sp2_salmon_run = entries = []
+            async with self.bot.session.get('https://splatoon2.ink/data/salmonruncalendar.json') as resp:
                 if resp.status != 200:
-                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet salmon responded with {resp.status}.')
+                    await self.bot.get_cog('Stats').log_error(extra=f'splatoon2.ink responded with {resp.status}.')
                     return 300.0 # try again in 5 minutes
 
                 data = await resp.json()
-                salmon = data.get('coop')
-                if salmon:
-                    try:
-                        if salmon['importance'] < 0:
-                            return 3600.0
+                now = datetime.datetime.utcnow()
+                for element in data.get('schedules', []):
+                    entry = SalmonRun(element)
+                    if now > entry.end_time:
+                        continue
 
-                        self.sp2_salmon_run = SalmonRun(salmon)
-                        now = datetime.datetime.utcnow()
-                        end = self.sp2_salmon_run.end_time
-                        return 3600.0 if now > end else (end - now).total_seconds()
-                    except KeyError:
-                        return 3600.0
+                    entries.append(entry)
+
+                entries.sort(key=lambda e: e.end_time)
+                if entries:
+                    return (entries[0].end_time - now).total_seconds()
                 return 3600.0
         except Exception as e:
-            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet salmon Error')
+            await self.bot.get_cog('Stats').log_error(extra=f'Salmon Error')
             return 3600.0
 
     async def parse_splatnet2_onlineshop(self):
@@ -1164,22 +1226,14 @@ class Splatoon:
     async def salmonrun(self, ctx):
         """Shows the Salmon Run schedule, if any."""
         salmon = self.sp2_salmon_run
-        if salmon is None:
+        if not salmon:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        e = discord.Embed(title='Salmon Run', colour=0xFF7500)
-        now = datetime.datetime.utcnow()
-        if now < salmon.start_time:
-            e.add_field(name='Starts In', value=time.human_timedelta(salmon.start_time), inline=False)
-            e.set_footer(text='Starts').timestamp = salmon.start_time
-        elif now < salmon.end_time:
-            e.add_field(name='Ends In', value=time.human_timedelta(salmon.end_time), inline=False)
-            e.set_footer(text='Ends').timestamp = salmon.end_time
-
-        e.add_field(name='Reward Name', value=salmon.gear.name)
-        e.add_field(name='Reward Brand', value=salmon.gear.brand)
-        e.set_thumbnail(url=str(self.BASE_URL) + salmon.gear.image)
-        await ctx.send(embed=e)
+        try:
+            pages = SalmonRunPages(ctx, salmon)
+            await pages.paginate()
+        except Exception as e:
+            await ctx.send(e)
 
     @commands.command(aliases=['splatnetshop'])
     async def splatshop(self, ctx):
