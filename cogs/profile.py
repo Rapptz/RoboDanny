@@ -210,10 +210,6 @@ class Profile:
         e.set_author(name=member.display_name, icon_url=member.avatar_url_as(format='png'))
 
         extra = record['extra'] or {}
-        rank = extra.get('sp1_rank')
-        if rank:
-            e.description = f'This user played Splatoon 1 and was ranked {rank}!'
-
         rank = extra.get('sp2_rank', {})
         value = 'Unranked'
         if rank:
