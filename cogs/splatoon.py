@@ -183,6 +183,7 @@ class SalmonRunPages(Pages):
         self.current_page = page
         salmon = self.entries[page - 1]
         self.embed = e = discord.Embed(colour=0xFF7500, title='Salmon Run')
+        e.description = '*Data provided by [splatoon2.ink](https://splatoon2.ink)*'
 
         if salmon.image:
             e.set_image(url=f'https://splatoon2.ink/{salmon.image}')
@@ -190,10 +191,10 @@ class SalmonRunPages(Pages):
         now = datetime.datetime.utcnow()
         if now <= salmon.start_time:
             e.set_footer(text='Starts').timestamp = salmon.start_time
-            e.description = f'Starts in {time.human_timedelta(salmon.start_time)}'
+            e.description = f'{e.description}\n\nStarts in {time.human_timedelta(salmon.start_time)}'
         elif now <= salmon.end_time:
             e.set_footer(text='Ends').timestamp = salmon.end_time
-            e.description = f'Ends in {time.human_timedelta(salmon.end_time)}'
+            e.description = f'{e.description}\n\nEnds in {time.human_timedelta(salmon.end_time)}'
 
         e.add_field(name='Weapons', value='\n'.join(salmon.weapons) or 'Unknown')
         e.add_field(name='Map', value=salmon.stage or 'Unknown')
