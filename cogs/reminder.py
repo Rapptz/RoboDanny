@@ -200,7 +200,7 @@ class Reminder:
 
         timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg, connection=ctx.db)
         delta = time.human_timedelta(when.dt, source=ctx.message.created_at)
-        await ctx.send(f"Alright {ctx.author.mention}, I'll remind you about {when.arg} in {delta}.")
+        await ctx.send(f"Alright {ctx.author.mention}, in {delta} I'll remind you about {when.arg}.")
 
     @reminder.command(name='list')
     async def reminder_list(self, ctx):
@@ -242,7 +242,7 @@ class Reminder:
             except:
                 return
 
-        await channel.send(f'<@{author_id}>, {timer.human_delta} you asked to be reminded of {message}.')
+        await channel.send(f'<@{author_id}>, {timer.human_delta} you asked to be reminded about {message}.')
 
 def setup(bot):
     bot.add_cog(Reminder(bot))
