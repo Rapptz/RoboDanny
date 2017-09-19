@@ -194,6 +194,10 @@ class SalmonRun:
             '__salmon__': True,
         }
 
+    def reset(self):
+        self.stage = None
+        self.weapons = []
+
 class SalmonRunPages(Pages):
     def __init__(self, ctx, entries):
         super().__init__(ctx, entries=entries, per_page=1)
@@ -1346,7 +1350,7 @@ class Splatoon:
         await self.splat2_data.save()
         await ctx.send(f'Successfully set the map for {entry.id} to {found}.')
 
-    @salmonrun.command(name='weapon')
+    @salmonrun.command(name='weapon', aliases=['weapons'])
     @is_salmon_moderator()
     async def salmonrun_weapon(self, ctx, id: int, first, second, third, fourth):
         """Edits the weapons of a Salmon Run entry."""
@@ -1373,6 +1377,19 @@ class Splatoon:
         entry.weapons = weapons
         await self.splat2_data.save()
         await ctx.send(f'Successfully set weapons to {formats.human_join(weapons, final="and")}')
+
+    @salmonrun.command(name='reset')
+    @commands.is_owner()
+    async def salmonrun_reset(self, ctx, id: int):
+        """Removes the maps and weapons from a Salmon Run entry."""
+
+        entry = self.get_salmon_run_by_id(id)
+        if entry is None:
+            return await ctx.send('Could not find an entry with this ID.')
+
+        entry.reset()
+        await self.splat2_data.save()
+        await ctx.send(f'Successfully reset {entry.id}.')
 
     @commands.command(aliases=['splatnetshop'])
     async def splatshop(self, ctx):
