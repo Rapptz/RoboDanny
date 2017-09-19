@@ -1344,7 +1344,7 @@ class Splatoon:
             return await ctx.send('Could not find an entry with this ID.')
 
         maps = list(SALMON_RUN_MAPS)
-        found = fuzzy.find(map, maps)
+        found = fuzzy.find(map.strip('"'), maps)
 
         if found is None:
             return await ctx.send(f'Bad map. Must be one of {formats.human_join(list(SALMON_RUN_MAPS))}')
