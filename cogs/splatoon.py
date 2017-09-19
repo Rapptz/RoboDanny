@@ -1285,6 +1285,9 @@ class Splatoon:
 
         current = self.splat2_data.get('salmon_run', [])
 
+        if start_time > end_time:
+            return await ctx.send('The end time must be after the start time...')
+
         # verify this is a new entry
         for schedule in current:
             if schedule.deleted:
