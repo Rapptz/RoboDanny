@@ -40,7 +40,8 @@ def get_random_scrims(modes, maps, count):
     result = []
     current_mode_index = 0
     for index in range(count):
-        while True:
+        # only try up to 25 times instead of infinitely
+        for i in range(25):
             entry = GameEntry(stage=random.choice(maps), mode=modes[current_mode_index])
             if is_valid_entry(result, entry):
                 result.append(entry)
