@@ -168,14 +168,17 @@ class API:
             pattern = re.compile('|'.join(fr'\b{k}\b' for k in pit_of_success_helpers.keys()))
             obj = pattern.sub(replace, obj)
 
-        cache = self._rtfm_cache[key]
-        matches = fuzzy.extract_or_exact(obj, cache, scorer=fuzzy.token_sort_ratio, limit=5, score_cutoff=50)
+        cache = list(self._rtfm_cache[key].items())
+        def transform(tup):
+            return tup[0]
+
+        matches = fuzzy.finder(obj, cache, key=lambda t: t[0], lazy=False)[:5]
 
         e = discord.Embed(colour=discord.Colour.blurple())
         if len(matches) == 0:
             return await ctx.send('Could not find anything. Sorry.')
 
-        e.description = '\n'.join(f'[{key}]({url}) ({p}%)' for key, p, url in matches)
+        e.description = '\n'.join(f'[{key}]({url})' for key, url in matches)
         await ctx.send(embed=e)
 
         if ctx.guild and ctx.guild.id == DISCORD_API_ID:
