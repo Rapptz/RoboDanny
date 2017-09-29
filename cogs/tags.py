@@ -816,7 +816,8 @@ class Tags:
         if member is not None:
             return await ctx.send('Tag owner is still in server.')
 
-        query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
+        query = """UPDATE tags SET owner_id=$1 WHERE id=$2;
+                   UPDATE tag_lookup SET owner_id=$1 WHERE tag_id=$2;"""
         await ctx.db.execute(query, ctx.author.id, row[0])
         await ctx.send('Successfully transferred tag ownership to you.')
 
