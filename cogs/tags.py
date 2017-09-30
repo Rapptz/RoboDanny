@@ -97,7 +97,10 @@ class TagName(commands.clean_content):
 
     async def convert(self, ctx, argument):
         converted = await super().convert(ctx, argument)
-        lower = converted.lower()
+        lower = converted.lower().strip()
+
+        if not lower:
+            raise commands.BadArgument('Missing tag name.')
 
         if len(lower) > 100:
             raise commands.BadArgument('Tag name is a maximum of 100 characters.')
