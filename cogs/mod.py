@@ -289,6 +289,10 @@ class Mod:
         The count parameter can only be up to 25.
         """
         count = max(min(count, 25), 5)
+
+        if not ctx.guild.chunked:
+            await self.bot.request_offline_members(ctx.guild)
+
         members = sorted(ctx.guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
 
         e = discord.Embed(title='New Members', colour=discord.Colour.green())
