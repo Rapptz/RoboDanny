@@ -191,7 +191,7 @@ class Stats:
         count = await ctx.db.fetchrow(query, ctx.guild.id)
 
         embed.description = f'{count[0]} commands used.'
-        embed.set_footer(text='Tracking command usage since').timestamp = count[1]
+        embed.set_footer(text='Tracking command usage since').timestamp = count[1] or datetime.datetime.utcnow()
 
         query = """SELECT command,
                           COUNT(*) as "uses"
@@ -279,7 +279,7 @@ class Stats:
         count = await ctx.db.fetchrow(query, ctx.guild.id, member.id)
 
         embed.description = f'{count[0]} commands used.'
-        embed.set_footer(text='First command used').timestamp = count[1]
+        embed.set_footer(text='First command used').timestamp = count[1] or datetime.datetime.utcnow()
 
         query = """SELECT command,
                           COUNT(*) as "uses"
