@@ -293,7 +293,7 @@ class Stats:
         records = await ctx.db.fetch(query, ctx.guild.id, member.id)
 
         value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records))
+                          for (index, (command, uses)) in enumerate(records)) or 'No Commands'
 
         embed.add_field(name='Most Used Commands', value=value, inline=False)
 
@@ -311,7 +311,7 @@ class Stats:
         records = await ctx.db.fetch(query, ctx.guild.id, member.id)
 
         value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records))
+                          for (index, (command, uses)) in enumerate(records)) or 'No Commands'
 
         embed.add_field(name='Most Used Commands Today', value=value, inline=False)
         await ctx.send(embed=embed)
