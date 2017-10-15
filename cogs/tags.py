@@ -545,6 +545,31 @@ class Tags:
         else:
             await ctx.send('Successfully edited tag.')
 
+    @tag.command()
+    @suggest_box()
+    async def append(self, ctx, name: TagName(lower=True), *, content: commands.clean_content):
+        """Modifies an existing tag that you own.
+
+        This command appends content to the original text. If
+        you want to get the old text back, consider using the
+        tag raw command.
+        """
+
+        query = """UPDATE tags SET content=CONCAT(content, $1) 
+                   WHERE LOWER(name)=$2 AND location_id=$3 AND owner_id=$4 AND LEN(CONCAT(content, $1)) <= 2000;
+                """
+        status = await ctx.db.execute(query, content, name, ctx.guild.id, ctx.author.id)
+
+        # the status returns UPDATE <count>
+        # if the <count> is 0, then nothing got updated
+        # probably due to the WHERE clause failing
+
+        if status[-1] == '0':
+            await ctx.send('Could not edit that tag. Are you sure it exists and you own it?'
+                           ' Is the total tag length less than or equal to 2000 characters?')
+        else:
+            await ctx.send('Successfully appended to the tag.')
+
     @tag.command(aliases=['delete'])
     @suggest_box()
     async def remove(self, ctx, *, name: TagName(lower=True)):
