@@ -106,6 +106,9 @@ class ResolvedCommandPermissions:
         if len(self._lookup) == 0:
             return False
 
+        if ctx.author.guild_permissions.manage_guild:
+            return False
+
         command_names = self._split(ctx.command.qualified_name)
 
         guild = self._lookup[None] # no special channel_id
