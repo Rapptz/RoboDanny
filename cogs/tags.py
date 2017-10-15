@@ -555,7 +555,9 @@ class Tags:
         tag raw command.
         """
 
-        query = "UPDATE tags SET content=CONCAT(content, $1) WHERE LOWER(name)=$2 AND location_id=$3 AND owner_id=$4;"
+        query = """UPDATE tags SET content=CONCAT(content, $1) 
+                   WHERE LOWER(name)=$2 AND location_id=$3 AND owner_id=$4 AND LEN(CONCAT(content, $1)) <= 2000;
+                """
         status = await ctx.db.execute(query, content, name, ctx.guild.id, ctx.author.id)
 
         # the status returns UPDATE <count>
@@ -563,7 +565,8 @@ class Tags:
         # probably due to the WHERE clause failing
 
         if status[-1] == '0':
-            await ctx.send('Could not append to that tag. Are you sure it exists and you own it?')
+            await ctx.send('Could not edit that tag. Are you sure it exists and you own it?'
+                           ' Is the total tag length less than or equal to 2000 characters?')
         else:
             await ctx.send('Successfully appended to the tag.')
 
