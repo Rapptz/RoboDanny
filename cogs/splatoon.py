@@ -52,11 +52,6 @@ def get_random_scrims(modes, maps, count):
 
     return result
 
-def is_salmon_moderator():
-    def predicate(ctx):
-        return ctx.channel.id == 359442516820623361
-    return commands.check(predicate)
-
 RESOURCE_TO_EMOJI = {
     # Some of these names can be finnicky.
     'Ability Doubler': '<:abilitydoubler:338814715088338957>',
@@ -87,12 +82,6 @@ RESOURCE_TO_EMOJI = {
     'Special Power Up': '<:specialpowerup:338815052234752000>',
     'Money': '<:money:338815193305972736>',
     'Unknown': '<:unknown:338815018101506049>',
-}
-
-SALMON_RUN_MAPS = {
-    'Spawning Grounds': 'https://i.imgur.com/6W5xsyr.jpg',
-    'Marooner\'s Bay': 'https://i.imgur.com/gD0VEyP.jpg',
-    'Lost Outpost': 'https://i.imgur.com/GuyhMG1.jpg',
 }
 
 # There's going to be some code duplication here because it's more
@@ -162,42 +151,19 @@ class Gear:
         return self
 
 class SalmonRun:
-    def __init__(self, start_time, end_time, id):
-        self.start_time = start_time
-        self.end_time = end_time
-        self.id = id
-        self.stage = None
-        self.deleted = False
-        self.weapons = []
+    def __init__(self, data):
+        fromutc = datetime.datetime.fromtimestamp
+        self.start_time = fromutc(data['start_time'])
+        self.end_time = fromutc(data['end_time'])
+
+        stage = data.get('stage', {})
+        self.stage = stage.get('name')
+        self._image = stage.get('image')
+        self.weapons = [w.get('name', 'Mystery') if w else 'Mystery' for w in data.get('weapons', [])]
 
     @property
     def image(self):
-        return SALMON_RUN_MAPS.get(self.stage)
-
-    @classmethod
-    def from_dict(cls, data):
-        fromutc = datetime.datetime.fromtimestamp
-
-        self = cls(fromutc(data['start_time']), fromutc(data['end_time']), data['id'])
-        self.stage = data['stage']
-        self.weapons = data['weapons']
-        self.deleted = data['deleted']
-        return self
-
-    def to_dict(self):
-        return {
-            'start_time': self.start_time.timestamp(),
-            'end_time': self.end_time.timestamp(),
-            'id': self.id,
-            'weapons': self.weapons,
-            'stage': self.stage,
-            'deleted': self.deleted,
-            '__salmon__': True,
-        }
-
-    def reset(self):
-        self.stage = None
-        self.weapons = []
+        return self._image and f'https://app.splatoon2.nintendo.net{self._image}'
 
 class SalmonRunPages(Pages):
     def __init__(self, ctx, entries):
@@ -209,8 +175,6 @@ class SalmonRunPages(Pages):
             ('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.last_page),
             ('\N{BLACK SQUARE FOR STOP}', self.stop_pages),
         ]
-
-        self.splat2_data = ctx.cog.splat2_data
 
     async def show_page(self, page, *, first=False):
         self.current_page = page
@@ -412,8 +376,6 @@ class Splatoon2Encoder(json.JSONEncoder):
 def splatoon2_decoder(obj):
     if '__gear__' in obj:
         return Gear.from_json(obj)
-    if '__salmon__' in obj:
-        return SalmonRun.from_dict(obj)
     return obj
 
 def mode_key(argument):
@@ -620,6 +582,7 @@ class Splatoon:
         self.sp2_map_data = {}
         self.sp2_shop = []
         self.sp2_festival = None
+        self.sp2_salmonrun = []
 
     def __unload(self):
         self.map_updater.cancel()
@@ -632,20 +595,8 @@ class Splatoon:
 
     @property
     def salmon_run(self):
-        schedule = self.splat2_data.get('salmon_run', [])
         now = datetime.datetime.utcnow()
-        return [s for s in schedule if now < s.end_time and not s.deleted]
-
-    def get_salmon_run_by_id(self, salmon_run_id):
-        schedule = self.splat2_data.get('salmon_run', [])
-
-        # chances are we're gonna look for a newer entry
-        # as a result let's reverse it since the newer IDs are at
-        # the bottom of the list
-        for element in reversed(schedule):
-            if element.id == salmon_run_id:
-                return element
-        return None
+        return [s for s in self.sp2_salmonrun if now < s.end_time]
 
     async def update_splatnet_cookie(self):
         username = self.splat1_data.get('username')
@@ -898,7 +849,7 @@ class Splatoon:
                 self.sp2_shop.sort(key=lambda m: m.end_time)
                 now = datetime.datetime.utcnow()
                 try:
-                    end = self.sp2_shop[0]
+                    end = self.sp2_shop[0].end_time
                     return 300.0 if now > end else (end - now).total_seconds()
                 except:
                     return 300.0
@@ -1018,6 +969,32 @@ class Splatoon:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Splatfest Error')
             return 300.0
 
+    async def parse_splatnet2_salmonrun(self):
+        try:
+            self.sp2_salmonrun = []
+            async with self.bot.session.get(self.BASE_URL / 'api/coop_schedules') as resp:
+                if resp.status != 200:
+                    await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Salmon Run Error')
+                    return 3600.0
+
+                js = await resp.json()
+
+                data = js['schedules']
+                if len(data) == 0:
+                    return 3600.0
+
+                for index, details in enumerate(js['details']):
+                    data[index].update(details)
+
+                self.sp2_salmonrun = [SalmonRun(d) for d in data]
+                self.sp2_salmonrun.sort(key=lambda m: m.end_time)
+                now = datetime.datetime.utcnow()
+                end = self.sp2_salmonrun[0].end_time
+                return 300.0 if now > end else (end - now).total_seconds()
+        except Exception as e:
+            await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Salmon Run Error')
+            return 3600.0
+
     async def splatnet2(self):
         try:
             while not self.bot.is_closed():
@@ -1025,6 +1002,7 @@ class Splatoon:
                 await self._is_authenticated.wait()
                 seconds.append(await self.parse_splatnet2_schedule())
                 seconds.append(await self.parse_splatnet2_onlineshop())
+                seconds.append(await self.parse_splatnet2_salmonrun())
                 seconds.append(await self.scrape_splatnet_stats_and_images())
                 seconds.append(await self.parse_splatnet2_splatfest())
                 await asyncio.sleep(min(seconds))
@@ -1271,129 +1249,6 @@ class Splatoon:
             await pages.paginate()
         except Exception as e:
             await ctx.send(e)
-
-    @salmonrun.command(name='new')
-    @is_salmon_moderator()
-    async def salmonrun_new(self, ctx, start_time: iso8601, end_time: iso8601):
-        """Creates a new Salmon Run entry.
-
-        Times must be provided in ISO-8601, e.g. YYYY-MM-DDTHH:MM
-        or 2017-09-20T18:00 and must be in UTC.
-
-        If you can't figure out how to provide times in UTC,
-        google your local time to UTC.
-        """
-
-        current = self.splat2_data.get('salmon_run', [])
-
-        if start_time > end_time:
-            return await ctx.send('The end time must be after the start time...')
-
-        # verify this is a new entry
-        for schedule in current:
-            if schedule.deleted:
-                continue
-
-            if schedule.start_time == start_time or schedule.end_time == end_time:
-                msg =  'Schedule conflicts with pre-existing entry.\n' \
-                      f'ID: {schedule.id}, Start: {schedule.start_time}, End: {schedule.end_time}'
-                return await ctx.send(msg)
-
-        # this should be fine now
-        entry = SalmonRun(start_time, end_time, len(current) + 1)
-        current.append(entry)
-        await self.splat2_data.put('salmon_run', current)
-        await ctx.send(f'Successfully created Salmon Run ID {entry.id} that starts {start_time} and ends {end_time}')
-
-    @salmonrun.command(name='delete')
-    @commands.is_owner()
-    async def salmonrun_delete(self, ctx, id: int):
-        """Deletes a Salmon Run entry."""
-
-        entry = self.get_salmon_run_by_id(id)
-        if entry is None:
-            return await ctx.send('Could not find an entry with this ID.')
-
-        entry.deleted = True
-        await self.splat2_data.save()
-        await ctx.send(f'Successfully deleted entry {entry.id}.')
-
-    @salmonrun.command(name='list')
-    @is_salmon_moderator()
-    async def salmonrun_list(self, ctx):
-        """Shows the salmon run moderation panel."""
-
-        e = discord.Embed(title='Salmon Run Moderation', colour=0XFF9E4D)
-
-        for entry in self.salmon_run:
-            value = f'Time: {entry.start_time} ~ {entry.end_time}'
-            if entry.weapons:
-                value = f'{value}\nWeapons: {", ".join(entry.weapons)}'
-            if entry.stage:
-                value = f'{value}\nStage: {entry.stage}'
-            e.add_field(name=f'Salmon Run ID: {entry.id}', value=value, inline=False)
-
-        await ctx.send(embed=e)
-
-    @salmonrun.command(name='map')
-    @is_salmon_moderator()
-    async def salmonrun_map(self, ctx, id: int, *, map):
-        """Edits the map of a Salmon Run entry."""
-
-        entry = self.get_salmon_run_by_id(id)
-        if entry is None:
-            return await ctx.send('Could not find an entry with this ID.')
-
-        maps = list(SALMON_RUN_MAPS)
-        found = fuzzy.find(map.strip('"'), maps)
-
-        if found is None:
-            return await ctx.send(f'Bad map. Must be one of {formats.human_join(list(SALMON_RUN_MAPS))}')
-
-        entry.stage = found
-        await self.splat2_data.save()
-        await ctx.send(f'Successfully set the map for {entry.id} to {found}.')
-
-    @salmonrun.command(name='weapon', aliases=['weapons'])
-    @is_salmon_moderator()
-    async def salmonrun_weapon(self, ctx, id: int, first, second, third, fourth):
-        """Edits the weapons of a Salmon Run entry."""
-
-        entry = self.get_salmon_run_by_id(id)
-        if entry is None:
-            return await ctx.send('Could not find an entry with this ID.')
-
-        valid_weapons = [
-            w['name']
-            for w in self.splat2_data.get('weapons', [])
-        ]
-
-        # add Grizzco specific weapons
-        valid_weapons.append('Mystery Weapon')
-
-        weapons = []
-        for to_find in (first, second, third, fourth):
-            found = fuzzy.find(to_find, valid_weapons)
-            if found is None:
-                return await ctx.send(f'Could not find weapon {to_find}.')
-            weapons.append(found)
-
-        entry.weapons = weapons
-        await self.splat2_data.save()
-        await ctx.send(f'Successfully set weapons to {formats.human_join(weapons, final="and")}')
-
-    @salmonrun.command(name='reset')
-    @commands.is_owner()
-    async def salmonrun_reset(self, ctx, id: int):
-        """Removes the maps and weapons from a Salmon Run entry."""
-
-        entry = self.get_salmon_run_by_id(id)
-        if entry is None:
-            return await ctx.send('Could not find an entry with this ID.')
-
-        entry.reset()
-        await self.splat2_data.save()
-        await ctx.send(f'Successfully reset {entry.id}.')
 
     @commands.command(aliases=['splatnetshop'])
     async def splatshop(self, ctx):
