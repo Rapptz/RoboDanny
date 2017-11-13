@@ -152,7 +152,7 @@ class Gear:
 
 class SalmonRun:
     def __init__(self, data):
-        fromutc = datetime.datetime.fromtimestamp
+        fromutc = datetime.datetime.utcfromtimestamp
         self.start_time = fromutc(data['start_time'])
         self.end_time = fromutc(data['end_time'])
 
