@@ -29,6 +29,8 @@ class DPYExclusive:
         try:
             await ctx.author.add_roles(discord.Object(id=DISCORD_PY_REWRITE_ROLE))
         except:
+            report = self.bot.get_cog('Stats')
+            await report.log_error(ctx=ctx, extra='Bad Role?')
             await ctx.message.add_reaction('\N{NO ENTRY SIGN}')
         else:
             await ctx.message.add_reaction('\N{WHITE HEAVY CHECK MARK}')
