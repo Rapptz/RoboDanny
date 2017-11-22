@@ -19,20 +19,23 @@ class DPYExclusive:
     @commands.command(hidden=True)
     @commands.check(lambda ctx: ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID)
     async def rewrite(self, ctx):
-        """Gives you the rewrite role.
+        """Toggles the rewrite role.
 
         Necessary to get rewrite help and news.
         """
 
         if any(r.id == DISCORD_PY_REWRITE_ROLE for r in ctx.author.roles):
-            return await ctx.message.add_reaction('\N{WARNING SIGN}')
+            coro = ctx.author.remove_roles
+        else:
+            coro = ctx.author.add_roles
 
         try:
-            await ctx.author.add_roles(discord.Object(id=DISCORD_PY_REWRITE_ROLE))
+            await coro(discord.Object(id=DISCORD_PY_REWRITE_ROLE))
         except:
             await ctx.message.add_reaction('\N{NO ENTRY SIGN}')
         else:
             await ctx.message.add_reaction('\N{WHITE HEAVY CHECK MARK}')
+
 
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
