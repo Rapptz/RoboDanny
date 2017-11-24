@@ -653,7 +653,7 @@ class Stars:
                        WHERE starboard_entries.guild_id=$1
                        AND   starboard_entries.bot_message_id = ANY($2::bigint[])
                        GROUP BY entry_id
-                       HAVING COUNT(*) >= $3
+                       HAVING COUNT(*) <= $3
                    )
                    DELETE FROM starboard_entries USING bad_entries
                    WHERE starboard_entries.id = bad_entries.entry_id
