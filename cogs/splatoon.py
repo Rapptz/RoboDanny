@@ -129,6 +129,8 @@ class Gear:
         self.name = data['name']
         self.stars = data['rarity'] + 1
         self.image = data['image']
+        self.main = None
+        self.price = None
 
         try:
             self.frequent_skill = brand['frequent_skill']['name']
@@ -304,7 +306,7 @@ class GearPages(Pages):
         else:
             e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
 
-        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {price}')
+        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {price or "???"}')
 
         UNKNOWN = RESOURCE_TO_EMOJI['Unknown']
 
@@ -864,7 +866,7 @@ class Splatoon:
             except KeyError:
                 continue
             else:
-                bulk[kind][gear.name] = gear.image
+                bulk[kind][gear.name] = gear
 
     async def scrape_splatnet_stats_and_images(self):
         try:
@@ -937,11 +939,16 @@ class Splatoon:
                     old = self.splat2_data.get(kind, [])
                     for gear in old:
                         try:
-                            image = data[gear.name]
+                            new_data = data.pop(gear.name)
                         except KeyError:
                             continue
                         else:
                             gear.image = image
+
+                    # add new data
+                    log.info('Scraped %s new pieces of %s gear.', len(data), kind)
+                    for value in data.values():
+                        old.append(value)
 
                 await self.splat2_data.save()
                 return 3600.0 # redo in an hour
