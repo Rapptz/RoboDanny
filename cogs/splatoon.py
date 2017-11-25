@@ -943,7 +943,7 @@ class Splatoon:
                         except KeyError:
                             continue
                         else:
-                            gear.image = image
+                            gear.image = new_data.image
 
                     # add new data
                     log.info('Scraped %s new pieces of %s gear.', len(data), kind)
