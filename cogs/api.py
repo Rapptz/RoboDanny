@@ -11,9 +11,10 @@ DISCORD_BOTS_ID   = 110373943822540800
 USER_BOTS_ROLE    = 178558252869484544
 CONTRIBUTORS_ROLE = 111173097888993280
 DISCORD_PY_ID     = 84319995256905728
+DISCORD_PY_GUILD  = 336642139381301249
 
 def is_discord_api():
-    return checks.is_in_guilds(DISCORD_API_ID)
+    return checks.is_in_guilds(DISCORD_API_ID, DISCORD_PY_GUILD)
 
 def contributor_or_higher():
     def predicate(ctx):
