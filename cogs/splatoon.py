@@ -1081,7 +1081,7 @@ class Splatoon:
             await ctx.send('\n'.join(output))
 
     async def generate_scrims(self, ctx, maps, games, mode):
-        modes = ['Rainmaker', 'Splat Zones', 'Tower Control']
+        modes = ['Rainmaker', 'Splat Zones', 'Tower Control', 'Clam Blitz']
 
         if mode is not None:
             mode = mode.lower()
@@ -1091,7 +1091,8 @@ class Splatoon:
                 'rm': 'Rainmaker',
                 'sz': 'Splat Zones',
                 'tc': 'Tower Control',
-                'tw': 'Turf War'
+                'tw': 'Turf War',
+                'cb': 'Clam Blitz',
             }
 
             real_mode = shortcuts.get(mode)
