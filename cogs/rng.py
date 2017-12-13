@@ -96,7 +96,7 @@ class RNG:
     @random.command()
     async def mode(self, ctx):
         """Displays a random Splatoon mode."""
-        mode = rng.choice(['Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control'])
+        mode = rng.choice(['Turf War', 'Splat Zones', 'Clam Blitz', 'Rainmaker', 'Tower Control'])
         await ctx.send(mode)
 
     @random.command()
