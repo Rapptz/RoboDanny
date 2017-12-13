@@ -98,7 +98,11 @@ def valid_rank(argument, *, _rank=_rank):
         'rain': 'Rainmaker',
         'rainmaker': 'Rainmaker',
         'rain maker': 'Rainmaker',
-        'rm': 'Rainmaker'
+        'rm': 'Rainmaker',
+        'clam blitz': 'Clam Blitz',
+        'clam': 'Clam Blitz',
+        'blitz': 'Clam Blitz',
+        'cb': 'Clam Blitz',
     }
 
     try:
@@ -448,7 +452,7 @@ class Profile:
         e.add_field(name='Top Splatoon 2 Weapons', value=value, inline=False)
 
         # get ranked data
-        for mode in ('Splat Zones', 'Tower Control', 'Rainmaker'):
+        for index, mode in enumerate(('Splat Zones', 'Tower Control', 'Rainmaker', 'Clam Blitz')):
             query = f"""SELECT extra #> '{{sp2_rank,{mode},rank}}' AS "Rank",
                                COUNT(*) AS "Total"
                         FROM profiles
@@ -462,6 +466,10 @@ class Profile:
 
             value = f'*{total} players*\n' + '\n'.join(f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records)
             e.add_field(name=mode, value=value, inline=True)
+
+            # add some empty padding so the embed doesn't look ugly
+            if index % 2 == 1:
+                e.add_field(name='\u200b', value='\u200b', inline=True)
 
         await ctx.send(embed=e)
 
