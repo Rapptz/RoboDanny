@@ -145,7 +145,7 @@ class Stats:
         embed.colour = discord.Colour.blurple()
 
         owner = self.bot.get_user(self.bot.owner_id)
-        embed.set_author(name=str(owner), icon_url=owner.avatar_url)
+        embed.set_author(name=str(owner), icon_url=owner.avatar_url_as(format='png'))
 
         # statistics
         total_members = sum(1 for _ in self.bot.get_all_members())
@@ -272,7 +272,7 @@ class Stats:
         )
 
         embed = discord.Embed(title='Command Stats', colour=member.colour)
-        embed.set_author(name=str(member), icon_url=member.avatar_url)
+        embed.set_author(name=str(member), icon_url=member.avatar_url_as(format='png'))
 
         # total command uses
         query = "SELECT COUNT(*), MIN(used) FROM commands WHERE guild_id=$1 AND author_id=$2;"

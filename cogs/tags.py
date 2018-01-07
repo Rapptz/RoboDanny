@@ -462,7 +462,7 @@ class Tags:
 
     async def member_tag_stats(self, ctx, member):
         e = discord.Embed(colour=discord.Colour.blurple())
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar_url_as(format='png'))
         e.set_footer(text='These statistics are server-specific.')
 
         query = """SELECT COUNT(*)
@@ -593,7 +593,7 @@ class Tags:
         embed.set_footer(text='Alias created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar_url_as(format='png'))
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Original', value=record['name'])
@@ -608,7 +608,7 @@ class Tags:
         embed.set_footer(text='Tag created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar_url_as(format='png'))
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=record['uses'])
@@ -701,7 +701,7 @@ class Tags:
         if rows:
             try:
                 p = Pages(ctx, entries=tuple(r[0] for r in rows))
-                p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
+                p.embed.set_author(name=member.display_name, icon_url=member.avatar_url_as(format='png'))
                 await p.paginate()
             except Exception as e:
                 await ctx.send(e)
@@ -959,7 +959,7 @@ class Tags:
         embed.set_footer(text='Tag added to box')
 
         user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar_url_as(format='png'))
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=data['uses'])
@@ -1070,7 +1070,7 @@ class Tags:
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
             try:
                 p = Pages(ctx, entries=entries)
-                p.embed.set_author(name=user.display_name, icon_url=user.avatar_url)
+                p.embed.set_author(name=user.display_name, icon_url=user.avatar_url_as(format='png'))
                 p.embed.title = f'{sum(u for _, u in rows)} total uses'
                 await p.paginate()
             except Exception as e:

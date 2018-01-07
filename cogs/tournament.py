@@ -1945,7 +1945,7 @@ class Tournament:
 
         info = await ctx.db.fetchrow(query, member.id)
         e = discord.Embed()
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar_url_as(format='png'))
 
         if record['challonge']:
             e.url = f'https://challonge.com/users/{record["challonge"]}'

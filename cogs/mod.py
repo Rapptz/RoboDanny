@@ -270,7 +270,7 @@ class Mod:
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = now
         e.set_footer(text='Created')
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar_url_as(format='png'))
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
         e.add_field(name='Created', value=time.human_timedelta(member.created_at), inline=False)

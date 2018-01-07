@@ -229,7 +229,7 @@ class Meta:
         e.colour = member.colour
 
         if member.avatar:
-            e.set_thumbnail(url=member.avatar_url)
+            e.set_thumbnail(url=member.avatar_url_as(format='png'))
 
         await ctx.send(embed=e)
 

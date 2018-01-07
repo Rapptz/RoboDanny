@@ -202,7 +202,7 @@ class API:
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar_url_as(format='png'))
 
         query = 'SELECT count FROM rtfm WHERE user_id=$1;'
         record = await ctx.db.fetchrow(query, member.id)
