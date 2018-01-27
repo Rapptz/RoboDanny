@@ -193,12 +193,20 @@ class API:
         Events, objects, and functions are all supported through a
         a cruddy fuzzy algorithm.
         """
-        await self.do_rtfm(ctx, 'latest', obj)
+        if ctx.channel.id == 381965515721146390: #d.py server rewrite help
+            await self.do_rtfm(ctx, 'rewrite', obj)
+        else:
+            await self.do_rtfm(ctx, 'latest', obj)
 
     @rtfm.command(name='rewrite')
     async def rtfm_rewrite(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a rewrite discord.py entity."""
         await self.do_rtfm(ctx, 'rewrite', obj)
+        
+    @rtfm.command(name='async')
+    async def rtfm_async(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for an async discord.py entity."""
+        await self.do_rtfm(ctx, 'latest', obj)
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
