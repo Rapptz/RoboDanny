@@ -10,7 +10,7 @@ DISCORD_API_ID    = 81384788765712384
 DISCORD_BOTS_ID   = 110373943822540800
 USER_BOTS_ROLE    = 178558252869484544
 CONTRIBUTORS_ROLE = 111173097888993280
-DISCORD_PY_ID     = 84319995256905728
+DISCORD_PY_ID     = 381889733053251584
 DISCORD_PY_GUILD  = 336642139381301249
 
 def is_discord_api():
@@ -182,7 +182,7 @@ class API:
         e.description = '\n'.join(f'[{key}]({url})' for key, url in matches)
         await ctx.send(embed=e)
 
-        if ctx.guild and ctx.guild.id == DISCORD_API_ID:
+        if ctx.guild and ctx.guild.id in [DISCORD_API_ID, DISCORD_PY_GUILD]:
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
 
