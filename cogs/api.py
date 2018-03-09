@@ -104,11 +104,11 @@ class API:
 
         page_types = {
             'rewrite': (
-                'http://discordpy.rtfd.io/en/rewrite/api.html',
-                'http://discordpy.rtfd.io/en/rewrite/ext/commands/api.html'
+                'https://rapptz.github.io/discord.py/docs/api.html',
+                'https://rapptz.github.io/discord.py/docs/ext/commands/api.html'
             ),
             'latest': (
-                'http://discordpy.rtfd.io/en/latest/api.html',
+                'https://discordpy.rtfd.io/en/latest/api.html',
             )
         }
 
