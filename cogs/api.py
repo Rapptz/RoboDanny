@@ -108,7 +108,7 @@ class API:
                 'https://rapptz.github.io/discord.py/docs/ext/commands/api.html'
             ),
             'latest': (
-                'https://discordpy.rtfd.io/en/latest/api.html',
+                'https://discordpy.readthedocs.org/en/latest/api.html',
             )
         }
 
@@ -131,7 +131,7 @@ class API:
         self._rtfm_cache = cache
 
     async def do_rtfm(self, ctx, key, obj):
-        base_url = f'http://discordpy.rtfd.io/en/{key}/'
+        base_url = f'https://discordpy.readthedocs.org/en/{key}/'
 
         if obj is None:
             await ctx.send(base_url)
