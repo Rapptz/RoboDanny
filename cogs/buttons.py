@@ -550,6 +550,7 @@ class Buttons:
             if total_bytes >= eight_mib:
                 break
 
+        await ctx.message.delete()
         data = discord.Embed(title=title)
         if text:
             data.description = text
@@ -650,7 +651,6 @@ class Buttons:
         except Exception as e:
             return await ctx.send(str(e))
 
-        await ctx.message.delete()
         spoiler_message = await ctx.send(embed=cache.to_spoiler_embed(ctx, storage_message))
         self._spoiler_cache[spoiler_message.id] = cache
         await spoiler_message.add_reaction(':spoiler:430469957042831371')
