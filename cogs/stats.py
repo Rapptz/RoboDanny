@@ -138,7 +138,11 @@ class Stats:
         else:
             cmd = cmd.format(r'`%h`')
 
-        revision = os.popen(cmd).read().strip()
+        try:
+            revision = os.popen(cmd).read().strip()
+        except OSError:
+            revision = 'Could not fetch due to memory error. Sorry.'
+
         embed = discord.Embed(description='Latest Changes:\n' + revision)
         embed.title = 'Official Bot Server Invite'
         embed.url = 'https://discord.gg/0118rJdtd1rVJJfuI'
