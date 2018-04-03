@@ -88,7 +88,7 @@ class SpoilerCache:
 
 class SpoilerCooldown(commands.CooldownMapping):
     def __init__(self):
-        super().__init__(commands.Cooldown(1, 20.0, commands.BucketType.user))
+        super().__init__(commands.Cooldown(1, 10.0, commands.BucketType.user))
 
     def _bucket_key(self, user_id):
         return user_id
