@@ -90,11 +90,11 @@ class SpoilerCooldown(commands.CooldownMapping):
     def __init__(self):
         super().__init__(commands.Cooldown(1, 10.0, commands.BucketType.user))
 
-    def _bucket_key(self, user_id):
-        return user_id
+    def _bucket_key(self, tup):
+        return tup
 
-    def is_rate_limited(self, user_id):
-        bucket = self.get_bucket(user_id)
+    def is_rate_limited(self, message_id, user_id):
+        bucket = self.get_bucket((message_id, user_id))
         return bucket.update_rate_limit() is not None
 
 class Buttons:
@@ -618,7 +618,7 @@ class Buttons:
         if not user or user.bot:
             return
 
-        if self._spoiler_cooldown.is_rate_limited(user_id):
+        if self._spoiler_cooldown.is_rate_limited(message_id, user_id):
             return
 
         cache = await self.get_spoiler_cache(channel_id, message_id)
