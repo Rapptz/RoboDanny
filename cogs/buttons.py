@@ -610,18 +610,18 @@ class Buttons:
         self._spoiler_cache[message_id] = cache
         return cache
 
-    async def on_raw_reaction_add(self, emoji, message_id, channel_id, user_id):
-        if emoji.id != SPOILER_EMOJI_ID:
+    async def on_raw_reaction_add(self, payload):
+        if payload.emoji.id != SPOILER_EMOJI_ID:
             return
 
-        user = self.bot.get_user(user_id)
+        user = self.bot.get_user(payload.user_id)
         if not user or user.bot:
             return
 
-        if self._spoiler_cooldown.is_rate_limited(message_id, user_id):
+        if self._spoiler_cooldown.is_rate_limited(payload.message_id, payload.user_id):
             return
 
-        cache = await self.get_spoiler_cache(channel_id, message_id)
+        cache = await self.get_spoiler_cache(payload.channel_id, payload.message_id)
         embed = cache.to_embed(self.bot)
         await user.send(embed=embed)
 

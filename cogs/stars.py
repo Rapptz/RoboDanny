@@ -210,29 +210,29 @@ class Stars:
             except Exception:
                 return None
 
-    async def reaction_action(self, fmt, emoji, message_id, channel_id, user_id):
-        if str(emoji) != '\N{WHITE MEDIUM STAR}':
+    async def reaction_action(self, fmt, payload):
+        if str(payload.emoji) != '\N{WHITE MEDIUM STAR}':
             return
 
-        channel = self.bot.get_channel(channel_id)
+        channel = self.bot.get_channel(payload.channel_id)
         if not isinstance(channel, discord.TextChannel):
             return
 
         method = getattr(self, f'{fmt}_message')
 
-        user = self.bot.get_user(user_id)
+        user = self.bot.get_user(payload.user_id)
         if user is None or user.bot:
             return
 
         async with self.bot.pool.acquire() as con:
             config = self.bot.get_cog('Config')
             if config:
-                plonked = await config.is_plonked(channel.guild.id, user_id, channel_id=channel_id, connection=con)
+                plonked = await config.is_plonked(channel.guild.id, payload.user_id, channel_id=payload.channel_id, connection=con)
                 if plonked:
                     return
 
             try:
-                await method(channel, message_id, user_id, connection=con)
+                await method(channel, payload.message_id, payload.user_id, connection=con)
             except StarError:
                 pass
 
@@ -249,53 +249,45 @@ class Stars:
             query = "DELETE FROM starboard WHERE id=$1;"
             await con.execute(query, channel.guild.id)
 
-    async def on_raw_reaction_add(self, emoji, message_id, channel_id, user_id):
-        await self.reaction_action('star', emoji, message_id, channel_id, user_id)
+    async def on_raw_reaction_add(self, payload):
+        await self.reaction_action('star', payload)
 
-    async def on_raw_reaction_remove(self, emoji, message_id, channel_id, user_id):
-        await self.reaction_action('unstar', emoji, message_id, channel_id, user_id)
+    async def on_raw_reaction_remove(self, payload):
+        await self.reaction_action('unstar', payload)
 
-    async def on_raw_message_delete(self, message_id, channel_id):
-        if message_id in self._about_to_be_deleted:
+    async def on_raw_message_delete(self, payload):
+        if payload.message_id in self._about_to_be_deleted:
             # we triggered this deletion ourselves and
             # we don't need to drop it from the database
-            self._about_to_be_deleted.discard(message_id)
+            self._about_to_be_deleted.discard(payload.message_id)
             return
 
-        channel = self.bot.get_channel(channel_id)
-        if channel is None or not isinstance(channel, discord.TextChannel):
-            return
-
-        starboard = await self.get_starboard(channel.guild.id)
-        if starboard.channel is None or starboard.channel.id != channel_id:
+        starboard = await self.get_starboard(payload.guild_id)
+        if starboard.channel is None or starboard.channel.id != payload.channel_id:
             return
 
         # at this point a message got deleted in the starboard
         # so just delete it from the database
         async with self.bot.pool.acquire() as con:
             query = "DELETE FROM starboard_entries WHERE bot_message_id=$1;"
-            await con.execute(query, message_id)
+            await con.execute(query, payload.message_id)
 
-    async def on_raw_bulk_message_delete(self, message_ids, channel_id):
-        if message_ids <= self._about_to_be_deleted:
+    async def on_raw_bulk_message_delete(self, payload):
+        if payload.message_ids <= self._about_to_be_deleted:
             # see comment above
-            self._about_to_be_deleted.difference_update(message_ids)
+            self._about_to_be_deleted.difference_update(payload.message_ids)
             return
 
-        channel = self.bot.get_channel(channel_id)
-        if channel is None or not isinstance(channel, discord.TextChannel):
-            return
-
-        starboard = await self.get_starboard(channel.guild.id)
-        if starboard.channel is None or starboard.channel.id != channel_id:
+        starboard = await self.get_starboard(payload.guild_id)
+        if starboard.channel is None or starboard.channel.id != payload.channel_id:
             return
 
         async with self.bot.pool.acquire() as con:
             query = "DELETE FROM starboard_entries WHERE bot_message_id=ANY($1::bigint[]);"
-            await con.execute(query, list(message_ids))
+            await con.execute(query, list(payload.message_ids))
 
-    async def on_raw_reaction_clear(self, message_id, channel_id):
-        channel = self.bot.get_channel(channel_id)
+    async def on_raw_reaction_clear(self, payload):
+        channel = self.bot.get_channel(payload.channel_id)
         if channel is None or not isinstance(channel, discord.TextChannel):
             return
 
@@ -305,7 +297,7 @@ class Stars:
                 return
 
             query = "DELETE FROM starboard_entries WHERE message_id=$1 RETURNING bot_message_id;"
-            bot_message_id = await con.fetchrow(query, message_id)
+            bot_message_id = await con.fetchrow(query, payload.message_id)
 
             if bot_message_id is None:
                 return
