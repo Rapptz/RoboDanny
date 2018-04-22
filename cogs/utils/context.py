@@ -117,13 +117,13 @@ class Context(commands.Context):
 
         confirm = None
 
-        def check(emoji, message_id, channel_id, user_id):
+        def check(payload):
             nonlocal confirm
 
-            if message_id != msg.id or user_id != author_id:
+            if payload.message_id != msg.id or payload.user_id != author_id:
                 return False
 
-            codepoint = str(emoji)
+            codepoint = str(payload.emoji)
 
             if codepoint == '\N{WHITE HEAVY CHECK MARK}':
                 confirm = True
