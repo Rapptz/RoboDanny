@@ -9,7 +9,7 @@ import logging
 import traceback
 import aiohttp
 import sys
-from collections import Counter
+from collections import Counter, deque
 
 import config
 import asyncpg
@@ -63,6 +63,7 @@ class RoboDanny(commands.AutoShardedBot):
         self.session = aiohttp.ClientSession(loop=self.loop)
 
         self.add_command(self.do)
+        self._prev_events = deque(maxlen=10)
 
         # guild_id: list
         self.prefixes = Config('prefixes.json')
@@ -73,6 +74,9 @@ class RoboDanny(commands.AutoShardedBot):
             except Exception as e:
                 print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
+
+    async def on_socket_response(self, msg):
+        self._prev_events.append(msg)
 
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.NoPrivateMessage):
@@ -128,7 +132,17 @@ class RoboDanny(commands.AutoShardedBot):
         await self.session.close()
 
     def run(self):
-        super().run(config.token, reconnect=True)
+        try:
+            super().run(config.token, reconnect=True)
+        finally:
+            with open('prev_events.log', 'w', encoding='utf-8') as fp:
+                for data in self._prev_events:
+                    try:
+                        x = json.dumps(data, ensure_ascii=True, indent=4)
+                    except:
+                        fp.write(f'{data}\n')
+                    else:
+                        fp.write(f'{x}\n')
 
     @property
     def config(self):
