@@ -16,6 +16,7 @@ LOGGING_CHANNEL = 309632009427222529
 
 class Commands(db.Table):
     id = db.PrimaryKeyColumn()
+
     guild_id = db.Column(db.Integer(big=True), index=True)
     channel_id = db.Column(db.Integer(big=True))
     author_id = db.Column(db.Integer(big=True), index=True)
@@ -145,7 +146,7 @@ class Stats:
 
         embed = discord.Embed(description='Latest Changes:\n' + revision)
         embed.title = 'Official Bot Server Invite'
-        embed.url = 'https://discord.gg/0118rJdtd1rVJJfuI'
+        embed.url = 'https://discord.gg/DWEaqMy'
         embed.colour = discord.Colour.blurple()
 
         owner = self.bot.get_user(self.bot.owner_id)
