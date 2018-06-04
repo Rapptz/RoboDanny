@@ -77,7 +77,7 @@ def valid_nnid(argument):
         raise commands.BadArgument('An NNID has a maximum of 16 characters.')
     return arg
 
-_rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSs][\+-]?)\s*(?P<number>[0-9]{0,2})$')
+_rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
 
 def valid_rank(argument, *, _rank=_rank):
     m = _rank.match(argument.strip('"'))
@@ -118,10 +118,10 @@ def valid_rank(argument, *, _rank=_rank):
     if number:
         number = int(number)
 
-        if number and rank != 'S+':
-            raise commands.BadArgument('Only S+ can input numbers.')
-        if number > 50:
-            raise commands.BadArgument('S+50 is the current cap.')
+        if number and rank not in ('S+', 'X'):
+            raise commands.BadArgument('Only S+ or X can input numbers.')
+        if rank == 'S+' and number > 10:
+            raise commands.BadArgument('S+10 is the current cap.')
 
     return mode, { 'rank': rank, 'number': number }
 
