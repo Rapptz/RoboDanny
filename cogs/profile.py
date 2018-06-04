@@ -291,6 +291,7 @@ class Profile:
         - tc/tower control
         - rm/rainmaker
         - sz/splat zones/zones
+        - cb/clam/blitz/clam blitz
         """
 
         query = """INSERT INTO profiles (id, extra)
