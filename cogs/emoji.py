@@ -14,7 +14,7 @@ import io
 log = logging.getLogger(__name__)
 
 BLOB_GUILD_ID = 272885620769161216
-EMOJI_REGEX = re.compile(r'<:.+?:([0-9]{15,21})>')
+EMOJI_REGEX = re.compile(r'<a?:.+?:([0-9]{15,21})>')
 
 class BlobEmoji(commands.Converter):
     async def convert(self, ctx, argument):
