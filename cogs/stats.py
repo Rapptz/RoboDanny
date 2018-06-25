@@ -154,7 +154,7 @@ class Stats:
 
         # statistics
         total_members = sum(1 for _ in self.bot.get_all_members())
-        total_online = len({m.id for m in self.bot.get_all_members() if m.status is discord.Status.online})
+        total_online = len({m.id for m in self.bot.get_all_members() if m.status is not discord.Status.offline})
         total_unique = len(self.bot.users)
 
         voice_channels = []
