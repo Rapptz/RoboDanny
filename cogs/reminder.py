@@ -99,6 +99,7 @@ class Reminder:
 
     async def dispatch_timers(self):
         try:
+            await self.bot.wait_until_ready()
             while not self.bot.is_closed():
                 # can only asyncio.sleep for up to ~48 days reliably
                 # so we're gonna cap it off at 40 days
