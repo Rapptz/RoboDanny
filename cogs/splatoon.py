@@ -994,12 +994,9 @@ class Splatoon:
 
                 js = await resp.json()
 
-                data = js['schedules']
+                data = js['details']
                 if len(data) == 0:
                     return 3600.0
-
-                for index, details in enumerate(js['details']):
-                    data[index].update(details)
 
                 self.sp2_salmonrun = [SalmonRun(d) for d in data]
                 self.sp2_salmonrun.sort(key=lambda m: m.end_time)
