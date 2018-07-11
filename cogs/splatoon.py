@@ -161,7 +161,15 @@ class SalmonRun:
         stage = data.get('stage', {})
         self.stage = stage.get('name')
         self._image = stage.get('image')
-        self.weapons = [w.get('name', 'Mystery') if w else 'Mystery' for w in data.get('weapons', [])]
+        weapons = data.get('weapons')
+        self.weapons = []
+        for weapon in weapons:
+            actual_weapon_data = weapon.get('weapon')
+            if actual_weapon_data is None:
+                name = 'Mystery'
+            else:
+                name = actual_weapon_data.get('name', 'Mystery')
+            self.weapons.append(name)
 
     @property
     def image(self):
