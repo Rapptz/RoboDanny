@@ -169,9 +169,9 @@ class Stars:
         emoji = self.star_emoji(stars)
 
         if stars > 1:
-            content = f'{emoji} **{stars}** {message.channel.mention} ID: {message.id}'
+            content = f'{emoji} **{stars}** {message.channel.mention} ID: {message.id} URL: <{message.jump_url}>'
         else:
-            content = f'{emoji} {message.channel.mention} ID: {message.id}'
+            content = f'{emoji} {message.channel.mention} ID: {message.id} URL: <{message.jump_url}>'
 
 
         embed = discord.Embed(description=message.content)
