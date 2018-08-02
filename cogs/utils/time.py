@@ -132,6 +132,10 @@ class UserFriendlyTime(commands.Converter):
                 # replace it with the current time
                 dt = dt.replace(hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond)
 
+            # if midnight is provided, just default to next day
+            if status.accuracy == pdt.pdtContext.ACU_HALFDAY:
+                dt = dt.replace(day=now.day + 1)
+
             self.dt =  dt
 
             if begin in (0, 1):
