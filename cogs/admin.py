@@ -256,6 +256,7 @@ class Admin:
         msg.author = who
         msg.content = ctx.prefix + command
         new_ctx = await self.bot.get_context(msg)
+        new_ctx.db = ctx.db
         await self.bot.invoke(new_ctx)
 
 def setup(bot):
