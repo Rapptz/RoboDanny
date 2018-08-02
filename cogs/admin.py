@@ -6,6 +6,8 @@ import inspect
 import textwrap
 from contextlib import redirect_stdout
 import io
+import copy
+from typing import Union
 
 # to expose to the eval command
 import datetime
@@ -246,6 +248,15 @@ class Admin:
             await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
         else:
             await ctx.send(fmt)
+
+    @commands.command(hidden=True)
+    async def sudo(self, ctx, who: Union[discord.Member, discord.User], *, command: str):
+        """Run a command as another user."""
+        msg = copy.copy(ctx.message)
+        msg.author = who
+        msg.content = ctx.prefix + command
+        new_ctx = await self.bot.get_context(msg)
+        await self.bot.invoke(new_ctx)
 
 def setup(bot):
     bot.add_cog(Admin(bot))
