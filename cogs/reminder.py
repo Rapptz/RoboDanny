@@ -234,6 +234,33 @@ class Reminder:
 
         await ctx.send(embed=e)
 
+    @reminder.command(name='delete')
+    async def reminder_delete(self, ctx, *, id: int):
+        """Deletes a reminder by its ID.
+
+        To get a reminder ID, use the reminder list command.
+
+        You must own the reminder to delete it, obviously.
+        """
+
+        query = """DELETE FROM reminders
+                   WHERE id=$1
+                   AND event = 'reminder'
+                   AND extra #>> '{args,0}' = $2;
+                """
+
+        status = await ctx.db.execute(query, id, str(ctx.author.id))
+        if status == 'DELETE 0':
+            return await ctx.send('Could not delete any reminders with that ID.')
+
+        # if the current timer is being deleted
+        if self._current_timer and self._current_timer.id == id:
+            # cancel the task and re-run it
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.dispatch_timers())
+
+        await ctx.send('Successfully deleted reminder.')
+
     async def on_reminder_timer_complete(self, timer):
         author_id, channel_id, message = timer.args
 
