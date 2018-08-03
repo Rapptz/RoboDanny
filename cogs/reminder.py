@@ -184,7 +184,7 @@ class Reminder:
         return timer
 
     @commands.group(aliases=['timer', 'remind'], usage='<when>', invoke_without_command=True)
-    async def reminder(self, ctx, *, when: time.UserFriendlyTime(commands.clean_content, default='something')):
+    async def reminder(self, ctx, *, when: time.UserFriendlyTime(commands.clean_content, default='\u2026')):
         """Reminds you of something after a certain amount of time.
 
         The input can be any direct date (e.g. YYYY-MM-DD) or a human
@@ -198,9 +198,13 @@ class Reminder:
         Times are in UTC.
         """
 
-        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id, ctx.channel.id, when.arg, connection=ctx.db)
-        delta = time.human_timedelta(when.dt, source=ctx.message.created_at)
-        await ctx.send(f"Alright {ctx.author.mention}, in {delta} I'll remind you about {when.arg}.")
+        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id,
+                                                             ctx.channel.id,
+                                                             when.arg,
+                                                             connection=ctx.db,
+                                                             message_id=ctx.message.id)
+        delta = time.human_timedelta(when.dt)
+        await ctx.send(f"Alright {ctx.author.mention}, in {delta}: {when.arg}")
 
     @reminder.command(name='list')
     async def reminder_list(self, ctx):
@@ -242,7 +246,14 @@ class Reminder:
             except:
                 return
 
-        await channel.send(f'<@{author_id}>, {timer.human_delta} you asked to be reminded about {message}.')
+        guild_id = channel.guild.id if isinstance(channel, discord.TextChannel) else '@me'
+        message_id = timer.kwargs.get('message_id')
+        msg = f'<@{author_id}>, {timer.human_delta}: {message}'
+
+        if message_id:
+            msg = f'{msg}\n\n<https://discordapp.com/channels/{guild_id}/{channel.id}/{message_id}>'
+
+        await channel.send(msg)
 
 def setup(bot):
     bot.add_cog(Reminder(bot))
