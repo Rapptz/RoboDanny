@@ -208,13 +208,13 @@ class Reminder:
 
     @reminder.command(name='list')
     async def reminder_list(self, ctx):
-        """Shows the 5 latest currently running reminders."""
-        query = """SELECT expires, extra #>> '{args,2}'
+        """Shows the 10 latest currently running reminders."""
+        query = """SELECT id, expires, extra #>> '{args,2}'
                    FROM reminders
                    WHERE event = 'reminder'
                    AND extra #>> '{args,0}' = $1
                    ORDER BY expires
-                   LIMIT 5;
+                   LIMIT 10;
                 """
 
         records = await ctx.db.fetch(query, str(ctx.author.id))
@@ -224,13 +224,13 @@ class Reminder:
 
         e = discord.Embed(colour=discord.Colour.blurple(), title='Reminders')
 
-        if len(records) == 5:
-            e.set_footer(text='Only showing up to 5 reminders.')
+        if len(records) == 10:
+            e.set_footer(text='Only showing up to 10 reminders.')
         else:
             e.set_footer(text=f'{len(records)} reminder{"s" if len(records) > 1 else ""}')
 
-        for expires, message in records:
-            e.add_field(name=f'In {time.human_timedelta(expires)}', value=message, inline=False)
+        for _id, expires, message in records:
+            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=message, inline=False)
 
         await ctx.send(embed=e)
 
