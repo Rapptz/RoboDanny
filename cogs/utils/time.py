@@ -104,8 +104,8 @@ class UserFriendlyTime(commands.Converter):
                 argument = argument[:-8].strip()
 
             if argument[0:2] == 'me':
-                # starts with "me to" or "me in"
-                if argument[0:6] in ('me to ', 'me in '):
+                # starts with "me to", "me in", or "me at "
+                if argument[0:6] in ('me to ', 'me in ', 'me at '):
                     argument = argument[6:]
 
             elements = calendar.nlp(argument, sourceTime=now)
