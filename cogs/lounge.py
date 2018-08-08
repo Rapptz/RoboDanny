@@ -24,8 +24,8 @@ class CodeBlock:
         cmds = {
             'cpp': 'g++ -std=c++1z -O2 -Wall -Wextra -pedantic -pthread main.cpp -lstdc++fs && ./a.out',
             'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
-            'py': 'python main.cpp', # coliru has no python3
-            'python': 'python main.cpp',
+            'py': 'python3 main.cpp', 
+            'python': 'python3 main.cpp',
             'haskell': 'runhaskell main.cpp'
         }
 
@@ -65,7 +65,7 @@ class Lounge:
 
         Anything else isn't supported. The C++ compiler uses g++ -std=c++14.
 
-        The python support is only python2.7 (unfortunately).
+        The python support is now 3.5.2.
 
         Please don't spam this for Stacked's sake.
         """
