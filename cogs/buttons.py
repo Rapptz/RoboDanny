@@ -118,10 +118,15 @@ class Buttons:
     @commands.command()
     async def love(self, ctx):
         """What is love?"""
-        action = random.choice([ctx.send('https://www.youtube.com/watch?v=HEXWRTEbj1I'),
-                                ctx.invoke(self.g, query='define: love')])
+        responses = [
+            'https://www.youtube.com/watch?v=HEXWRTEbj1I',
+            'https://www.youtube.com/watch?v=i0p1bmr0EmE',
+            'an intense feeling of deep affection',
+            'something we don\'t have'
+        ]
 
-        await action
+        response = random.choice(responses)
+        await ctx.send(response)
 
     @commands.command(hidden=True)
     async def bored(self, ctx):
