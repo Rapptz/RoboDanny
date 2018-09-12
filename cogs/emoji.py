@@ -286,18 +286,7 @@ class Emoji:
             p = count / total
             return f'{name}: {count} uses ({p:.2%}), {per_day:.2f} uses/day.'
 
-        value = '\n'.join(f'{i}. {to_string(emoji, total)}' for i, (emoji, total) in enumerate(top, 1))
-        e.add_field(name='Top 10', value=value)
-
-        query = """SELECT emoji_id, total
-                   FROM emoji_stats
-                   WHERE guild_id=$1
-                   ORDER BY total ASC
-                   LIMIT 10;
-                """
-        bottom = await ctx.db.fetch(query, ctx.guild.id)
-        value = '\n'.join(f'{i}. {to_string(emoji, total)}' for i, (emoji, total) in enumerate(bottom, 1))
-        e.add_field(name='Bottom 10', value=value)
+        e.description = '\n'.join(f'{i}. {to_string(emoji, total)}' for i, (emoji, total) in enumerate(top, 1))
         await ctx.send(embed=e)
 
     async def get_emoji_stats(self, ctx, emoji_id):
