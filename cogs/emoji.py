@@ -246,6 +246,18 @@ class Emoji:
         fp.seek(0)
         await ctx.send(file=discord.File(fp, 'blob_posts.txt'))
 
+    def emoji_fmt(self, emoji_id, count, total):
+        emoji = self.bot.get_emoji(emoji_id)
+        if emoji is None:
+            name = f'[\N{WHITE QUESTION MARK ORNAMENT}](https://cdn.discordapp.com/emojis/{emoji_id}.png)'
+            emoji = discord.Object(id=emoji_id)
+        else:
+            name = str(emoji)
+
+        per_day = usage_per_day(emoji.created_at, count)
+        p = count / total
+        return f'{name}: {count} uses ({p:.1%}), {per_day:.1f} uses/day.'
+
     async def get_guild_stats(self, ctx):
         e = discord.Embed(title='Emoji Leaderboard', colour=discord.Colour.blurple())
 
@@ -274,19 +286,7 @@ class Emoji:
 
         top = await ctx.db.fetch(query, ctx.guild.id)
 
-        def to_string(emoji_id, count):
-            emoji = self.bot.get_emoji(emoji_id)
-            if emoji is None:
-                name = f'[Unknown Emoji](https://cdn.discordapp.com/emojis/{emoji_id}.png)'
-                emoji = discord.Object(id=emoji_id)
-            else:
-                name = str(emoji)
-
-            per_day = usage_per_day(emoji.created_at, count)
-            p = count / total
-            return f'{name}: {count} uses ({p:.2%}), {per_day:.2f} uses/day.'
-
-        e.description = '\n'.join(f'{i}. {to_string(emoji, total)}' for i, (emoji, total) in enumerate(top, 1))
+        e.description = '\n'.join(f'{i}. {self.emoji_fmt(emoji, count, total)}' for i, (emoji, count) in enumerate(top, 1))
         await ctx.send(embed=e)
 
     async def get_emoji_stats(self, ctx, emoji_id):
@@ -332,7 +332,7 @@ class Emoji:
         e.set_footer(text='These statistics are for servers I am in')
         await ctx.send(embed=e)
 
-    @commands.command()
+    @commands.group(invoke_without_command=True)
     @commands.guild_only()
     async def emojistats(self, ctx, *, emoji: partial_emoji = None):
         """Shows you statistics about the emoji usage in this server.
@@ -344,6 +344,40 @@ class Emoji:
             await self.get_guild_stats(ctx)
         else:
             await self.get_emoji_stats(ctx, emoji)
+
+    @emojistats.command(name='server', aliases=['guild'])
+    @commands.guild_only()
+    async def emojistats_guild(self, ctx):
+        """Shows you statistics about the local server emojis in this server."""
+        emoji_ids = [e.id for e in ctx.guild.emojis]
+
+        if not emoji_ids:
+            await ctx.send('This guild has no custom emoji.')
+
+        query = """SELECT emoji_id, total
+                   FROM emoji_stats
+                   WHERE guild_id=$1 AND emoji_id = ANY($2::bigint[])
+                   ORDER BY total DESC
+                """
+
+        e = discord.Embed(title='Emoji Leaderboard', colour=discord.Colour.blurple())
+        records = await ctx.db.fetch(query, ctx.guild.id, emoji_ids)
+
+        total = sum(a for _, a in records)
+        emoji_used = len(records)
+        per_day = usage_per_day(ctx.me.joined_at, total)
+        e.set_footer(text=f'{total} uses over {emoji_used} emoji for {per_day:.2f} uses per day.')
+        top = records[:10]
+        value = '\n'.join(f'{i}. {self.emoji_fmt(emoji, count, total)}' for i, (emoji, count) in enumerate(top, 1))
+        e.add_field(name='Top 10', value=value)
+
+        record_count = len(records)
+        if record_count > 10:
+            bottom = records[-10:] if record_count >= 20 else records[-record_count + 10:]
+            value = '\n'.join(f'{i}. {self.emoji_fmt(emoji, count, total)}' for i, (emoji, count) in enumerate(bottom, 1))
+            e.add_field(name=f'Bottom {len(bottom)}', value=value)
+
+        await ctx.send(embed=e)
 
 def setup(bot):
     bot.add_cog(Emoji(bot))
