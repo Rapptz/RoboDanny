@@ -368,13 +368,13 @@ class Emoji:
         per_day = usage_per_day(ctx.me.joined_at, total)
         e.set_footer(text=f'{total} uses over {emoji_used} emoji for {per_day:.2f} uses per day.')
         top = records[:10]
-        value = '\n'.join(f'{i}. {self.emoji_fmt(emoji, count, total)}' for i, (emoji, count) in enumerate(top, 1))
-        e.add_field(name='Top 10', value=value)
+        value = '\n'.join(self.emoji_fmt(emoji, count, total) for (emoji, count) in top)
+        e.add_field(name=f'Top {len(top)}', value=value)
 
         record_count = len(records)
         if record_count > 10:
             bottom = records[-10:] if record_count >= 20 else records[-record_count + 10:]
-            value = '\n'.join(f'{i}. {self.emoji_fmt(emoji, count, total)}' for i, (emoji, count) in enumerate(bottom, 1))
+            value = '\n'.join(self.emoji_fmt(emoji, count, total) for (emoji, count) in bottom)
             e.add_field(name=f'Bottom {len(bottom)}', value=value)
 
         await ctx.send(embed=e)
