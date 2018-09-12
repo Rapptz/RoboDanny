@@ -450,7 +450,7 @@ class Buttons:
 
         return card, entries
 
-    @commands.command(aliases=['google'])
+    @commands.command(aliases=['google'], enabled=False)
     async def g(self, ctx, *, query):
         """Searches google and gives you top result."""
         await ctx.trigger_typing()
