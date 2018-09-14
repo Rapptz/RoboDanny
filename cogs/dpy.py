@@ -22,6 +22,9 @@ class DPYExclusive:
             invite.code: invite.uses
         }
 
+    def __local_check(self, ctx):
+        return ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID
+
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_PY_GUILD_ID:
             return
@@ -46,23 +49,38 @@ class DPYExclusive:
             url = 'https://github.com/Rapptz/discord.py/issues/'
             await message.channel.send(url + m.group('number'))
 
+    async def toggle_role(self, ctx, role_id):
+        if any(r.id == role_id for r in ctx.author.roles):
+            try:
+                await ctx.author.remove_roles(discord.Object(id=role_id))
+            except:
+                await ctx.message.add_reaction('\N{NO ENTRY SIGN}')
+            else:
+                await ctx.message.add_reaction('\N{HEAVY MINUS SIGN}')
+            finally:
+                return
+
+        try:
+            await ctx.author.add_roles(discord.Object(id=role_id))
+        except:
+            await ctx.message.add_reaction('\N{NO ENTRY SIGN}')
+        else:
+            await ctx.message.add_reaction('\N{HEAVY PLUS SIGN}')
+
     @commands.command(hidden=True)
-    @commands.check(lambda ctx: ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID)
     async def rewrite(self, ctx):
         """Gives you the rewrite role.
 
         Necessary to get rewrite help and news.
         """
 
-        if any(r.id == DISCORD_PY_REWRITE_ROLE for r in ctx.author.roles):
-            return await ctx.message.add_reaction('\N{WARNING SIGN}')
+        await self.toggle_role(ctx, DISCORD_PY_REWRITE_ROLE)
 
-        try:
-            await ctx.author.add_roles(discord.Object(id=DISCORD_PY_REWRITE_ROLE))
-        except:
-            await ctx.message.add_reaction('\N{NO ENTRY SIGN}')
-        else:
-            await ctx.message.add_reaction('\N{WHITE HEAVY CHECK MARK}')
+    @commands.command(hidden=True, aliases=['日本語'])
+    async def nihongo(self, ctx):
+        """日本語チャットに参加したい場合はこの役職を付ける"""
+
+        await self.toggle_role(ctx, DISCORD_PY_JP_ROLE)
 
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
