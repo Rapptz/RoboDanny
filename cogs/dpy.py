@@ -20,6 +20,7 @@ class DPYExclusive:
         invites = await guild.invites()
         self._invite_cache = {
             invite.code: invite.uses
+            for invite in invites
         }
 
     def __local_check(self, ctx):
