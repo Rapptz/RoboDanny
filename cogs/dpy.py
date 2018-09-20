@@ -34,10 +34,10 @@ class DPYExclusive:
             await member.add_roles(discord.Object(id=DISCORD_PY_BOTS_ROLE))
             return
 
-        JP_INVITE_CODE = 'nXzj3dg'
+        JP_INVITE_CODES = ('y9Bm8Yx', 'nXzj3dg')
         invites = await member.guild.invites()
         for invite in invites:
-            if invite.code == JP_INVITE_CODE and invite.uses > self._invite_cache[invite.code]:
+            if invite.code in JP_INVITE_CODES and invite.uses > self._invite_cache[invite.code]:
                 await member.add_roles(discord.Object(id=DISCORD_PY_JP_ROLE))
             self._invite_cache[invite.code] = invite.uses
 
