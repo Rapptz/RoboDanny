@@ -83,5 +83,24 @@ class DPYExclusive:
 
         await self.toggle_role(ctx, DISCORD_PY_JP_ROLE)
 
+    @commands.command(hidden=True)
+    @commands.check(lambda ctx: ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID)
+    async def norewrite(self, ctx):
+        """Removes the rewrite role.
+        
+        Useful if you accidentally gave yourself the rewrite role using `?rewrite`,
+        or if you wish to unsubscribe from news and leave the help channel.
+        """
+
+        if not any(r.id == DISCORD_PY_REWRITE_ROLE for r in ctx.author.roles):
+            return await ctx.message.add_reaction('\N{WARNING SIGN}')
+
+        try:
+            await ctx.author.remove_roles(discord.Object(id=DISCORD_PY_REWRITE_ROLE))
+        except:
+            await ctx.message.add_reaction('\N{NO ENTRY SIGN}')
+        else:
+            await ctx.message.add_reaction('\N{WHITE HEAVY CHECK MARK}')
+
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
