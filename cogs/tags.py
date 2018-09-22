@@ -181,7 +181,7 @@ class Tags:
     async def get_tag(self, guild_id, name, *, connection=None):
         def disambiguate(rows, query):
             if rows is None or len(rows) == 0:
-                raise RuntimeError('Tag not found. Maybe check the tag box?')
+                raise RuntimeError('Tag not found.')
 
             names = '\n'.join(r['name'] for r in rows)
             raise RuntimeError(f'Tag not found. Did you mean...\n{names}')
