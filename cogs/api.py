@@ -104,11 +104,11 @@ class API:
 
         page_types = {
             'rewrite': (
-                'https://discordpy.readthedocs.org/en/rewrite/api.html',
-                'https://discordpy.readthedocs.org/en/rewrite/ext/commands/api.html'
+                'https://discordpy.readthedocs.io/en/rewrite/api.html',
+                'https://discordpy.readthedocs.io/en/rewrite/ext/commands/api.html'
             ),
             'latest': (
-                'https://discordpy.readthedocs.org/en/latest/api.html',
+                'https://discordpy.readthedocs.io/en/latest/api.html',
             )
         }
 
@@ -131,7 +131,7 @@ class API:
         self._rtfm_cache = cache
 
     async def do_rtfm(self, ctx, key, obj):
-        base_url = f'https://discordpy.readthedocs.org/en/{key}/'
+        base_url = f'https://discordpy.readthedocs.io/en/{key}/'
 
         if obj is None:
             await ctx.send(base_url)
@@ -504,7 +504,7 @@ class API:
 
     async def refresh_faq_cache(self):
         self.faq_entries = {}
-        base_url = 'http://discordpy.readthedocs.io/en/latest/faq.html'
+        base_url = 'https://discordpy.readthedocs.io/en/latest/faq.html'
         async with self.bot.session.get(base_url) as resp:
             text = await resp.text(encoding='utf-8')
 
@@ -520,7 +520,7 @@ class API:
             await self.refresh_faq_cache()
 
         if query is None:
-            return await ctx.send('http://discordpy.readthedocs.io/en/latest/faq.html')
+            return await ctx.send('https://discordpy.readthedocs.io/en/latest/faq.html')
 
         matches = fuzzy.extract_matches(query, self.faq_entries, scorer=fuzzy.partial_ratio, score_cutoff=40)
         if len(matches) == 0:
