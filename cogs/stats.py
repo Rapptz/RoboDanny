@@ -133,7 +133,7 @@ class Stats:
     @commands.command()
     async def about(self, ctx):
         """Tells you information about the bot itself."""
-        cmd = r'git show -s HEAD~3..HEAD --format="[{}](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"'
+        cmd = r'git log -n 3 -s --format="[{}](https://github.com/Rapptz/RoboDanny/commit/%H) %s (%cr)"'
         if os.name == 'posix':
             cmd = cmd.format(r'\`%h\`')
         else:
