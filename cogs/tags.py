@@ -545,7 +545,7 @@ class Tags:
         else:
             await ctx.send('Successfully edited tag.')
 
-    @tag.command(aliases=['delete'])
+    @tag.command(aliases=['delete', 'del', 'rm'])
     @suggest_box()
     async def remove(self, ctx, *, name: TagName(lower=True)):
         """Removes a tag that you own.
