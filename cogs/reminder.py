@@ -234,7 +234,7 @@ class Reminder:
 
         await ctx.send(embed=e)
 
-    @reminder.command(name='delete')
+    @reminder.command(name='delete', aliases=['remove'])
     async def reminder_delete(self, ctx, *, id: int):
         """Deletes a reminder by its ID.
 
