@@ -1,3 +1,4 @@
+import asyncio
 from discord.ext import commands
 from datetime import datetime
 import discord
@@ -556,6 +557,8 @@ class Buttons:
             if total_bytes >= eight_mib:
                 break
 
+        # on mobile, messages that are deleted immediately sometimes persist client side
+        await asyncio.sleep(0.2, loop=self.bot.loop)
         await ctx.message.delete()
         data = discord.Embed(title=title)
         if text:
