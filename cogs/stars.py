@@ -7,8 +7,6 @@ from collections import Counter, defaultdict
 import discord
 import datetime
 import time
-import json
-import random
 import asyncio
 import asyncpg
 import logging
