@@ -1193,7 +1193,7 @@ class Stars:
         or more to show up in the starboard channel.
 
         You cannot have a negative number and the maximum
-        star limit you can set is 25.
+        star limit you can set is 100.
 
         Note that messages that previously did not meet the
         limit but now do will still not show up in the starboard
@@ -1205,7 +1205,7 @@ class Stars:
         if ctx.starboard.needs_migration:
             return await ctx.send('Your starboard requires migration!')
 
-        stars = min(max(stars, 1), 25)
+        stars = min(max(stars, 1), 100)
         query = "UPDATE starboard SET threshold=$2 WHERE id=$1;"
         await ctx.db.execute(query, ctx.guild.id, stars)
         self.get_starboard.invalidate(self, ctx.guild.id)
