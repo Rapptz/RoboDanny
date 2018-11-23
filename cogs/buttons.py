@@ -558,7 +558,7 @@ class Buttons:
                 break
 
         # on mobile, messages that are deleted immediately sometimes persist client side
-        await asyncio.sleep(0.2, loop=self.bot.loop)
+        await asyncio.sleep(0.1, loop=self.bot.loop)
         await ctx.message.delete()
         data = discord.Embed(title=title)
         if text:
