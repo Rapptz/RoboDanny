@@ -18,13 +18,13 @@ class CodeBlock:
 
         language = block[3:]
         self.command = self.get_command_from_language(language.lower())
-        self.source = code.rstrip('`')
+        self.source = code.rstrip('`').replace('```', '')
 
     def get_command_from_language(self, language):
         cmds = {
             'cpp': 'g++ -std=c++1z -O2 -Wall -Wextra -pedantic -pthread main.cpp -lstdc++fs && ./a.out',
             'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
-            'py': 'python3 main.cpp', 
+            'py': 'python3 main.cpp',
             'python': 'python3 main.cpp',
             'haskell': 'runhaskell main.cpp'
         }
