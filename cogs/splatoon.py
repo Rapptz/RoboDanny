@@ -186,9 +186,10 @@ class SalmonRunPages(Pages):
             ('\N{BLACK SQUARE FOR STOP}', self.stop_pages),
         ]
 
-    async def show_page(self, page, *, first=False):
-        self.current_page = page
-        salmon = self.entries[page - 1]
+    def get_page(self, page):
+        return self.entries[page - 1]
+
+    def prepare_embed(self, salmon, page, *, first=False):
         self.embed = e = discord.Embed(colour=0xFF7500, title='Salmon Run')
 
         if salmon.image:
@@ -207,23 +208,6 @@ class SalmonRunPages(Pages):
 
         if self.maximum_pages > 1:
             e.title = f'Salmon Run {page} out of {self.maximum_pages}'
-
-        if not self.paginating:
-            return await self.channel.send(embed=self.embed)
-
-        if not first:
-            await self.message.edit(embed=self.embed)
-            return
-
-        self.message = await self.channel.send(embed=self.embed)
-        for (reaction, _) in self.reaction_emojis:
-            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
-                # no |<< or >>| buttons if we only have two pages
-                # we can't forbid it if someone ends up using it but remove
-                # it from the default set
-                continue
-
-            await self.message.add_reaction(reaction)
 
 class Splatfest:
     def __init__(self, data):
@@ -290,9 +274,10 @@ class GearPages(Pages):
         self.reaction_emojis.pop()
         self.splat2_data = ctx.cog.splat2_data
 
-    async def show_page(self, page, *, first=False):
-        self.current_page = page
-        merch = self.entries[page - 1]
+    def get_page(self, page):
+        return self.entries[page - 1]
+
+    def prepare_embed(self, merch, page, *, first=False):
         original_gear = None
 
         if isinstance(merch, Merchandise):
@@ -350,23 +335,6 @@ class GearPages(Pages):
 
         if self.maximum_pages > 1:
             e.set_footer(text=f'Gear {page}/{self.maximum_pages}')
-
-        if not self.paginating:
-            return await self.channel.send(embed=self.embed)
-
-        if not first:
-            await self.message.edit(embed=self.embed)
-            return
-
-        self.message = await self.channel.send(embed=self.embed)
-        for (reaction, _) in self.reaction_emojis:
-            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
-                # no |<< or >>| buttons if we only have two pages
-                # we can't forbid it if someone ends up using it but remove
-                # it from the default set
-                continue
-
-            await self.message.add_reaction(reaction)
 
 # JSON stuff
 

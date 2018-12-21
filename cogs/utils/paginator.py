@@ -80,9 +80,7 @@ class Pages:
         base = (page - 1) * self.per_page
         return self.entries[base:base + self.per_page]
 
-    async def show_page(self, page, *, first=False):
-        self.current_page = page
-        entries = self.get_page(page)
+    def prepare_embed(self, entries, page, *, first=False):
         p = []
         for index, entry in enumerate(entries, 1 + ((page - 1) * self.per_page)):
             p.append(f'{index}. {entry}')
@@ -95,18 +93,24 @@ class Pages:
 
             self.embed.set_footer(text=text)
 
+        if self.paginating and first:
+            p.append('')
+            p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
+
+        self.embed.description = '\n'.join(p)
+
+    async def show_page(self, page, *, first=False):
+        self.current_page = page
+        entries = self.get_page(page)
+        self.prepare_embed(entries, page, first=first)
+
         if not self.paginating:
-            self.embed.description = '\n'.join(p)
             return await self.channel.send(embed=self.embed)
 
         if not first:
-            self.embed.description = '\n'.join(p)
             await self.message.edit(embed=self.embed)
             return
 
-        p.append('')
-        p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
-        self.embed.description = '\n'.join(p)
         self.message = await self.channel.send(embed=self.embed)
         for (reaction, _) in self.reaction_emojis:
             if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
@@ -240,10 +244,8 @@ class FieldPages(Pages):
     """Similar to Pages except entries should be a list of
     tuples having (key, value) to show as embed fields instead.
     """
-    async def show_page(self, page, *, first=False):
-        self.current_page = page
-        entries = self.get_page(page)
 
+    def prepare_embed(self, entries, page, *, first=False):
         self.embed.clear_fields()
         self.embed.description = discord.Embed.Empty
 
@@ -257,23 +259,6 @@ class FieldPages(Pages):
                 text = f'Page {page}/{self.maximum_pages}'
 
             self.embed.set_footer(text=text)
-
-        if not self.paginating:
-            return await self.channel.send(embed=self.embed)
-
-        if not first:
-            await self.message.edit(embed=self.embed)
-            return
-
-        self.message = await self.channel.send(embed=self.embed)
-        for (reaction, _) in self.reaction_emojis:
-            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
-                # no |<< or >>| buttons if we only have two pages
-                # we can't forbid it if someone ends up using it but remove
-                # it from the default set
-                continue
-
-            await self.message.add_reaction(reaction)
 
 import itertools
 import inspect
@@ -420,10 +405,7 @@ class HelpPaginator(Pages):
         self.description = description
         return commands
 
-    async def show_page(self, page, *, first=False):
-        self.current_page = page
-        entries = self.get_page(page)
-
+    def prepare_embed(self, entries, page, *, first=False):
         self.embed.clear_fields()
         self.embed.description = self.description
         self.embed.title = self.title
@@ -441,23 +423,6 @@ class HelpPaginator(Pages):
 
         if self.maximum_pages:
             self.embed.set_author(name=f'Page {page}/{self.maximum_pages} ({self.total} commands)')
-
-        if not self.paginating:
-            return await self.channel.send(embed=self.embed)
-
-        if not first:
-            await self.message.edit(embed=self.embed)
-            return
-
-        self.message = await self.channel.send(embed=self.embed)
-        for (reaction, _) in self.reaction_emojis:
-            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
-                # no |<< or >>| buttons if we only have two pages
-                # we can't forbid it if someone ends up using it but remove
-                # it from the default set
-                continue
-
-            await self.message.add_reaction(reaction)
 
     async def show_help(self):
         """shows this message"""
