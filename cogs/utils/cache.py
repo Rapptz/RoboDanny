@@ -1,6 +1,7 @@
 import inspect
 import asyncio
 import enum
+import time
 
 from functools import wraps
 
@@ -18,9 +19,29 @@ def _wrap_new_coroutine(value):
         return value
     return new_coroutine()
 
+class ExpiringCache(dict):
+    def __init__(self, seconds):
+        self.__ttl = seconds
+        super().__init__()
+
+    def __verify_cache_integrity(self):
+        # Have to do this in two steps...
+        current_time = time.monotonic()
+        to_remove = [k for (k, (v, t)) in self.items() if current_time > (t + self.__ttl)]
+        for k in to_remove:
+            del self[k]
+
+    def __getitem__(self, key):
+        self.__verify_cache_integrity()
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, (value, time.monotonic()))
+
 class Strategy(enum.Enum):
     lru = 1
     raw = 2
+    timed = 3
 
 def cache(maxsize=128, strategy=Strategy.lru):
     def decorator(func):
@@ -29,6 +50,9 @@ def cache(maxsize=128, strategy=Strategy.lru):
             _stats = _internal_cache.get_stats
         elif strategy is Strategy.raw:
             _internal_cache = {}
+            _stats = lambda: (0, 0)
+        elif strategy is Strategy.timed:
+            _internal_cache = ExpiringCache(maxsize)
             _stats = lambda: (0, 0)
 
         def _make_key(args, kwargs):
