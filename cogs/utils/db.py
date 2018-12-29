@@ -363,9 +363,6 @@ class Column:
                 builder.append("(%s)" % default)
         elif self.unique:
             builder.append('UNIQUE')
-        elif self.primary_key:
-            builder.append('PRIMARY KEY')
-
         if not self.nullable:
             builder.append('NOT NULL')
 
@@ -781,7 +778,15 @@ class Table(metaclass=TableMeta):
             builder.append('IF NOT EXISTS')
 
         builder.append(cls.__tablename__)
-        builder.append('(%s)' % ', '.join(c._create_table() for c in cls.columns))
+        column_creations = []
+        primary_keys = []
+        for col in cls.columns:
+            column_creations.append(col._create_table())
+            if col.primary_key:
+                primary_keys.append(col.name)
+
+        column_creations.append('PRIMARY KEY (%s)' % ', '.join(primary_keys))
+        builder.append('(%s)' % ', '.join(column_creations))
         statements.append(' '.join(builder) + ';')
 
         # handle the index creations
