@@ -235,7 +235,7 @@ class Profile:
                     VALUES ($1, {values})
                     ON CONFLICT (id)
                     DO UPDATE
-                    SET ({keys}) = ({values});
+                    SET ({keys}) = ROW({values});
                  """
 
         await ctx.db.execute(query, ctx.author.id, *fields.values())
