@@ -166,7 +166,7 @@ class SalmonRun:
         for weapon in weapons:
             actual_weapon_data = weapon.get('weapon')
             if actual_weapon_data is None:
-                name = 'Mystery'
+                name = 'Rare-only Mystery' if weapon['id'] == '-2' else 'Mystery'
             else:
                 name = actual_weapon_data.get('name', 'Mystery')
             self.weapons.append(name)
