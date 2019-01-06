@@ -51,6 +51,7 @@ class Lounge:
         self.bot = bot
 
     @commands.command()
+    @checks.is_lounge_cpp()
     async def coliru(self, ctx, *, code: CodeBlock):
         """Compiles code via Coliru.
 
