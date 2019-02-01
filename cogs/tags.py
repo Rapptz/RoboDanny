@@ -673,7 +673,7 @@ class Tags:
 
         transformations = {
             re.escape(c): '\\' + c
-            for c in ('*', '`', '_', '~', '\\', '<')
+            for c in ('*', '`', '_', '~', '\\', '<', '|')
         }
 
         def replace(obj):
