@@ -39,7 +39,7 @@ class DPYExclusive:
     def __local_check(self, ctx):
         return ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID
 
-    async def __local_error(self, ctx, error):
+    async def __error(self, ctx, error):
         if isinstance(error, GithubError):
             await ctx.send(f'Github Error: {error}')
 
