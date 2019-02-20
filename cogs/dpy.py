@@ -170,13 +170,13 @@ class DPYExclusive:
     async def github_close(self, ctx, number: int, *labels):
         """Closes and optionally labels an issue."""
         js = await self.edit_issue(number, labels=labels, state='closed')
-        await ctx.send(f'Successfully closed <{js["url"]}>')
+        await ctx.send(f'Successfully closed <{js["html_url"]}>')
 
     @github.command(name='open')
     async def github_open(self, ctx, number: int):
         """Re-open an issue"""
         js = await self.edit_issue(number, state='open')
-        await ctx.send(f'Successfully closed <{js["url"]}>')
+        await ctx.send(f'Successfully closed <{js["html_url"]}>')
 
     @github.command(name='label')
     async def github_label(self, ctx, number: int, *labels):
@@ -184,7 +184,7 @@ class DPYExclusive:
         if not labels:
             await ctx.send('Missing labels to assign.')
         js = await self.edit_issue(number, labels=labels)
-        await ctx.send(f'Successfully labelled <{js["url"]}>')
+        await ctx.send(f'Successfully labelled <{js["html_url"]}>')
 
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
