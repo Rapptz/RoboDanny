@@ -156,7 +156,7 @@ class DPYExclusive:
             diff = [repr(x) for x in (labels - valid_labels)]
             if diff:
                 raise GithubError(f'Invalid labels passed: {human_join(diff, final="and")}')
-            data['labels'] = list(current_labels + labels)
+            data['labels'] = list(current_labels | labels)
 
         return await self.github_request('PATCH', url_path, data=data)
 
