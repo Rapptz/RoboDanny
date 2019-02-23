@@ -323,6 +323,7 @@ class Stats:
 
     @commands.group(invoke_without_command=True)
     @commands.guild_only()
+    @commands.cooldown(1, 30.0, type=commands.BucketType.member)
     async def stats(self, ctx, *, member: discord.Member = None):
         """Tells you command usage stats for the server or a member."""
 
@@ -332,6 +333,7 @@ class Stats:
             await self.show_member_stats(ctx, member)
 
     @stats.command(name='global')
+    @commands.cooldown(1, 30.0, type=commands.BucketType.member)
     async def stats_global(self, ctx):
         """Global all time command statistics."""
 
@@ -398,6 +400,7 @@ class Stats:
         await ctx.send(embed=e)
 
     @stats.command(name='today')
+    @commands.cooldown(1, 30.0, type=commands.BucketType.member)
     async def stats_today(self, ctx):
         """Global command statistics for the day."""
 
