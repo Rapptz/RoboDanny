@@ -28,6 +28,7 @@ class Meta:
             await ctx.send(error)
 
     @commands.command(name='help')
+    @commands.cooldown(1, 3.0, type=commands.BucketType.member)
     async def _help(self, ctx, *, command: str = None):
         """Shows help about a command or the bot"""
 
