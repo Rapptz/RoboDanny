@@ -195,7 +195,7 @@ class API:
         """
         await self.do_rtfm(ctx, 'latest', obj)
 
-    @rtfm.command(name='rewrite')
+    @rtfm.command(name='rewrite',aliases=["rw"])
     async def rtfm_rewrite(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a rewrite discord.py entity."""
         await self.do_rtfm(ctx, 'rewrite', obj)
