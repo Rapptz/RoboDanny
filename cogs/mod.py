@@ -655,7 +655,11 @@ class Mod:
         if not confirm:
             return await ctx.send('Aborting.')
 
-        reason = args.reason or f'Action done by {ctx.author} (ID: {ctx.author.id})'
+        if args.reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+        else:
+            reason = await ActionReason().convert(ctx, args.reason)
+
         count = 0
         for member in members:
             try:
