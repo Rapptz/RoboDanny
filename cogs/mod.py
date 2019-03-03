@@ -1,5 +1,5 @@
 from discord.ext import commands
-from .utils import checks, db, time, cache
+from .utils import checks, db, time, cache, formats
 from collections import Counter, defaultdict
 from inspect import cleandoc
 
@@ -62,6 +62,11 @@ class ModConfig:
 
 ## Converters
 
+def can_execute_action(ctx, user, target):
+    return user.id == ctx.bot.owner_id or \
+           user == ctx.guild.owner or \
+           user.top_role > target.top_role
+
 class MemberID(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -72,11 +77,7 @@ class MemberID(commands.Converter):
             except ValueError:
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
         else:
-            can_execute = ctx.author.id == ctx.bot.owner_id or \
-                          ctx.author == ctx.guild.owner or \
-                          ctx.author.top_role > m.top_role
-
-            if not can_execute:
+            if not can_execute_action(ctx, ctx.author, m):
                 raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
             return m.id
 
@@ -510,24 +511,161 @@ class Mod:
     @commands.command()
     @commands.guild_only()
     @checks.has_permissions(ban_members=True)
-    async def massban(self, ctx, reason: ActionReason, *members: MemberID):
+    async def massban(self, ctx, *, args):
         """Mass bans multiple members from the server.
 
-        You can also ban from ID to ban regardless whether they're
-        in the server or not.
+        This command has a powerful "command line" syntax. To use this command
+        you and the bot must both have Ban Members permission. **Every option is optional.**
 
-        Note that unlike the ban command, the reason comes first
-        and is not optional.
+        Users are only banned **if and only if** all conditions are met.
 
-        In order for this to work, the bot must have Ban Member permissions.
+        The following options are valid.
 
-        To use this command you must have Ban Members permission.
+        `--channel` or `-c`: Channel to search for message history.
+        `--reason` or `-r`: The reason for the ban.
+        `--regex`: Regex that usernames must match.
+        `--created`: Matches users whose accounts were created less than specified minutes ago.
+        `--joined`: Matches users that joined less than specified minutes ago.
+        `--joined-before`: Matches users who joined before the member given.
+        `--joined-after`: Matches users who joined after the member given.
+        `--no-avatar`: Matches users who have no avatar.
+        `--show`: Show members instead of banning them (no arguments).
+
+        Message history filters (Requires `--channel`):
+
+        `--contains`: A substring to search for in the message.
+        `--starts`: A substring to search if the message starts with.
+        `--ends`: A substring to search if the message ends with.
+        `--match`: A regex to match the message content to.
+        `--search`: How many messages to search. Default 100. Max 2000.
+        `--after`: Messages must come after this message ID.
+        `--before`: Messages must come before this message ID.
+        `--files`: Checks if the message has attachments (no arguments).
+        `--embeds`: Checks if the message has embeds (no arguments).
         """
 
-        for member_id in members:
-            await ctx.guild.ban(discord.Object(id=member_id), reason=reason)
+        parser = Arguments(add_help=False, allow_abbrev=False)
+        parser.add_argument('--channel', '-c')
+        parser.add_argument('--reason', '-r')
+        parser.add_argument('--search', type=int, default=100)
+        parser.add_argument('--regex')
+        parser.add_argument('--no-avatar', action='store_true')
+        parser.add_argument('--created', type=int)
+        parser.add_argument('--joined', type=int)
+        parser.add_argument('--joined-before')
+        parser.add_argument('--joined-after')
+        parser.add_argument('--contains')
+        parser.add_argument('--starts')
+        parser.add_argument('--ends')
+        parser.add_argument('--match')
+        parser.add_argument('--show', action='store_true')
+        parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
+        parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
+        parser.add_argument('--after', type=int)
+        parser.add_argument('--before', type=int)
 
-        await ctx.send('\N{OK HAND SIGN}')
+        try:
+            args = parser.parse_args(shlex.split(args))
+        except Exception as e:
+            return await ctx.send(str(e))
+
+        members = []
+
+        if args.channel:
+            channel = await commands.TextChannelConverter().convert(ctx, args.channel)
+            before = args.before and discord.Object(id=args.before)
+            after = args.after and discord.Object(id=args.after)
+            predicates = []
+            if args.contains:
+                predicates.append(lambda m: args.contains in m.content)
+            if args.starts:
+                predicates.append(lambda m: m.content.startswith(args.starts))
+            if args.ends:
+                predicates.append(lambda m: m.content.endswith(args.ends))
+            if args.match:
+                try:
+                    _match = re.compile(args.match)
+                except re.error as e:
+                    return await ctx.send(f'Invalid regex passed to `--match`: {e}')
+                else:
+                    predicates.append(lambda m, x=_match: x.match(m.content))
+            if args.embeds:
+                predicates.append(args.embeds)
+            if args.files:
+                predicates.append(args.files)
+
+            async for message in channel.history(limit=min(max(1, args.search), 2000), before=before, after=after):
+                if all(p(message) for p in predicates):
+                    members.append(message.author)
+        else:
+            members = ctx.guild.members
+
+        # member filters
+        predicates = [
+            lambda m: can_execute_action(ctx, ctx.author, m), # Only if applicable
+            lambda m: not m.bot, # No bots
+            lambda m: m.discriminator != '0000', # No deleted users
+        ]
+
+        if args.regex:
+            try:
+                _regex = re.compile(args.regex)
+            except re.error as e:
+                return await ctx.send(f'Invalid regex passed to `--regex`: {e}')
+            else:
+                predicates.append(lambda m, x=_regex: x.match(m.name))
+
+        if args.no_avatar:
+            predicates.append(lambda m: m.avatar is None)
+
+        now = datetime.datetime.utcnow()
+        if args.created:
+            def created(member, *, offset=now - datetime.timedelta(minutes=args.created)):
+                return member.created_at > offset
+            predicates.append(created)
+        if args.joined:
+            def joined(member, *, offset=now - datetime.timedelta(minutes=args.joined)):
+                return member.joined_at and member.joined_at > offset
+            predicates.append(joined)
+        if args.joined_after:
+            _joined_after_member = await commands.MemberConverter().convert(ctx, args.joined_after)
+            def joined_after(member, *, _other=_joined_after_member):
+                return member.joined_at and _other.joined_at and member.joined_at > _other.joined_at
+            predicates.append(joined_after)
+        if args.joined_before:
+            _joined_before_member = await commands.MemberConverter().convert(ctx, args.joined_before)
+            def joined_before(member, *, _other=_joined_before_member):
+                return member.joined_at and _other.joined_at and member.joined_at < _other.joined_at
+            predicates.append(joined_before)
+
+        members = {m for m in members if all(p(m) for p in predicates)}
+        if len(members) == 0:
+            return await ctx.send('No members found matching criteria.')
+
+        if args.show:
+            fmt = "\n".join(f'{member.id}\t{member}' for member in members)
+            content = f'Total members: {len(members)}\n{fmt}'
+            async with self.bot.session.post('https://hastebin.com/documents', data=content) as resp:
+                if resp.status != 200:
+                    return await ctx.send('Sorry, failed to post data to hastebin.')
+                js = await resp.json()
+                return await ctx.send(f'https://hastebin.com/{js["key"]}.txt')
+
+        confirm = await ctx.prompt(f'This will ban **{formats.Plural(member=len(members))}**. Are you sure?')
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        reason = args.reason or f'Action done by {ctx.author} (ID: {ctx.author.id})'
+        count = 0
+        for member in members:
+            try:
+                await ctx.guild.ban(member, reason=reason)
+            except discord.HTTPException:
+                pass
+            else:
+                count += 1
+
+        await ctx.send(f'Banned {count}/{len(members)}')
 
     @commands.command()
     @commands.guild_only()
