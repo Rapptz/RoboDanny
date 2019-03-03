@@ -528,7 +528,8 @@ class Mod:
         `--joined`: Matches users that joined less than specified minutes ago.
         `--joined-before`: Matches users who joined before the member given.
         `--joined-after`: Matches users who joined after the member given.
-        `--no-avatar`: Matches users who have no avatar.
+        `--no-avatar`: Matches users who have no avatar. (no arguments)
+        `--no-roles`: Matches users that have no role. (no arguments)
         `--show`: Show members instead of banning them (no arguments).
 
         Message history filters (Requires `--channel`):
@@ -617,6 +618,8 @@ class Mod:
 
         if args.no_avatar:
             predicates.append(lambda m: m.avatar is None)
+        if args.no_roles:
+            predicates.append(lambda m: len(getattr(m, 'roles', [])) == 0)
 
         now = datetime.datetime.utcnow()
         if args.created:
