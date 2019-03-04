@@ -619,7 +619,7 @@ class Mod:
         if args.no_avatar:
             predicates.append(lambda m: m.avatar is None)
         if args.no_roles:
-            predicates.append(lambda m: len(getattr(m, 'roles', [])) == 0)
+            predicates.append(lambda m: len(getattr(m, 'roles', [])) <= 1)
 
         now = datetime.datetime.utcnow()
         if args.created:
