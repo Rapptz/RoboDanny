@@ -211,17 +211,18 @@ class Config:
         return not resolved.is_blocked(ctx)
 
     async def _bulk_ignore_entries(self, ctx, entries):
-        async with ctx.db.transaction():
-            query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
-            records = await ctx.db.fetch(query, ctx.guild.id)
+        async with ctx.db.acquire():
+            async with ctx.db.transaction():
+                query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
+                records = await ctx.db.fetch(query, ctx.guild.id)
 
-            # we do not want to insert duplicates
-            current_plonks = {r[0] for r in records}
-            guild_id = ctx.guild.id
-            to_insert = [(guild_id, e.id) for e in entries if e.id not in current_plonks]
+                # we do not want to insert duplicates
+                current_plonks = {r[0] for r in records}
+                guild_id = ctx.guild.id
+                to_insert = [(guild_id, e.id) for e in entries if e.id not in current_plonks]
 
-            # do a bulk COPY
-            await ctx.db.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
+                # do a bulk COPY
+                await ctx.db.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
 
     async def __error(self, ctx, error):
         if isinstance(error, commands.BadArgument):

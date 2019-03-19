@@ -1516,7 +1516,8 @@ class Tournament:
             return await ctx.send('You are already part of another team.')
 
         try:
-            await self.new_registration(ctx, url, team)
+            async with ctx.acquire():
+                await self.new_registration(ctx, url, team)
         finally:
             self._already_running_registration.discard(ctx.author.id)
 

@@ -253,20 +253,21 @@ class Tags:
         # since I'm checking for the exception type and acting on it, I need
         # to use the manual transaction blocks
 
-        tr = ctx.db.transaction()
-        await tr.start()
+        async with ctx.acquire():
+            tr = ctx.db.transaction()
+            await tr.start()
 
-        try:
-            await ctx.db.execute(query, name, content, ctx.author.id, ctx.guild.id)
-        except asyncpg.UniqueViolationError:
-            await tr.rollback()
-            await ctx.send('This tag already exists.')
-        except:
-            await tr.rollback()
-            await ctx.send('Could not create tag.')
-        else:
-            await tr.commit()
-            await ctx.send(f'Tag {name} successfully created.')
+            try:
+                await ctx.db.execute(query, name, content, ctx.author.id, ctx.guild.id)
+            except asyncpg.UniqueViolationError:
+                await tr.rollback()
+                await ctx.send('This tag already exists.')
+            except:
+                await tr.rollback()
+                await ctx.send('Could not create tag.')
+            else:
+                await tr.commit()
+                await ctx.send(f'Tag {name} successfully created.')
 
     @tag.command()
     @suggest_box()

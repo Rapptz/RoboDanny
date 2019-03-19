@@ -119,8 +119,7 @@ class RoboDanny(commands.AutoShardedBot):
         if ctx.command is None:
             return
 
-        async with ctx.acquire():
-            await self.invoke(ctx)
+        await self.invoke(ctx)
 
     async def on_message(self, message):
         if message.author.bot:

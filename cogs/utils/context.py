@@ -22,7 +22,7 @@ class Context(commands.Context):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.pool = self.bot.pool
-        self.db = None
+        self._db = None
 
     async def entry_to_code(self, entries):
         width = max(len(a) for a, b in entries)
@@ -160,10 +160,14 @@ class Context(commands.Context):
             return f'{emoji}: {label}'
         return emoji
 
+    @property
+    def db(self):
+        return self._db if self._db else self.pool
+
     async def _acquire(self, timeout):
-        if self.db is None:
-            self.db = await self.pool.acquire(timeout=timeout)
-        return self.db
+        if self._db is None:
+            self._db = await self.pool.acquire(timeout=timeout)
+        return self._db
 
     def acquire(self, *, timeout=None):
         """Acquires a database connection from the pool. e.g. ::
@@ -192,9 +196,9 @@ class Context(commands.Context):
         # from source digging asyncpg source, releasing an already
         # released connection does nothing
 
-        if self.db is not None:
-            await self.bot.pool.release(self.db)
-            self.db = None
+        if self._db is not None:
+            await self.bot.pool.release(self._db)
+            self._db = None
 
     async def show_help(self, command=None):
         """Shows the help command for the specified command if given.
