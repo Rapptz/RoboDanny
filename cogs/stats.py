@@ -543,11 +543,11 @@ class Stats(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        ignored = (commands.NoPrivateMessage, commands.DisabledCommand, commands.CheckFailure,
-                   commands.CommandNotFound, commands.UserInputError, discord.Forbidden)
-        error = getattr(error, 'original', error)
+        if not isinstance(error, commands.CommandInvokeError):
+            return
 
-        if isinstance(error, ignored):
+        error = error.original
+        if isinstance(error, (discord.Forbidden, discord.NotFound)):
             return
 
         e = discord.Embed(title='Command Error', colour=0xcc3366)
