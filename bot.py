@@ -68,6 +68,12 @@ class RoboDanny(commands.AutoShardedBot):
         # guild_id: list
         self.prefixes = Config('prefixes.json')
 
+        # guild_id and user_id mapped to True
+        # these are users and guilds globally blacklisted
+        # from using the bot
+        self.blacklist = Config('blacklist.json')
+
+
         for extension in initial_extensions:
             try:
                 self.load_extension(extension)
@@ -104,6 +110,16 @@ class RoboDanny(commands.AutoShardedBot):
         else:
             await self.prefixes.put(guild.id, sorted(set(prefixes), reverse=True))
 
+
+    async def add_to_blacklist(self, object_id):
+        await self.blacklist.put(object_id, True)
+
+    async def remove_from_blacklist(self, object_id):
+        try:
+            await self.blacklist.remove(object_id)
+        except KeyError:
+            pass
+
     async def on_ready(self):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
@@ -119,12 +135,19 @@ class RoboDanny(commands.AutoShardedBot):
         if ctx.command is None:
             return
 
+        if ctx.author.id in self.blacklist:
+            return
+
         await self.invoke(ctx)
 
     async def on_message(self, message):
         if message.author.bot:
             return
         await self.process_commands(message)
+
+    async def on_guild_join(self, guild):
+        if guild.id in self.blacklist:
+            await guild.leave()
 
     async def close(self):
         await super().close()

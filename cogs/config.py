@@ -421,5 +421,21 @@ class Config:
         """Disables a command for this server."""
         await ctx.invoke(self.server_disable, command=command)
 
+    @config.group(name='global')
+    @commands.is_owner()
+    async def _global(self, ctx):
+        """Handles global bot configuration."""
+        pass
+
+    @_global.command(name='block')
+    async def global_block(self, ctx, object_id: int):
+        """Blocks a user or guild globally."""
+        await self.bot.add_to_blacklist(object_id)
+
+    @_global.command(name='unblock')
+    async def global_unblock(self, ctx, object_id: int):
+        """Unblocks a user or guild globally."""
+        await self.bot.remove_from_blacklist(object_id)
+
 def setup(bot):
     bot.add_cog(Config(bot))
