@@ -440,11 +440,13 @@ class Config(commands.Cog):
     async def global_block(self, ctx, object_id: int):
         """Blocks a user or guild globally."""
         await self.bot.add_to_blacklist(object_id)
+        await ctx.send(ctx.tick(True))
 
     @_global.command(name='unblock')
     async def global_unblock(self, ctx, object_id: int):
         """Unblocks a user or guild globally."""
         await self.bot.remove_from_blacklist(object_id)
+        await ctx.send(ctx.tick(True))
 
 def setup(bot):
     bot.add_cog(Config(bot))
