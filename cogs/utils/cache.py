@@ -77,7 +77,7 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
                     key.append(_true_repr(k))
                     key.append(_true_repr(v))
 
-            return ''.join(key)
+            return ':'.join(key)
 
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -105,9 +105,21 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
             else:
                 return True
 
+        def _invalidate_containing(key):
+            to_remove = []
+            for k in _internal_cache.keys():
+                if key in k:
+                    to_remove.append(k)
+            for k in to_remove:
+                try:
+                    del _internal_cache[k]
+                except KeyError:
+                    continue
+
         wrapper.cache = _internal_cache
         wrapper.get_key = lambda *args, **kwargs: _make_key(args, kwargs)
         wrapper.invalidate = _invalidate
         wrapper.get_stats = _stats
+        wrapper.invalidate_containing = _invalidate_containing
         return wrapper
     return decorator
