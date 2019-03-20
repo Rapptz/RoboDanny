@@ -51,7 +51,9 @@ class Stats(commands.Cog):
 
         if self._data_batch:
             await self.bot.pool.execute(query, self._data_batch)
-            log.info('Registered %s commands to the database.', len(self._data_batch))
+            total = len(self._data_batch)
+            if total > 1:
+                log.info('Registered %s commands to the database.', total)
             self._data_batch.clear()
 
     def cog_unload(self):
