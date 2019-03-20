@@ -7,6 +7,8 @@ import logging
 import discord
 import datetime
 import traceback
+import asyncpg
+import asyncio
 import psutil
 import os
 
@@ -30,6 +32,41 @@ class Stats:
     def __init__(self, bot):
         self.bot = bot
         self.process = psutil.Process()
+        self._batch_lock = asyncio.Lock(loop=bot.loop)
+        self._task = bot.loop.create_task(self.bulk_insert_loop())
+        self._data_batch = []
+
+    async def bulk_insert(self):
+        query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command)
+                   SELECT x.guild, x.channel, x.author, x.used, x.prefix, x.command
+                   FROM jsonb_to_recordset($1::jsonb) AS
+                   x(guild BIGINT, channel BIGINT, author BIGINT, used TIMESTAMP, prefix TEXT, command TEXT)
+                """
+
+        if self._data_batch:
+            await self.bot.pool.execute(query, self._data_batch)
+            log.info('Registered %s commands to the database.', len(self._data_batch))
+            self._data_batch.clear()
+
+    def __unload(self):
+        # cancel the task we have looping...
+        self._task.cancel()
+
+        # if there's some remaining data, then write it
+        if self._data_batch:
+            self.bot.loop.create_task(self.bulk_insert())
+
+    async def bulk_insert_loop(self):
+        try:
+            while not self.bot.is_closed():
+                async with self._batch_lock:
+                    await self.bulk_insert()
+                await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            pass
+        except (OSError, asyncpg.PostgresConnectionError):
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.bulk_insert_loop())
 
     async def on_command(self, ctx):
         command = ctx.command.qualified_name
@@ -43,12 +80,16 @@ class Stats:
             destination = f'#{message.channel} ({message.guild})'
             guild_id = ctx.guild.id
 
-        query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command)
-                   VALUES ($1, $2, $3, $4, $5, $6)
-                """
-
         log.info(f'{message.created_at}: {message.author} in {destination}: {message.content}')
-        await self.bot.pool.execute(query, guild_id, ctx.channel.id, ctx.author.id, message.created_at, ctx.prefix, command)
+        async with self._batch_lock:
+            self._data_batch.append({
+                'guild': guild_id,
+                'channel': ctx.channel.id,
+                'author': ctx.author.id,
+                'used': message.created_at.isoformat(),
+                'prefix': ctx.prefix,
+                'command': command
+            })
 
     async def on_socket_response(self, msg):
         self.bot.socket_stats[msg.get('t')] += 1
