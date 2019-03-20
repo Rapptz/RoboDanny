@@ -114,13 +114,13 @@ class TagName(commands.clean_content):
 
         return converted if not self.lower else lower
 
-class Tags:
+class Tags(commands.Cog):
     """The tag related commands."""
 
     def __init__(self, bot):
         self.bot = bot
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, (UnavailableTagCommand, UnableToUseBox)):
             await ctx.send(error)
         elif isinstance(error, commands.UserInputError):

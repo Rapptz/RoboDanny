@@ -98,7 +98,7 @@ class SpoilerCooldown(commands.CooldownMapping):
         bucket = self.get_bucket((message_id, user_id))
         return bucket.update_rate_limit() is not None
 
-class Buttons:
+class Buttons(commands.Cog):
     """Buttons that make you feel."""
 
     def __init__(self, bot):
@@ -619,6 +619,7 @@ class Buttons:
         self._spoiler_cache[message_id] = cache
         return cache
 
+    @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
         if payload.emoji.id != SPOILER_EMOJI_ID:
             return

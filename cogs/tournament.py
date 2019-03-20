@@ -417,7 +417,7 @@ class Challonge:
             else:
                 raise ChallongeError(f'Challonge responded with {resp.status} for {url}.')
 
-class Tournament:
+class Tournament(commands.Cog):
     """Tournament specific tools."""
 
     def __init__(self, bot):
@@ -425,7 +425,7 @@ class Tournament:
         self.config = config.Config('tournament.json')
         self._already_running_registration = set()
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, (ChallongeError, commands.BadArgument)):
             traceback.print_exc()
             await ctx.send(error)
@@ -586,6 +586,7 @@ class Tournament:
         await announcement.send(msg)
         await not_checked_in.edit(mentionable=False)
 
+    @commands.Cog.listener()
     async def on_tournament_checkin_timer_complete(self, timer):
         minutes_remaining, = timer.args
 
@@ -873,6 +874,7 @@ class Tournament:
         await self.log("Participant Clean-up", **fields)
         await self.prepare_participant_cache()
 
+    @commands.Cog.listener()
     async def on_tournament_round_timer_complete(self, timer):
         round_num, remaining = timer.args
 

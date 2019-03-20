@@ -105,7 +105,7 @@ class ActionReason(commands.Converter):
 
 ## The actual cog
 
-class Mod:
+class Mod(commands.Cog):
     """Moderation related commands."""
 
     def __init__(self, bot):
@@ -117,7 +117,7 @@ class Mod:
     def __repr__(self):
         return '<cogs.Mod>'
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
         elif isinstance(error, commands.CommandInvokeError):
@@ -178,6 +178,7 @@ class Mod:
             log.info(f'[Raid Mode] Kicked {member} (ID: {member.id}) from server {member.guild} via strict mode.')
             self._recently_kicked[guild.id].add(member.id)
 
+    @commands.Cog.listener()
     async def on_message(self, message):
         author = message.author
         if author.id in (self.bot.user.id, self.bot.owner_id):
@@ -224,6 +225,7 @@ class Mod:
             await message.channel.send(f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.')
             log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
 
+    @commands.Cog.listener()
     async def on_voice_state_update(self, user, before, after):
         if not isinstance(user, discord.Member):
             return
@@ -236,6 +238,7 @@ class Mod:
 
             await self.check_raid(config, user.guild, user, datetime.datetime.utcnow())
 
+    @commands.Cog.listener()
     async def on_member_join(self, member):
         config = await self.get_guild_config(member.guild.id)
         if config is None or not config.raid_mode:
@@ -751,6 +754,7 @@ class Mod:
         timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id, ctx.author.id, member, connection=ctx.db)
         await ctx.send(f'Banned ID {member} for {time.human_timedelta(duration.dt)}.')
 
+    @commands.Cog.listener()
     async def on_tempban_timer_complete(self, timer):
         guild_id, mod_id, member_id = timer.args
 

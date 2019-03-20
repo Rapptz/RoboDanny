@@ -163,11 +163,11 @@ class SplatoonWeapon(commands.Converter):
         else:
             return weapon
 
-class Profile:
+class Profile(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 

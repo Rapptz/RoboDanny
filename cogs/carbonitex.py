@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 CARBONITEX_API_BOTDATA = 'https://www.carbonitex.net/discord/data/botdata.php'
 DISCORD_BOTS_API       = 'https://bots.discord.pw/api'
 
-class Carbonitex:
+class Carbonitex(commands.Cog):
     """Cog for updating carbonitex.net and bots.discord.pw bot information."""
     def __init__(self, bot):
         self.bot = bot
@@ -35,12 +35,15 @@ class Carbonitex:
         async with self.bot.session.post(url, data=payload, headers=headers) as resp:
             log.info(f'DBots statistics returned {resp.status} for {payload}')
 
+    @commands.Cog.listener()
     async def on_guild_join(self, guild):
         await self.update()
 
+    @commands.Cog.listener()
     async def on_guild_remove(self, guild):
         await self.update()
 
+    @commands.Cog.listener()
     async def on_ready(self):
         await self.update()
 

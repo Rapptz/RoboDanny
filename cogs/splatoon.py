@@ -539,7 +539,7 @@ class GearQuery(commands.Converter):
 
         return [g for g, _ in importance]
 
-class Splatoon:
+class Splatoon(commands.Cog):
     """Splatoon related commands."""
 
     BASE_URL = yarl.URL('https://app.splatoon2.nintendo.net')
@@ -562,12 +562,12 @@ class Splatoon:
         self.sp2_festival = None
         self.sp2_salmonrun = []
 
-    def __unload(self):
+    def cog_unload(self):
         self.map_updater.cancel()
         self._splatnet2.cancel()
         self._authenticator.cancel()
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             return await ctx.send(error)
 

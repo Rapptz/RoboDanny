@@ -53,7 +53,7 @@ class Timer:
     def __repr__(self):
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
 
-class Reminder:
+class Reminder(commands.Cog):
     """Reminders to do something."""
 
     def __init__(self, bot):
@@ -62,10 +62,10 @@ class Reminder:
         self._current_timer = None
         self._task = bot.loop.create_task(self.dispatch_timers())
 
-    def __unload(self):
+    def cog_unload(self):
         self._task.cancel()
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
@@ -261,6 +261,7 @@ class Reminder:
 
         await ctx.send('Successfully deleted reminder.')
 
+    @commands.Cog.listener()
     async def on_reminder_timer_complete(self, timer):
         author_id, channel_id, message = timer.args
 

@@ -26,7 +26,7 @@ class Commands(db.Table):
     prefix = db.Column(db.String)
     command = db.Column(db.String, index=True)
 
-class Stats:
+class Stats(commands.Cog):
     """Bot usage statistics."""
 
     def __init__(self, bot):
@@ -48,7 +48,7 @@ class Stats:
             log.info('Registered %s commands to the database.', len(self._data_batch))
             self._data_batch.clear()
 
-    def __unload(self):
+    def cog_unload(self):
         # cancel the task we have looping...
         self._task.cancel()
 
@@ -68,6 +68,7 @@ class Stats:
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.bulk_insert_loop())
 
+    @commands.Cog.listener()
     async def on_command(self, ctx):
         command = ctx.command.qualified_name
         self.bot.command_stats[command] += 1
@@ -91,6 +92,7 @@ class Stats:
                 'command': command
             })
 
+    @commands.Cog.listener()
     async def on_socket_response(self, msg):
         self.bot.socket_stats[msg.get('t')] += 1
 
@@ -529,14 +531,17 @@ class Stats:
 
         await self.webhook.send(embed=e)
 
+    @commands.Cog.listener()
     async def on_guild_join(self, guild):
         e = discord.Embed(colour=0x53dda4, title='New Guild') # green colour
         await self.send_guild_stats(e, guild)
 
+    @commands.Cog.listener()
     async def on_guild_remove(self, guild):
         e = discord.Embed(colour=0xdd5f53, title='Left Guild') # red colour
         await self.send_guild_stats(e, guild)
 
+    @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
         ignored = (commands.NoPrivateMessage, commands.DisabledCommand, commands.CheckFailure,
                    commands.CommandNotFound, commands.UserInputError, discord.Forbidden)

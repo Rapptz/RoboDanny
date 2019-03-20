@@ -16,14 +16,14 @@ class Prefix(commands.Converter):
             raise commands.BadArgument('That is a reserved prefix already in use.')
         return argument
 
-class Meta:
+class Meta(commands.Cog):
     """Commands for utilities related to Discord or the Bot itself."""
 
     def __init__(self, bot):
         self.bot = bot
         bot.remove_command('help')
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 

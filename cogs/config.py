@@ -143,7 +143,7 @@ class ResolvedCommandPermissions:
 
         return blocked
 
-class Config:
+class Config(commands.Cog):
     """Handles the bot's configuration system.
 
     This is how you disable or enable certain commands
@@ -173,7 +173,7 @@ class Config:
 
         return row is not None
 
-    async def __global_check_once(self, ctx):
+    async def bot_check_once(self, ctx):
         if ctx.guild is None:
             return True
 
@@ -200,7 +200,7 @@ class Config:
         records = await connection.fetch(query, guild_id)
         return ResolvedCommandPermissions(guild_id, records)
 
-    async def __global_check(self, ctx):
+    async def bot_check(self, ctx):
         if ctx.guild is None:
             return True
 
@@ -228,7 +228,7 @@ class Config:
                 # invalidate the cache for this guild
                 self.is_plonked.invalidate_containing(f'{ctx.guild.id!r}:')
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 

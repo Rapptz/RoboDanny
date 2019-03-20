@@ -19,7 +19,7 @@ def is_proficient():
         return ctx.author._roles.has(DISCORD_PY_PROF_ROLE)
     return commands.check(predicate)
 
-class DPYExclusive:
+class DPYExclusive(commands.Cog, name='discord.py'):
     def __init__(self, bot):
         self.bot = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
@@ -36,10 +36,10 @@ class DPYExclusive:
             for invite in invites
         }
 
-    def __local_check(self, ctx):
+    def cog_check(self, ctx):
         return ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
         if isinstance(error, GithubError):
             await ctx.send(f'Github Error: {error}')
 
@@ -74,6 +74,7 @@ class DPYExclusive:
             if self._req_lock.locked():
                 self._req_lock.release()
 
+    @commands.Cog.listener()
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_PY_GUILD_ID:
             return
@@ -89,6 +90,7 @@ class DPYExclusive:
                 await member.add_roles(discord.Object(id=DISCORD_PY_JP_ROLE))
             self._invite_cache[invite.code] = invite.uses
 
+    @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
             return

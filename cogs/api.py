@@ -40,7 +40,7 @@ class RTFM(db.Table):
     user_id = db.Column(db.Integer(big=True), unique=True, index=True)
     count = db.Column(db.Integer, default=1)
 
-class API:
+class API(commands.Cog):
     """Discord API exclusive things."""
 
     def __init__(self, bot):
@@ -48,6 +48,7 @@ class API:
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
         self._recently_blocked = set()
 
+    @commands.Cog.listener()
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_API_ID:
             return
@@ -56,6 +57,7 @@ class API:
             role = discord.Object(id=USER_BOTS_ROLE)
             await member.add_roles(role)
 
+    @commands.Cog.listener()
     async def on_message(self, message):
         channel = message.channel
         author = message.author
@@ -89,6 +91,7 @@ class API:
             url = 'https://github.com/Rapptz/discord.py/issues/'
             await channel.send(url + m.group('number'))
 
+    @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if after.guild.id != DISCORD_API_ID:
             return
@@ -299,6 +302,7 @@ class API:
         else:
             await ctx.send(f'Blocked {member} for {time.human_timedelta(duration.dt)}.')
 
+    @commands.Cog.listener()
     async def on_tempblock_timer_complete(self, timer):
         guild_id, mod_id, channel_id, member_id = timer.args
 

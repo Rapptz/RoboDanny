@@ -71,7 +71,7 @@ class EmojiStats(db.Table, table_name='emoji_stats'):
         sql = "CREATE UNIQUE INDEX IF NOT EXISTS emoji_stats_uniq_idx ON emoji_stats (guild_id, emoji_id);"
         return statement + '\n' + sql
 
-class Emoji:
+class Emoji(commands.Cog):
     """Custom emoji tracking"""
 
     def __init__(self, bot):
@@ -80,10 +80,10 @@ class Emoji:
         self._batch_lock = asyncio.Lock(loop=bot.loop)
         self._task = bot.loop.create_task(self.bulk_insert())
 
-    def __unload(self):
+    def cog_unload(self):
         self._task.cancel()
 
-    async def __error(self, ctx, error):
+    async def cog_command_error(self, ctx, error):
        if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
@@ -125,6 +125,7 @@ class Emoji:
             fmt = f'Suggestion from {message.author}: {message.clean_content}'
             await ch.send(fmt, file=discord.File(data, message.attachments[0].filename))
 
+    @commands.Cog.listener()
     async def on_message(self, message):
         if message.guild is None:
             return
@@ -143,6 +144,7 @@ class Emoji:
         async with self._batch_lock:
             self._batch_of_data[message.guild.id].update(map(int, matches))
 
+    @commands.Cog.listener()
     async def on_guild_emojis_update(self, guild, before, after):
         # we only care when an emoji is added
         lookup = { e.id for e in before }

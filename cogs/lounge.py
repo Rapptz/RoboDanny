@@ -41,7 +41,7 @@ class CodeBlock:
                 fmt = 'Could not find a language to compile with.'
             raise commands.BadArgument(fmt) from e
 
-class Lounge:
+class Lounge(commands.Cog, name='Lounge<C++>'):
     """Commands made for Lounge<C++>.
 
     Don't abuse these.

@@ -5,7 +5,7 @@ def to_emoji(c):
     base = 0x1f1e6
     return chr(base + c)
 
-class Polls:
+class Polls(commands.Cog):
     """Poll voting system."""
 
     def __init__(self, bot):

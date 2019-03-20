@@ -1,7 +1,7 @@
 from discord.ext import commands
 import random as rng
 
-class RNG:
+class RNG(commands.Cog):
     """Utilities that provide pseudo-RNG."""
 
     def __init__(self, bot):
