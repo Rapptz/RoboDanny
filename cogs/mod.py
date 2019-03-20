@@ -766,7 +766,7 @@ class Mod(commands.Cog):
         moderator = guild.get_member(mod_id)
         if moderator is None:
             try:
-                moderator = await self.bot.get_user_info(mod_id)
+                moderator = await self.bot.fetch_user(mod_id)
             except:
                 # request failed somehow
                 moderator = f'Mod ID {mod_id}'

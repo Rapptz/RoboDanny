@@ -593,7 +593,7 @@ class Tags(commands.Cog):
         embed.timestamp = record['lookup_created_at']
         embed.set_footer(text='Alias created at')
 
-        user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
+        user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
         embed.set_author(name=str(user), icon_url=user.avatar_url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
@@ -608,7 +608,7 @@ class Tags(commands.Cog):
         embed.timestamp = record['created_at']
         embed.set_footer(text='Tag created at')
 
-        user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
+        user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
         embed.set_author(name=str(user), icon_url=user.avatar_url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
@@ -959,7 +959,7 @@ class Tags(commands.Cog):
         embed.timestamp = data['created_at']
         embed.set_footer(text='Tag added to box')
 
-        user = self.bot.get_user(owner_id) or (await self.bot.get_user_info(owner_id))
+        user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
         embed.set_author(name=str(user), icon_url=user.avatar_url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')

@@ -43,8 +43,8 @@ class Admin(commands.Cog):
         """Loads a module."""
         try:
             self.bot.load_extension(module)
-        except Exception as e:
-            await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+        except commands.ExtensionError as e:
+            await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
@@ -53,8 +53,8 @@ class Admin(commands.Cog):
         """Unloads a module."""
         try:
             self.bot.unload_extension(module)
-        except Exception as e:
-            await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+        except commands.ExtensionError as e:
+            await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
@@ -63,8 +63,8 @@ class Admin(commands.Cog):
         """Reloads a module."""
         try:
             self.bot.reload_extension(module)
-        except Exception as e:
-            await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+        except commands.ExtensionError as e:
+            await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
