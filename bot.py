@@ -93,9 +93,13 @@ class RoboDanny(commands.AutoShardedBot):
         elif isinstance(error, commands.DisabledCommand):
             await ctx.author.send('Sorry. This command is disabled and cannot be used.')
         elif isinstance(error, commands.CommandInvokeError):
-            print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
-            traceback.print_tb(error.original.__traceback__)
-            print(f'{error.original.__class__.__name__}: {error.original}', file=sys.stderr)
+            original = error.original
+            if not isinstance(original, discord.HTTPException):
+                print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
+                traceback.print_tb(original.__traceback__)
+                print(f'{original.__class__.__name__}: {original}', file=sys.stderr)
+        elif isinstance(error, commands.ArgumentParsingError):
+            await ctx.send(error)
 
     def get_guild_prefixes(self, guild, *, local_inject=_prefix_callable):
         proxy_msg = discord.Object(id=None)
