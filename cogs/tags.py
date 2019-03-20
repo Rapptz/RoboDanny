@@ -373,7 +373,7 @@ class Tags(commands.Cog):
     @make.error
     async def tag_make_error(self, ctx, error):
         if isinstance(error, commands.TooManyArguments):
-            await self.bot.say(f'Please call just {ctx.prefix}tag make')
+            await ctx.send(f'Please call just {ctx.prefix}tag make')
 
     async def guild_tag_stats(self, ctx):
         # I'm not sure on how to do this with a single query
