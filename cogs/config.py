@@ -153,7 +153,8 @@ class Config:
     def __init__(self, bot):
         self.bot = bot
 
-    async def is_plonked(self, guild_id, member_id, *, channel_id=None, connection=None, check_bypass=True):
+    @cache.cache(strategy=cache.Strategy.lru, maxsize=1024, ignore_kwargs=True)
+    async def is_plonked(self, guild_id, member_id, channel_id=None, *, connection=None, check_bypass=True):
         if check_bypass:
             guild = self.bot.get_guild(guild_id)
             if guild is not None:
@@ -211,7 +212,7 @@ class Config:
         return not resolved.is_blocked(ctx)
 
     async def _bulk_ignore_entries(self, ctx, entries):
-        async with ctx.db.acquire():
+        async with ctx.acquire():
             async with ctx.db.transaction():
                 query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
                 records = await ctx.db.fetch(query, ctx.guild.id)
@@ -223,6 +224,9 @@ class Config:
 
                 # do a bulk COPY
                 await ctx.db.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
+
+                # invalidate the cache for this guild
+                self.is_plonked.invalidate_containing(f'{ctx.guild.id!r}:')
 
     async def __error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -251,6 +255,9 @@ class Config:
             # shortcut for a single insert
             query = "INSERT INTO plonks (guild_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;"
             await ctx.db.execute(query, ctx.guild.id, ctx.channel.id)
+
+            # invalidate the cache for this guild
+            self.is_plonked.invalidate_containing(f'{ctx.guild.id!r}:')
         else:
             await self._bulk_ignore_entries(ctx, entities)
 
@@ -306,6 +313,7 @@ class Config:
 
         query = "DELETE FROM plonks WHERE guild_id=$1;"
         await ctx.db.execute(query, ctx.guild.id)
+        self.is_plonked.invalidate_containing(f'{ctx.guild.id!r}:')
         await ctx.send('Successfully cleared all ignores.')
 
     @config.group(pass_context=True, invoke_without_command=True, aliases=['unplonk'])
@@ -326,6 +334,7 @@ class Config:
             entities = [c.id for c in entities]
             await ctx.db.execute(query, ctx.guild.id, entities)
 
+        self.is_plonked.invalidate_containing(f'{ctx.guild.id!r}:')
         await ctx.send(ctx.tick(True))
 
     @unignore.command(name='all')
