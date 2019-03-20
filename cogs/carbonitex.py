@@ -1,3 +1,4 @@
+from discord.ext import commands
 import aiohttp
 import json
 import logging
@@ -5,7 +6,7 @@ import logging
 log = logging.getLogger(__name__)
 
 CARBONITEX_API_BOTDATA = 'https://www.carbonitex.net/discord/data/botdata.php'
-DISCORD_BOTS_API       = 'https://bots.discord.pw/api'
+DISCORD_BOTS_API       = 'https://discord.bots.gg/api/v1'
 
 class Carbonitex(commands.Cog):
     """Cog for updating carbonitex.net and bots.discord.pw bot information."""
@@ -23,7 +24,8 @@ class Carbonitex(commands.Cog):
             log.info(f'Carbon statistics returned {resp.status} for {carbon_payload}')
 
         payload = json.dumps({
-            'server_count': guild_count
+            'guildCount': guild_count,
+            'shardCount': len(self.bot.shards)
         })
 
         headers = {
