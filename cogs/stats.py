@@ -375,11 +375,11 @@ class Stats(commands.Cog):
     @commands.cooldown(1, 30.0, type=commands.BucketType.member)
     async def stats(self, ctx, *, member: discord.Member = None):
         """Tells you command usage stats for the server or a member."""
-
-        if member is None:
-            await self.show_guild_stats(ctx)
-        else:
-            await self.show_member_stats(ctx, member)
+        async with ctx.typing():
+            if member is None:
+                await self.show_guild_stats(ctx)
+            else:
+                await self.show_member_stats(ctx, member)
 
     @stats.command(name='global')
     @commands.cooldown(1, 30.0, type=commands.BucketType.member)
@@ -536,6 +536,11 @@ class Stats(commands.Cog):
             e.timestamp = guild.me.joined_at
 
         await self.webhook.send(embed=e)
+
+    @stats_today.before_invoke
+    @stats_global.before_invoke
+    async def before_stats_invoke(self, ctx):
+        await ctx.trigger_typing()
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
