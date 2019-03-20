@@ -43,7 +43,7 @@ class Strategy(enum.Enum):
     raw = 2
     timed = 3
 
-def cache(maxsize=128, strategy=Strategy.lru):
+def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
     def decorator(func):
         if strategy is Strategy.lru:
             _internal_cache = LRU(maxsize)
@@ -65,16 +65,17 @@ def cache(maxsize=128, strategy=Strategy.lru):
 
             key = [ f'{func.__module__}.{func.__name__}' ]
             key.extend(_true_repr(o) for o in args)
-            for k, v in kwargs.items():
-                # note: this only really works for this use case in particular
-                # I want to pass asyncpg.Connection objects to the parameters
-                # however, they use default __repr__ and I do not care what
-                # connection is passed in, so I needed a bypass.
-                if k == 'connection':
-                    continue
+            if not ignore_kwargs:
+                for k, v in kwargs.items():
+                    # note: this only really works for this use case in particular
+                    # I want to pass asyncpg.Connection objects to the parameters
+                    # however, they use default __repr__ and I do not care what
+                    # connection is passed in, so I needed a bypass.
+                    if k == 'connection':
+                        continue
 
-                key.append(_true_repr(k))
-                key.append(_true_repr(v))
+                    key.append(_true_repr(k))
+                    key.append(_true_repr(v))
 
             return ''.join(key)
 
