@@ -73,6 +73,9 @@ class RoboDanny(commands.AutoShardedBot):
         # from using the bot
         self.blacklist = Config('blacklist.json')
 
+        # in case of even further spam, add a cooldown mapping
+        # for people who excessively spam commands
+        self.spam_control = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.user)
 
         for extension in initial_extensions:
             try:
@@ -137,6 +140,17 @@ class RoboDanny(commands.AutoShardedBot):
 
         if ctx.author.id in self.blacklist:
             return
+
+        bucket = self.spam_control.get_bucket(message)
+        retry_after = bucket.update_rate_limit()
+        if retry_after:
+            is_owner = await self.is_owner(message.author)
+            if not is_owner:
+                guild_name = getattr(ctx.guild, 'name', 'No Guild (DMs)')
+                guild_id = getattr(ctx.guild, 'id', None)
+                fmt = 'User %s (ID %s) in guild %r (ID %s) spamming, retry_after: %.2fs'
+                log.warning(fmt, message.author, message.author.id, guild_name, guild_id, retry_after)
+                return
 
         await self.invoke(ctx)
 
