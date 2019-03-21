@@ -236,7 +236,7 @@ class Config(commands.Cog):
     async def config(self, ctx):
         """Handles the server or channel permission configuration for the bot."""
         if ctx.invoked_subcommand is None:
-            await ctx.show_help('config')
+            await ctx.send_help('config')
 
     @config.group(invoke_without_command=True, aliases=['plonk'])
     @checks.is_mod()
