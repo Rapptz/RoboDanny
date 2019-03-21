@@ -156,7 +156,11 @@ class RoboDanny(commands.AutoShardedBot):
                 log.warning(fmt, message.author, message.author.id, guild_name, guild_id, retry_after)
                 return
 
-        await self.invoke(ctx)
+        try:
+            await self.invoke(ctx)
+        finally:
+            # Just in case we have any outstanding DB connections
+            await ctx.release()
 
     async def on_message(self, message):
         if message.author.bot:
