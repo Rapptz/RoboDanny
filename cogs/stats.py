@@ -646,16 +646,17 @@ class Stats(commands.Cog):
 
         description = [
             f'Total `Pool.acquire` Waiters: {total_waiting}',
-            f'Current Pool Generation: {current_generation}'
+            f'Current Pool Generation: {current_generation}',
+            f'Connections In Use: {len(pool._holders) - pool._queue.qsize()}'
         ]
 
         questionable_connections = 0
         connection_value = []
-        for index, holder in enumerate(pool._queue._queue, start=1):
+        for index, holder in enumerate(pool._holders, start=1):
             generation = holder._generation
             in_use = holder._in_use is not None
             is_closed = holder._con is None or holder._con.is_closed()
-            display = f'generation={holder._generation} in_use={in_use} closed={is_closed}'
+            display = f'gen={holder._generation} in_use={in_use} closed={is_closed}'
             questionable_connections += any((in_use, generation != current_generation))
             connection_value.append(f'<Holder i={index} {display}>')
 
@@ -672,7 +673,9 @@ class Stats(commands.Cog):
         description.append(f'Questionable Connections: {questionable_connections}')
 
         total_warnings += questionable_connections
-        total_warnings += bool(being_spammed)
+        if being_spammed:
+            embed.colour = WARNING
+            total_warnings += 1
 
         try:
             task_retriever = asyncio.Task.all_tasks
@@ -720,6 +723,10 @@ class Stats(commands.Cog):
         for shard_id, total in identifies.items():
             resume_info_builder.append(f'Shard ID {shard_id} IDENTIFYs: {total}')
 
+        if absolute_total_identifies >= (len(self.bot.shards) * 5):
+            total_warnings += 1
+            embed.colour = WARNING
+
         embed.add_field(name='Gateway (last 24 hours)', value='\n'.join(resume_info_builder), inline=False)
 
         memory_usage = self.process.memory_full_info().uss / 1024**2
@@ -728,11 +735,10 @@ class Stats(commands.Cog):
 
         if command_waiters >= 8:
             total_warnings += 1
-
-        if total_warnings >= 8:
-            embed.colour = UNHEALTHY
-        elif total_warnings >= 2:
             embed.colour = WARNING
+
+        if total_warnings >= 9:
+            embed.colour = UNHEALTHY
 
         embed.set_footer(text=f'{total_warnings} warning(s)')
         embed.description = '\n'.join(description)
