@@ -1,5 +1,5 @@
 from discord.ext import commands
-from collections import Counter
+from collections import Counter, defaultdict
 
 from .utils import checks, db
 
@@ -10,6 +10,7 @@ import traceback
 import asyncpg
 import asyncio
 import psutil
+import json
 import os
 import re
 import io
@@ -52,6 +53,22 @@ class Stats(commands.Cog):
         self._batch_lock = asyncio.Lock(loop=bot.loop)
         self._task = bot.loop.create_task(self.bulk_insert_loop())
         self._data_batch = []
+
+        # This is a datetime list
+        self._resumes = []
+        # shard_id: List[datetime]
+        self._identifies = defaultdict(list)
+
+    def _clear_gateway_data(self):
+        one_week_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        to_remove = [index for index, dt in enumerate(self._resumes) if dt < one_week_ago]
+        for index in reversed(to_remove):
+            del self._resumes[index]
+
+        for shard_id, dates in self._identifies.items():
+            to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
+            for index in reversed(to_remove):
+                del dates[index]
 
     async def bulk_insert(self):
         query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command)
@@ -589,6 +606,24 @@ class Stats(commands.Cog):
         e.timestamp = datetime.datetime.utcnow()
         await self.webhook.send(embed=e)
 
+    @commands.Cog.listener()
+    async def on_socket_raw_send(self, data):
+        # kind of weird way to check if we're sending
+        # IDENTIFY or RESUME
+        if '"op":2' not in data and '"op":6' not in data:
+            return
+
+        back_to_json = json.loads(data)
+        if back_to_json['op'] == 2:
+            payload = back_to_json['d']
+            inner_shard = payload.get('shard', [0])
+            self._identifies[inner_shard[0]].append(datetime.datetime.utcnow())
+        else:
+            self._resumes.append(datetime.datetime.utcnow())
+
+        # don't want to permanently grow memory
+        self._clear_gateway_data()
+
     @commands.command(hidden=True)
     @commands.is_owner()
     async def bothealth(self, ctx):
@@ -670,9 +705,26 @@ class Stats(commands.Cog):
         is_locked = self._batch_lock.locked()
         description.append(f'Commands Waiting: {command_waiters}, Batch Locked: {is_locked}')
 
+        # RESUME/IDENTIFY data
+        yesterday = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        total_resumes = sum(1 for dt in self._resumes if dt > yesterday)
+        identifies = {
+            shard_id: sum(1 for dt in dates if dt > yesterday)
+            for shard_id, dates in self._identifies.items()
+        }
+        absolute_total_identifies = sum(identifies.values())
+        resume_info_builder = [
+            f'Total RESUMEs: {total_resumes}',
+            f'Total IDENTIFYs: {absolute_total_identifies}'
+        ]
+        for shard_id, total in identifies.items():
+            resume_info_builder.append(f'Shard ID {shard_id} IDENTIFYs: {total}')
+
+        embed.add_field(name='Gateway (last 24 hours)', value='\n'.join(resume_info_builder), inline=False)
+
         memory_usage = self.process.memory_full_info().uss / 1024**2
         cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
-        embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
+        embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU', inline=False)
 
         if command_waiters >= 8:
             total_warnings += 1
