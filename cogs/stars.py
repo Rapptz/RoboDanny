@@ -187,6 +187,7 @@ class Stars(commands.Cog):
             else:
                 embed.add_field(name='Attachment', value=f'[{file.filename}]({file.url})', inline=False)
 
+        embed.add_field(name='Original', value=f'[Jump!]({message.jump_url})')
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url_as(format='png'))
         embed.timestamp = message.created_at
         embed.colour = self.star_gradient_colour(stars)
