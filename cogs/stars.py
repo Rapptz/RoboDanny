@@ -224,17 +224,10 @@ class Stars(commands.Cog):
         if user is None or user.bot:
             return
 
-        async with self.bot.pool.acquire() as con:
-            config = self.bot.get_cog('Config')
-            if config:
-                plonked = await config.is_plonked(channel.guild.id, payload.user_id, channel_id=payload.channel_id, connection=con)
-                if plonked:
-                    return
-
-            try:
-                await method(channel, payload.message_id, payload.user_id, connection=con)
-            except StarError:
-                pass
+        try:
+            await method(channel, payload.message_id, payload.user_id, verify=True)
+        except StarError:
+            pass
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
@@ -314,14 +307,22 @@ class Stars(commands.Cog):
             if msg is not None:
                 await msg.delete()
 
-    async def star_message(self, channel, message_id, starrer_id, *, connection):
+    async def star_message(self, channel, message_id, starrer_id, *, verify=False):
         guild_id = channel.guild.id
         lock = self._locks.get(guild_id)
         if lock is None:
             self._locks[guild_id] = lock = asyncio.Lock(loop=self.bot.loop)
 
         async with lock:
-            await self._star_message(channel, message_id, starrer_id, connection=connection)
+            async with self.bot.pool.acquire() as con:
+                if verify:
+                    config = self.bot.get_cog('Config')
+                    if config:
+                        plonked = await config.is_plonked(guild_id, starrer_id, channel_id=channel.id, connection=con)
+                        if plonked:
+                            return
+
+                await self._star_message(channel, message_id, starrer_id, connection=con)
 
     async def _star_message(self, channel, message_id, starrer_id, *, connection):
         """Stars a message.
@@ -434,14 +435,21 @@ class Stars(commands.Cog):
             else:
                 await new_msg.edit(content=content, embed=embed)
 
-    async def unstar_message(self, channel, message_id, starrer_id, *, connection):
+    async def unstar_message(self, channel, message_id, starrer_id, *, verify=False):
         guild_id = channel.guild.id
         lock = self._locks.get(guild_id)
         if lock is None:
             self._locks[guild_id] = lock = asyncio.Lock(loop=self.bot.loop)
 
         async with lock:
-            await self._unstar_message(channel, message_id, starrer_id, connection=connection)
+            async with self.bot.pool.acquire() as con:
+                if verify:
+                    config = self.bot.get_cog('Config')
+                    if config:
+                        plonked = await config.is_plonked(guild_id, starrer_id, channel_id=channel.id, connection=con)
+                        if plonked:
+                            return
+                await self._unstar_message(channel, message_id, starrer_id, connection=con)
 
     async def _unstar_message(self, channel, message_id, starrer_id, *, connection):
         """Unstars a message.
@@ -602,7 +610,7 @@ class Stars(commands.Cog):
         """
 
         try:
-            await self.star_message(ctx.channel, message, ctx.author.id, connection=ctx.db)
+            await self.star_message(ctx.channel, message, ctx.author.id)
         except StarError as e:
             await ctx.send(e)
         else:
@@ -618,7 +626,7 @@ class Stars(commands.Cog):
         functionality.
         """
         try:
-            await self.unstar_message(ctx.channel, message, ctx.author.id, connection=ctx.db)
+            await self.unstar_message(ctx.channel, message, ctx.author.id)
         except StarError as e:
             return await ctx.send(e)
         else:
