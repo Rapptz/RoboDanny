@@ -101,18 +101,11 @@ class ResolvedCommandPermissions:
         from itertools import accumulate
         return list(accumulate(obj.split(), lambda x, y: f'{x} {y}'))
 
-    def is_blocked(self, ctx):
-        # fast path
-        if len(self._lookup) == 0:
-            return False
-
-        if ctx.author.guild_permissions.manage_guild:
-            return False
-
-        command_names = self._split(ctx.command.qualified_name)
+    def _is_command_blocked(self, name, channel_id):
+        command_names = self._split(name)
 
         guild = self._lookup[None] # no special channel_id
-        channel = self._lookup[ctx.channel.id]
+        channel = self._lookup[channel_id]
 
         blocked = None
 
@@ -142,6 +135,22 @@ class ResolvedCommandPermissions:
                 blocked = False
 
         return blocked
+
+    def is_command_blocked(self, name, channel_id):
+        # fast path
+        if len(self._lookup) == 0:
+            return False
+        return self._is_command_blocked(name, channel_id)
+
+    def is_blocked(self, ctx):
+        # fast path
+        if len(self._lookup) == 0:
+            return False
+
+        if ctx.author.guild_permissions.manage_guild:
+            return False
+
+        return self._is_command_blocked(ctx.command.qualified_name, ctx.channel.id)
 
 class Config(commands.Cog):
     """Handles the bot's configuration system.

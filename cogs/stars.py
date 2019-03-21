@@ -321,6 +321,9 @@ class Stars(commands.Cog):
                         plonked = await config.is_plonked(guild_id, starrer_id, channel_id=channel.id, connection=con)
                         if plonked:
                             return
+                        perms = await config.get_command_permissions(guild_id, connection=con)
+                        if perms.is_command_blocked('star', channel.id):
+                            return
 
                 await self._star_message(channel, message_id, starrer_id, connection=con)
 
@@ -449,6 +452,10 @@ class Stars(commands.Cog):
                         plonked = await config.is_plonked(guild_id, starrer_id, channel_id=channel.id, connection=con)
                         if plonked:
                             return
+                        perms = await config.get_command_permissions(guild_id, connection=con)
+                        if perms.is_command_blocked('star', channel.id):
+                            return
+
                 await self._unstar_message(channel, message_id, starrer_id, connection=con)
 
     async def _unstar_message(self, channel, message_id, starrer_id, *, connection):
@@ -626,7 +633,7 @@ class Stars(commands.Cog):
         functionality.
         """
         try:
-            await self.unstar_message(ctx.channel, message, ctx.author.id)
+            await self.unstar_message(ctx.channel, message, ctx.author.id, verify=True)
         except StarError as e:
             return await ctx.send(e)
         else:
