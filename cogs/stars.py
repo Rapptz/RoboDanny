@@ -831,7 +831,8 @@ class Stars(commands.Cog):
                 fmt = 'https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}'.format(**groups)
 
                 embed = message.embeds[0]
-                embed.add_field(name='Original', value=f'[Jump!]({fmt})', inline=False)
+                if len(embed.fields) == 0 or embed.fields[0].name == 'Attachments':
+                    embed.add_field(name='Original', value=f'[Jump!]({fmt})', inline=False)
                 try:
                     await message.edit(embed=embed)
                 except discord.HTTPException:
