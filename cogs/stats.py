@@ -749,8 +749,8 @@ class Stats(commands.Cog):
     async def debug_task(self, ctx, memory_id: hex_value):
         """Debug a task by a memory location."""
         task = object_at(memory_id)
-        if task is None:
-            return await ctx.send(f'Could not find object at {hex(memory_id)}.')
+        if task is None or not isinstance(task, asyncio.Task):
+            return await ctx.send(f'Could not find Task object at {hex(memory_id)}.')
 
         if ctx.invoked_with == 'cancel_task':
             task.cancel()
