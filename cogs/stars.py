@@ -351,6 +351,9 @@ class Stars(commands.Cog):
         if starboard.locked:
             raise StarError('\N{NO ENTRY SIGN} Starboard is locked.')
 
+        if channel.is_nsfw() and not starboard.channel.is_nsfw():
+            raise StarError('\N{NO ENTRY SIGN} Cannot star NSFW in non-NSFW starboard channel.')
+
         if channel.id == starboard.channel.id:
             # special case redirection code goes here
             # ergo, when we add a reaction from starboard we want it to star
