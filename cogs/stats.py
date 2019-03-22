@@ -2,6 +2,7 @@ from discord.ext import commands
 from collections import Counter, defaultdict
 
 from .utils import checks, db
+from .utils.paginator import CannotPaginate
 
 import logging
 import discord
@@ -588,7 +589,7 @@ class Stats(commands.Cog):
             return
 
         error = error.original
-        if isinstance(error, (discord.Forbidden, discord.NotFound)):
+        if isinstance(error, (discord.Forbidden, discord.NotFound, CannotPaginate)):
             return
 
         e = discord.Embed(title='Command Error', colour=0xcc3366)
