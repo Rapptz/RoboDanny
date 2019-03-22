@@ -554,6 +554,7 @@ class Mod(commands.Cog):
         parser.add_argument('--search', type=int, default=100)
         parser.add_argument('--regex')
         parser.add_argument('--no-avatar', action='store_true')
+        parser.add_argument('--no-roles', action='store_true')
         parser.add_argument('--created', type=int)
         parser.add_argument('--joined', type=int)
         parser.add_argument('--joined-before')
