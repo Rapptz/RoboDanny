@@ -812,7 +812,7 @@ class Stars(commands.Cog):
 
         await ctx.send('Starboard is now locked and migration will now begin.')
 
-        valid_msg = re.compile(r'.+?\*\*[0-9]+\*\*\s*<#(?P<channel_id>[0-9]{17,21})>\s*ID\:\s*(?P<message_id>[0-9]{17,21})')
+        valid_msg = re.compile(r'.+?<#(?P<channel_id>[0-9]{17,21})>\s*ID\:\s*(?P<message_id>[0-9]{17,21})')
         async with ctx.typing():
             fetched = 0
             updated = 0
