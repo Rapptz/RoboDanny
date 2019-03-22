@@ -731,7 +731,7 @@ class Stats(commands.Cog):
         cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
         embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU', inline=False)
 
-        global_rate_limit = not self.bot.http._global_over.set()
+        global_rate_limit = not self.bot.http._global_over.is_set()
         description.append(f'Global Rate Limit: {global_rate_limit}')
 
         if command_waiters >= 8:
