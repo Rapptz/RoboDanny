@@ -835,12 +835,12 @@ class Stars(commands.Cog):
                 embed = message.embeds[0]
                 if len(embed.fields) == 0 or embed.fields[0].name == 'Attachments':
                     embed.add_field(name='Original', value=f'[Jump!]({fmt})', inline=False)
-                try:
-                    await message.edit(embed=embed)
-                except discord.HTTPException:
-                    failed += 1
-                else:
-                    updated += 1
+                    try:
+                        await message.edit(embed=embed)
+                    except discord.HTTPException:
+                        failed += 1
+                    else:
+                        updated += 1
 
             delta = time.time() - start
             query = "UPDATE starboard SET locked = FALSE WHERE id=$1;"
