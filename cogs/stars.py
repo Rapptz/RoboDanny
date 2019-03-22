@@ -543,7 +543,7 @@ class Stars(commands.Cog):
             content, embed = self.get_emoji_message(msg, count)
             await bot_message.edit(content=content, embed=embed)
 
-    @commands.command()
+    @commands.group(invoke_without_command=True)
     @checks.is_mod()
     async def starboard(self, ctx, *, name='starboard'):
         """Sets up the starboard for this server.
@@ -605,6 +605,25 @@ class Stars(commands.Cog):
         else:
             self.get_starboard.invalidate(self, ctx.guild.id)
             await ctx.send(f'\N{GLOWING STAR} Starboard created at {channel.mention}.')
+
+    @starboard.command(name='info')
+    @requires_starboard()
+    async def starboard_info(self, ctx):
+        """Shows meta information about the starboard."""
+        starboard = ctx.starboard
+        channel = starboard.channel
+        data = []
+
+        if channel is None:
+            data.append('Channel: #deleted-channel')
+        else:
+            data.append(f'Channel: {channel.mention}')
+            data.append(f'NSFW: {channel.is_nsfw()}')
+
+        data.append(f'Locked: {starboard.locked}')
+        data.append(f'Limit: {Plural(star=starboard.threshold)}')
+        data.append(f'Max Age: {Plural(day=starboard.max_age.days)}')
+        await ctx.send('\n'.join(data))
 
     @commands.group(invoke_without_command=True, ignore_extra=False)
     @commands.guild_only()
