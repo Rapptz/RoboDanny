@@ -187,7 +187,7 @@ class Stars(commands.Cog):
             else:
                 embed.add_field(name='Attachment', value=f'[{file.filename}]({file.url})', inline=False)
 
-        embed.add_field(name='Original', value=f'[Jump!]({message.jump_url})')
+        embed.add_field(name='Original', value=f'[Jump!]({message.jump_url})', inline=False)
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url_as(format='png'))
         embed.timestamp = message.created_at
         embed.colour = self.star_gradient_colour(stars)
@@ -782,8 +782,7 @@ class Stars(commands.Cog):
     async def star_migrate(self, ctx):
         """Migrates the starboard to the newest version.
 
-        If you don't do this, the starboard will be locked
-        for you until you do so.
+        While doing this, the starboard is locked.
 
         Note: This is an **incredibly expensive operation**.
 
@@ -792,180 +791,74 @@ class Stars(commands.Cog):
         You must have Manage Server permissions to use this.
         """
 
-        if not ctx.starboard.needs_migration:
-            # already migrated so ignore it
-            return await ctx.send('You are already migrated.')
-
-        _avatar_id = re.compile(r'\/avatars\/(?P<id>[0-9]{15,})')
-        start = time.time()
-
         perms = ctx.starboard.channel.permissions_for(ctx.me)
         if not perms.read_message_history:
             return await ctx.send(f'Bot does not have Read Message History in {ctx.starboard.channel.mention}.')
 
-        await ctx.send('Please be patient this will take a while...')
+        if ctx.starboard.locked:
+            return await ctx.send('Starboard must be unlocked to migrate. It will be locked during the migration.')
+
+        stats = self.bot.get_cog('Stats')
+        if stats is None:
+            return await ctx.send('Internal error occurred: Stats cog not loaded')
+
+        webhook = stats.webhook
+
+        start = time.time()
+        guild_id = ctx.guild.id
+        query = "UPDATE starboard SET locked=TRUE WHERE id=$1;"
+        await ctx.db.execute(query, guild_id)
+        self.get_starboard.invalidate(self, guild_id)
+
+        await ctx.send('Starboard is now locked and migration will now begin.')
+
+        valid_msg = re.compile(r'.+?\*\*[0-9]+\*\*\s*<#(?P<channel_id>[0-9]{17,21})>\s*ID\:\s*(?P<message_id>[0-9]{17,21})')
         async with ctx.typing():
-            channel = ctx.starboard.channel
+            fetched = 0
+            updated = 0
+            failed = 0
 
-            # the request below might take a while
-            await ctx.release()
+            # At the time of writing, the average server only had ~256 entries.
+            async for message in ctx.starboard.channel.history(limit=1000):
+                fetched += 1
 
-            # the data in the starboard channel is technically 'final' for this version
-            current_messages = await channel.history(limit=None).filter(lambda m: m.channel_mentions).flatten()
-
-            # first, we will delete all the entries that aren't in the channel once and
-            # for all
-
-            message_ids = [m.id for m in current_messages]
-            channel_ids = [m.raw_channel_mentions[0] for m in current_messages]
-
-            await ctx.acquire()
-            query = "DELETE FROM starboard_entries WHERE guild_id=$1 AND NOT (bot_message_id=ANY($2::bigint[]))"
-            status = await ctx.db.execute(query, ctx.guild.id, message_ids)
-
-            _, _, deleted = status.partition(' ') # DELETE <number>
-            deleted = int(deleted)
-
-            # get the up-to-date resolution of bot_message_id -> message_id
-            query = "SELECT bot_message_id, message_id FROM starboard_entries WHERE guild_id=$1;"
-            records = await ctx.db.fetch(query, ctx.guild.id)
-            records = dict(records)
-
-            # so I want to add in a channel_id and an author_id
-            # due to a consequence of bad design I do not have this information stored
-            # luckily, every message in the starboard does have a channel mention resolving
-            # to the channel_id, however getting the author_id is a lot trickier.
-            # More on that later
-
-            # We can fetch the author_id without any extraneous requests by checking
-            # if the message has an embed (starboard v2) and the embed author icon URL
-            # has the author_id embedded in it like so:
-            # https://images-ext-2.discordapp.net/external/{stuff}/{cdn_link}
-            # which {cdn_link} is:
-            # https/cdn.discordapp.com/avatars/{author_id}/{filename}
-            # Note: this fails if there's no URL or the user has a default avatars
-            # when this happens, we would need to do an HTTP request so let's keep track of those
-
-            author_ids = []
-
-            # channel_id: [message_ids]
-            needs_requests = defaultdict(list)
-
-            for index, message in enumerate(current_messages):
-                if message.embeds:
-                    icon_url = message.embeds[0].author.icon_url
-                    if icon_url:
-                        match = _avatar_id.search(icon_url)
-                        if match:
-                            author_ids.append(int(match.group('id')))
-                            continue
-
-                # if any of the steps failed, then let's add None
-                author_ids.append(None)
-                message_id = records.get(message.id)
-                if message_id:
-                    needs_requests[channel_ids[index]].append(message_id)
-
-            query = """UPDATE starboard_entries
-                       SET channel_id=t.channel_id,
-                           author_id=t.author_id
-                       FROM UNNEST($1::bigint[], $2::bigint[], $3::bigint[])
-                       AS t(channel_id, message_id, author_id)
-                       WHERE starboard_entries.guild_id=$4
-                       AND   starboard_entries.bot_message_id=t.message_id
-                    """
-
-            status = await ctx.db.execute(query, channel_ids, message_ids, author_ids, ctx.guild.id)
-            _, _, updated = status.partition(' ')
-            updated = int(updated)
-            await ctx.release()
-
-            # now we need to do requests for the missing info
-            needed_requests = sum(len(a) for a in needs_requests.values())
-            bad_data = 0
-
-            async def send_confirmation():
-                """Sends the confirmation messages."""
-                _log = self.bot.get_channel(309632009427222529)
-                delta = time.time() - start
-
-                await ctx.acquire()
-                query = "UPDATE starboard SET locked = FALSE WHERE id=$1;"
-                await ctx.db.execute(query, ctx.guild.id)
-                self.get_starboard.invalidate(self, ctx.guild.id)
-
-                m = await ctx.send(f'{ctx.author.mention}, we are done migrating!\n' \
-                                   f'Deleted {deleted} out of date entries.\n' \
-                                   f'Updated {updated} entries to the new format ({bad_data} failures).\n' \
-                                   f'Took {delta:.2f}s.')
-
-                e = discord.Embed(title='Starboard Migration', colour=discord.Colour.gold())
-                e.add_field(name='Deleted', value=deleted)
-                e.add_field(name='Updated', value=updated)
-                e.add_field(name='Requests', value=needed_requests)
-
-                e.add_field(name='Name', value=ctx.guild.name)
-                e.add_field(name='ID', value=ctx.guild.id)
-                e.add_field(name='Owner', value=f'{ctx.guild.owner} ID: {ctx.guild.owner.id}', inline=False)
-                e.add_field(name='Failed Updates', value=bad_data)
-
-                e.set_footer(text=f'Took {delta:.2f}s to migrate')
-                e.timestamp = m.created_at
-                await _log.send(embed=e)
-
-            if needed_requests == 0:
-                # we're done migrating if we have successfully ported everything
-                await send_confirmation()
-                return
-
-            # RIP slow path time on top of being O(N^2) lol
-
-            me = ctx.guild.me
-
-            data_to_pass = {} # message_id: author_id
-            for channel_id, messages in needs_requests.items():
-                channel = ctx.guild.get_channel(channel_id)
-                if channel is None:
-                    # deleted channel?
-                    # just ignore it and move on
-                    needed_requests -= len(messages)
-                    bad_data += len(messages)
+                match = valid_msg.match(message.content)
+                if match is None:
                     continue
 
-                perms = channel.permissions_for(me)
-                if not (perms.read_message_history and perms.read_messages):
-                    # same as being deleted
-                    needed_requests -= len(messages)
-                    bad_data += len(messages)
-                    continue
+                groups = match.groupdict()
+                groups['guild_id'] = guild_id
+                fmt = 'https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}'.format(**groups)
 
-                # it's fine now
-                # let's sort the snowflakes by newest to oldest
-                # so cassandra can handle our requests faster
-                for message_id in sorted(messages):
-                    msg = await self.get_message(channel, message_id)
-                    if msg is not None:
-                        data_to_pass[message_id] = msg.author.id
-                    else:
-                        bad_data += 1
+                embed = message.embeds[0]
+                embed.add_field(name='Original', value=f'[Jump!]({fmt})', inline=False)
+                try:
+                    await message.edit(embed=embed)
+                except discord.HTTPException:
+                    failed += 1
+                else:
+                    updated += 1
 
-            # actually run the update query now
-            query = """UPDATE starboard_entries
-                       SET author_id=t.author_id
-                       FROM UNNEST($1::bigint[], $2::bigint[])
-                       AS t(message_id, author_id)
-                       WHERE starboard_entries.message_id=t.message_id
-                    """
+            delta = time.time() - start
+            query = "UPDATE starboard SET locked = FALSE WHERE id=$1;"
+            await ctx.db.execute(query, guild_id)
+            self.get_starboard.invalidate(self, guild_id)
 
-            await ctx.acquire()
-            status = await ctx.db.execute(query, list(data_to_pass.keys()), list(data_to_pass.values()))
-            _, _, second_update = status.partition(' ')
-            updated += int(second_update)
-            updated = min(updated, len(current_messages))
+            m = await ctx.send(f'{ctx.author.mention}, we are done migrating!\n' \
+                                'The starboard has been unlocked.\n' \
+                               f'Updated {updated}/{fetched} entries to the new format.\n' \
+                               f'Took {delta:.2f}s.')
 
-            # it's finally over lol
-            await ctx.release()
-            await send_confirmation()
+            e = discord.Embed(title='Starboard Migration', colour=discord.Colour.gold())
+            e.add_field(name='Updated', value=updated)
+            e.add_field(name='Fetched', value=fetched)
+            e.add_field(name='Failed', value=failed)
+            e.add_field(name='Name', value=ctx.guild.name)
+            e.add_field(name='ID', value=guild_id)
+            e.set_footer(text=f'Took {delta:.2f}s to migrate')
+            e.timestamp = m.created_at
+            await webhook.send(embed=e)
+
 
     def records_to_value(self, records, fmt=None, default='None!'):
         if not records:
@@ -1302,7 +1195,11 @@ class Stars(commands.Cog):
         await ctx.send(f'Preparing to send to {len(to_send)} channels (out of {len(records)}).')
 
         success = 0
-        for channel in to_send:
+        start = time.time()
+        for index, channel in enumerate(to_send):
+            if index % 5 == 0:
+                await asyncio.sleep(1)
+
             try:
                 await channel.send(message)
             except:
@@ -1310,7 +1207,8 @@ class Stars(commands.Cog):
             else:
                 success += 1
 
-        await ctx.send(f'Successfully sent to {success} channels (out of {len(to_send)}).')
+        delta = time.time() - start
+        await ctx.send(f'Successfully sent to {success} channels (out of {len(to_send)}) in {delta:.2f}s.')
 
 def setup(bot):
     bot.add_cog(Stars(bot))
