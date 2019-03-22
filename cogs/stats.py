@@ -700,9 +700,7 @@ class Stats(commands.Cog):
         bad_inner_tasks = ", ".join(hex(id(t)) for t in inner_tasks if t.done() and t._exception is not None)
         total_warnings += bool(bad_inner_tasks)
         embed.add_field(name='Inner Tasks', value=f'Total: {len(inner_tasks)}\nFailed: {bad_inner_tasks or "None"}')
-
-        task_ids = tuple(hex(id(t)) for t in event_tasks)
-        embed.add_field(name='Events Waiting', value=f'Total: {len(task_ids)}\n{", ".join(task_ids)}', inline=False)
+        embed.add_field(name='Events Waiting', value=f'Total: {len(event_tasks)}', inline=False)
 
         command_waiters = len(self._data_batch)
         is_locked = self._batch_lock.locked()
