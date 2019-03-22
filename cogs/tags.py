@@ -826,6 +826,28 @@ class Tags(commands.Cog):
         await ctx.db.execute(query, ctx.author.id, row[0])
         await ctx.send('Successfully transferred tag ownership to you.')
 
+    @tag.command()
+    @suggest_box()
+    async def transfer(self, ctx, member: discord.Member, *, tag: TagName):
+        """Transfers a tag to another member.
+
+        You must own the tag before doing this.
+        """
+
+        query = "SELECT id FROM tags WHERE location_id=$1 AND LOWER(name)=$2 AND owner_id=$3;"
+        row = await ctx.db.fetchrow(query, ctx.guild.id, tag.lower(), ctx.author.id)
+        if row is None:
+            return await ctx.send(f'A tag with the name of "{tag}" does not exist or is not owned by you.')
+
+        async with ctx.acquire():
+            async with ctx.db.transaction():
+                query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
+                await ctx.db.execute(query, member.id, row[0])
+                query = "UPDATE tag_lookup SET owner_id=$1 WHERE tag_id=$2;"
+                await ctx.db.execute(query, member.id, row[0])
+
+        await ctx.send(f'Successfully transferred tag ownership to {member}.')
+
     @tag.group()
     @can_use_box()
     async def box(self, ctx):
