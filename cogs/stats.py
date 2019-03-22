@@ -733,11 +733,14 @@ class Stats(commands.Cog):
         cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
         embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU', inline=False)
 
+        global_rate_limit = not self.bot.http._global_over.set()
+        description.append(f'Global Rate Limit: {global_rate_limit}')
+
         if command_waiters >= 8:
             total_warnings += 1
             embed.colour = WARNING
 
-        if total_warnings >= 9:
+        if global_rate_limit or total_warnings >= 9:
             embed.colour = UNHEALTHY
 
         embed.set_footer(text=f'{total_warnings} warning(s)')
