@@ -3,6 +3,8 @@ from .utils import db, checks, cache
 from .utils.paginator import Pages
 
 from collections import defaultdict
+from typing import Optional
+import discord
 
 class LazyEntity:
     """This is meant for use with the Paginator.
@@ -429,15 +431,31 @@ class Config(commands.Cog):
 
     @config.command(name='enable')
     @checks.is_mod()
-    async def config_enable(self, ctx, *, command: CommandName):
-        """Enables a command for this server."""
-        await ctx.invoke(self.server_enable, command=command)
+    async def config_enable(self, ctx, channel: Optional[discord.TextChannel], *, command: CommandName):
+        """Enables a command the server or a channel."""
+
+        channel_id = channel.id if channel else None
+        human_friendly = channel.mention if channel else 'the server'
+        try:
+            await self.command_toggle(ctx.db, ctx.guild.id, channel_id, command, whitelist=True)
+        except RuntimeError as e:
+            await ctx.send(e)
+        else:
+            await ctx.send(f'Command successfully enabled for {human_friendly}.')
 
     @config.command(name='disable')
     @checks.is_mod()
-    async def config_disable(self, ctx, *, command: CommandName):
-        """Disables a command for this server."""
-        await ctx.invoke(self.server_disable, command=command)
+    async def config_disable(self, ctx, channel: Optional[discord.TextChannel], *, command: CommandName):
+        """Disables a command for the server or a channel."""
+
+        channel_id = channel.id if channel else None
+        human_friendly = channel.mention if channel else 'the server'
+        try:
+            await self.command_toggle(ctx.db, ctx.guild.id, channel_id, command, whitelist=True)
+        except RuntimeError as e:
+            await ctx.send(e)
+        else:
+            await ctx.send(f'Command successfully disabled for {human_friendly}.')
 
     @config.group(name='global')
     @commands.is_owner()
