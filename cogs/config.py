@@ -71,7 +71,7 @@ class CommandName(commands.Converter):
         }
 
         if lowered not in valid_commands:
-            raise commands.BadArgument('That command name is not valid.')
+            raise commands.BadArgument(f'Command {lowered!r} is not valid.')
 
         return lowered
 
