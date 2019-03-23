@@ -103,6 +103,19 @@ class ResolvedCommandPermissions:
         from itertools import accumulate
         return list(accumulate(obj.split(), lambda x, y: f'{x} {y}'))
 
+    def get_blocked_commands(self, channel_id):
+        if len(self._lookup) == 0:
+            return set()
+
+        guild = self._lookup[None]
+        channel = self._lookup[channel_id]
+
+        # first, apply the guild-level denies
+        ret = guild.deny - guild.allow
+
+        # then apply the channel-level denies
+        return ret | (channel.deny - channel.allow)
+
     def _is_command_blocked(self, name, channel_id):
         command_names = self._split(name)
 
@@ -470,6 +483,26 @@ class Config(commands.Cog):
     @config_disable.before_invoke
     async def open_database_before_working(self, ctx):
         await ctx.acquire()
+
+    @config.command(name='disabled')
+    @checks.is_mod()
+    async def config_disabled(self, ctx, *, channel: discord.TextChannel = None):
+        """Shows the disabled commands for the channel given."""
+
+        channel = channel or ctx.channel
+        resolved = await self.get_command_permissions(ctx.guild.id)
+        disabled = resolved.get_blocked_commands(channel.id)
+
+        if len(disabled) > 15:
+            async with self.bot.session.post('https://hastebin.com/documents', data=content) as resp:
+                if resp.status != 200:
+                    return await ctx.send('Sorry, failed to post data to hastebin.')
+                js = await resp.json()
+                value = f'Too long... Check: https://hastebin.com/{js["key"]}.txt'
+        else:
+            value = '\n'.join(disabled) or 'None!'
+        await ctx.send(f'In {channel.mention} the following commands are disabled:\n{value}')
+
 
     @config.group(name='global')
     @commands.is_owner()
