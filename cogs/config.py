@@ -370,20 +370,27 @@ class Config(commands.Cog):
         # clear the cache
         self.get_command_permissions.invalidate(self, guild_id)
 
-        query = "DELETE FROM command_config WHERE guild_id=$1 AND name=$2 AND channel_id=$3 AND whitelist=$4;"
+        if channel_id is None:
+            subcheck = 'channel_id IS NULL'
+            args = (guild_id, name)
+        else:
+            subcheck = 'channel_id=$3'
+            args = (guild_id, name, channel_id)
 
-        # DELETE <num>
-        status = await connection.execute(query, guild_id, name, channel_id, whitelist)
-        if status[-1] != '0':
-            return
+        async with connection.transaction():
+            # delete the previous entry regardless of what it was
+            query = f"DELETE FROM command_config WHERE guild_id=$1 AND name=$2 AND {subcheck};"
 
-        query = "INSERT INTO command_config (guild_id, channel_id, name, whitelist) VALUES ($1, $2, $3, $4);"
+            # DELETE <num>
+            await connection.execute(query, *args)
 
-        try:
-            await connection.execute(query, guild_id, channel_id, name, whitelist)
-        except asyncpg.UniqueViolationError:
-            msg = 'This command is already disabled.' if not whitelist else 'This command is already explicitly enabled.'
-            raise RuntimeError('This command is already disabled.')
+            query = "INSERT INTO command_config (guild_id, channel_id, name, whitelist) VALUES ($1, $2, $3, $4);"
+
+            try:
+                await connection.execute(query, guild_id, channel_id, name, whitelist)
+            except asyncpg.UniqueViolationError:
+                msg = 'This command is already disabled.' if not whitelist else 'This command is already explicitly enabled.'
+                raise RuntimeError(msg)
 
     @channel.command(name='disable')
     async def channel_disable(self, ctx, *, command: CommandName):
@@ -456,6 +463,13 @@ class Config(commands.Cog):
             await ctx.send(e)
         else:
             await ctx.send(f'Command successfully disabled for {human_friendly}.')
+
+    @server.before_invoke
+    @channel.before_invoke
+    @config_enable.before_invoke
+    @config_disable.before_invoke
+    async def open_database_before_working(self, ctx):
+        await ctx.acquire()
 
     @config.group(name='global')
     @commands.is_owner()
