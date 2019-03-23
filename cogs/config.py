@@ -451,7 +451,7 @@ class Config(commands.Cog):
         channel_id = channel.id if channel else None
         human_friendly = channel.mention if channel else 'the server'
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, channel_id, command, whitelist=True)
+            await self.command_toggle(ctx.db, ctx.guild.id, channel_id, command, whitelist=False)
         except RuntimeError as e:
             await ctx.send(e)
         else:
