@@ -494,7 +494,7 @@ class Config(commands.Cog):
         disabled = resolved.get_blocked_commands(channel.id)
 
         if len(disabled) > 15:
-            async with self.bot.session.post('https://hastebin.com/documents', data=content) as resp:
+            async with self.bot.session.post('https://hastebin.com/documents', data='\n'.join(disabled)) as resp:
                 if resp.status != 200:
                     return await ctx.send('Sorry, failed to post data to hastebin.')
                 js = await resp.json()
