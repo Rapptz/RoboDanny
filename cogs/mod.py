@@ -210,7 +210,7 @@ class Mod(commands.Cog):
             return
 
         # check if it meets the thresholds required
-        mention_count = sum(not m.bot for m in message.mentions)
+        mention_count = sum(not m.bot and m.id != author.id for m in message.mentions)
         if mention_count < config.mention_count:
             return
 
