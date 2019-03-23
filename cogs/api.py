@@ -185,7 +185,7 @@ class API(commands.Cog):
         e.description = '\n'.join(f'[{key}]({url})' for key, url in matches)
         await ctx.send(embed=e)
 
-        if ctx.guild and ctx.guild.id == DISCORD_API_ID:
+        if ctx.guild and ctx.guild.id in (DISCORD_API_ID, DISCORD_PY_GUILD):
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
 
