@@ -145,6 +145,9 @@ class RoboDanny(commands.AutoShardedBot):
         if ctx.author.id in self.blacklist:
             return
 
+        if ctx.guild is not None and ctx.guild.id in self.blacklist:
+            return
+
         bucket = self.spam_control.get_bucket(message)
         retry_after = bucket.update_rate_limit()
         if retry_after:
