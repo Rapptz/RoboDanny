@@ -179,6 +179,9 @@ class Config(commands.Cog):
 
     @cache.cache(strategy=cache.Strategy.lru, maxsize=1024, ignore_kwargs=True)
     async def is_plonked(self, guild_id, member_id, channel_id=None, *, connection=None, check_bypass=True):
+        if member_id in self.bot.blacklist or guild_id in self.bot.blacklist:
+            return True
+
         if check_bypass:
             guild = self.bot.get_guild(guild_id)
             if guild is not None:
