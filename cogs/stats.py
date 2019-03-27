@@ -260,6 +260,11 @@ class Stats(commands.Cog):
         embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
         await ctx.send(embed=embed)
 
+    def censor_object(self, obj):
+        if not isinstance(obj, str) and obj.id in self.bot.blacklist:
+            return '[censored]'
+        return censor_invite(obj)
+
     async def show_guild_stats(self, ctx):
         lookup = (
             '\N{FIRST PLACE MEDAL}',
@@ -455,7 +460,7 @@ class Stats(commands.Cog):
             if guild_id is None:
                 guild = 'Private Message'
             else:
-                guild = censor_invite(self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>')
+                guild = self.censor_object(self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>')
 
             emoji = lookup[index]
             value.append(f'{emoji}: {guild} ({uses} uses)')
@@ -472,7 +477,7 @@ class Stats(commands.Cog):
         records = await ctx.db.fetch(query)
         value = []
         for (index, (author_id, uses)) in enumerate(records):
-            user = censor_invite(self.bot.get_user(author_id) or f'<Unknown {author_id}>')
+            user = self.censor_object(self.bot.get_user(author_id) or f'<Unknown {author_id}>')
             emoji = lookup[index]
             value.append(f'{emoji}: {user} ({uses} uses)')
 
@@ -524,7 +529,7 @@ class Stats(commands.Cog):
             if guild_id is None:
                 guild = 'Private Message'
             else:
-                guild = censor_invite(self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>')
+                guild = self.censor_object(self.bot.get_guild(guild_id) or f'<Unknown {guild_id}>')
             emoji = lookup[index]
             value.append(f'{emoji}: {guild} ({uses} uses)')
 
@@ -541,7 +546,7 @@ class Stats(commands.Cog):
         records = await ctx.db.fetch(query)
         value = []
         for (index, (author_id, uses)) in enumerate(records):
-            user = censor_invite(self.bot.get_user(author_id) or f'<Unknown {author_id}>')
+            user = self.censor_object(self.bot.get_user(author_id) or f'<Unknown {author_id}>')
             emoji = lookup[index]
             value.append(f'{emoji}: {user} ({uses} uses)')
 
