@@ -550,7 +550,6 @@ class Splatoon(commands.Cog):
         self.splat2_data = config.Config('splatoon2.json', loop=bot.loop,
                                          object_hook=splatoon2_decoder, encoder=Splatoon2Encoder)
         self.map_data = []
-        self.map_updater = bot.loop.create_task(self.update_maps())
 
         self._splatnet2 = bot.loop.create_task(self.splatnet2())
         self._authenticator = bot.loop.create_task(self.splatnet2_authenticator())
@@ -563,7 +562,6 @@ class Splatoon(commands.Cog):
         self.sp2_salmonrun = []
 
     def cog_unload(self):
-        self.map_updater.cancel()
         self._splatnet2.cancel()
         self._authenticator.cancel()
 
@@ -575,34 +573,6 @@ class Splatoon(commands.Cog):
     def salmon_run(self):
         now = datetime.datetime.utcnow()
         return [s for s in self.sp2_salmonrun if now < s.end_time]
-
-    async def update_splatnet_cookie(self):
-        username = self.splat1_data.get('username')
-        password = self.splat1_data.get('password')
-        await maps.get_new_splatnet_cookie(self.bot.session, username, password)
-
-    async def update_maps(self):
-        try:
-            await self.update_splatnet_cookie()
-            while not self.bot.is_closed():
-                await self.update_schedule()
-                await asyncio.sleep(120) # task runs every 2 minutes
-        except asyncio.CancelledError:
-            pass
-
-    async def update_schedule(self):
-        try:
-            schedule = await maps.get_splatnet_schedule(self.bot.session)
-        except:
-            # if we get an exception, keep the old data
-            # make sure to remove the old data that already ended
-            self.map_data = [data for data in self.map_data if not data.is_over]
-        else:
-            self.map_data = []
-            for entry in schedule:
-                if entry.is_over:
-                    continue
-                self.map_data.append(entry)
 
     async def splatnet2_authenticator(self):
         try:
