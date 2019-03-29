@@ -120,6 +120,9 @@ class Tags(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        # guild_id: set(name)
+        self._reserved_tags_being_made = {}
+
     async def cog_command_error(self, ctx, error):
         if isinstance(error, (UnavailableTagCommand, UnableToUseBox)):
             await ctx.send(error)
@@ -207,6 +210,60 @@ class Tags(commands.Cog):
         else:
             return row
 
+    async def create_tag(self, ctx, name, content):
+        # due to our denormalized design, I need to insert the tag in two different
+        # tables, make sure it's in a transaction so if one of the inserts fail I
+        # can act upon it
+        query = """WITH tag_insert AS (
+                        INSERT INTO tags (name, content, owner_id, location_id)
+                        VALUES ($1, $2, $3, $4)
+                        RETURNING id
+                    )
+                    INSERT INTO tag_lookup (name, owner_id, location_id, tag_id)
+                    VALUES ($1, $3, $4, (SELECT id FROM tag_insert));
+                """
+
+        # since I'm checking for the exception type and acting on it, I need
+        # to use the manual transaction blocks
+
+        async with ctx.acquire():
+            tr = ctx.db.transaction()
+            await tr.start()
+
+            try:
+                await ctx.db.execute(query, name, content, ctx.author.id, ctx.guild.id)
+            except asyncpg.UniqueViolationError:
+                await tr.rollback()
+                await ctx.send('This tag already exists.')
+            except:
+                await tr.rollback()
+                await ctx.send('Could not create tag.')
+            else:
+                await tr.commit()
+                await ctx.send(f'Tag {name} successfully created.')
+
+    def is_tag_being_made(self, guild_id, name):
+        try:
+            being_made = self._reserved_tags_being_made[guild_id]
+        except KeyError:
+            return False
+        else:
+            return name.lower() in being_made
+
+    def add_in_progress_tag(self, guild_id, name):
+        tags = self._reserved_tags_being_made.setdefault(guild_id, set())
+        tags.add(name.lower())
+
+    def remove_in_progress_tag(self, guild_id, name):
+        try:
+            being_made = self._reserved_tags_being_made[guild_id]
+        except KeyError:
+            return
+
+        being_made.discard(name.lower())
+        if len(being_made) == 0:
+            del self._reserved_tags_being_made[guild_id]
+
     @commands.group(invoke_without_command=True)
     @suggest_box()
     async def tag(self, ctx, *, name: TagName(lower=True)):
@@ -238,36 +295,10 @@ class Tags(commands.Cog):
         Note that server moderators can delete your tag.
         """
 
-        # due to our denormalized design, I need to insert the tag in two different
-        # tables, make sure it's in a transaction so if one of the inserts fail I
-        # can act upon it
-        query = """WITH tag_insert AS (
-                        INSERT INTO tags (name, content, owner_id, location_id)
-                        VALUES ($1, $2, $3, $4)
-                        RETURNING id
-                    )
-                    INSERT INTO tag_lookup (name, owner_id, location_id, tag_id)
-                    VALUES ($1, $3, $4, (SELECT id FROM tag_insert));
-                """
+        if self.is_tag_being_made(ctx.guild.id, name):
+            return await ctx.send('This tag is currently being made by someone.')
 
-        # since I'm checking for the exception type and acting on it, I need
-        # to use the manual transaction blocks
-
-        async with ctx.acquire():
-            tr = ctx.db.transaction()
-            await tr.start()
-
-            try:
-                await ctx.db.execute(query, name, content, ctx.author.id, ctx.guild.id)
-            except asyncpg.UniqueViolationError:
-                await tr.rollback()
-                await ctx.send('This tag already exists.')
-            except:
-                await tr.rollback()
-                await ctx.send('Could not create tag.')
-            else:
-                await tr.commit()
-                await ctx.send(f'Tag {name} successfully created.')
+        await self.create_tag(ctx, name, content)
 
     @tag.command()
     @suggest_box()
@@ -333,6 +364,10 @@ class Tags(commands.Cog):
         finally:
             ctx.message = original
 
+        if self.is_tag_being_made(ctx.guild.id, name):
+            return await ctx.send('Sorry. This tag is currently being made by someone. ' \
+                                 f'Redo the command "{ctx.prefix}tag make" to retry.')
+
         # reacquire our connection since we need the query
         await ctx.acquire()
 
@@ -348,6 +383,7 @@ class Tags(commands.Cog):
                                  f'Redo the command "{ctx.prefix}tag make" to retry.')
 
 
+        self.add_in_progress_tag(ctx.guild.id, name)
         await ctx.send(f'Neat. So the name is {name}. What about the tag\'s content?')
 
         # release while we wait for response
@@ -367,8 +403,10 @@ class Tags(commands.Cog):
         if msg.attachments:
             clean_content = f'{clean_content}\n{msg.attachments[0].url}'
 
-        await ctx.acquire()
-        await ctx.invoke(self.create, name=name, content=clean_content)
+        try:
+            await self.create_tag(ctx, name, clean_content)
+        finally:
+            self.remove_in_progress_tag(ctx.guild.id, name)
 
     @make.error
     async def tag_make_error(self, ctx, error):
