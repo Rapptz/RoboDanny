@@ -77,6 +77,10 @@ class RoboDanny(commands.AutoShardedBot):
         # for people who excessively spam commands
         self.spam_control = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.user)
 
+        # A counter to auto-ban frequent spammers
+        # Triggering the rate limit 5 times in a row will auto-ban the user from the bot.
+        self._auto_spam_count = Counter()
+
         for extension in initial_extensions:
             try:
                 self.load_extension(extension)
@@ -136,6 +140,28 @@ class RoboDanny(commands.AutoShardedBot):
     async def on_resumed(self):
         print('resumed...')
 
+    @property
+    def stats_webhook(self):
+        wh_id, wh_token = self.config.stat_webhook
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.session))
+        return hook
+
+    def log_spammer(self, ctx, message, retry_after, *, autoblock=False):
+        guild_name = getattr(ctx.guild, 'name', 'No Guild (DMs)')
+        guild_id = getattr(ctx.guild, 'id', None)
+        fmt = 'User %s (ID %s) in guild %r (ID %s) spamming, retry_after: %.2fs'
+        log.warning(fmt, message.author, message.author.id, guild_name, guild_id, retry_after)
+        if not autoblock:
+            return
+
+        wh = self.stats_webhook
+        embed = discord.Embed(title='Auto-blocked Member', colour=0xDDA453)
+        embed.add_field(name='Member', value=f'{message.author} (ID: {message.author.id})', inline=False)
+        embed.add_field(name='Guild Info', value=f'{guild_name} (ID: {guild_id})', inline=False)
+        embed.add_field(name='Channel Info', value=f'{message.channel} (ID: {message.channel.id}', inline=False)
+        embed.timestamp = datetime.datetime.utcnow()
+        return wh.send(embed=embed)
+
     async def process_commands(self, message):
         ctx = await self.get_context(message, cls=context.Context)
 
@@ -150,14 +176,18 @@ class RoboDanny(commands.AutoShardedBot):
 
         bucket = self.spam_control.get_bucket(message)
         retry_after = bucket.update_rate_limit()
-        if retry_after:
-            is_owner = await self.is_owner(message.author)
-            if not is_owner:
-                guild_name = getattr(ctx.guild, 'name', 'No Guild (DMs)')
-                guild_id = getattr(ctx.guild, 'id', None)
-                fmt = 'User %s (ID %s) in guild %r (ID %s) spamming, retry_after: %.2fs'
-                log.warning(fmt, message.author, message.author.id, guild_name, guild_id, retry_after)
-                return
+        author_id = message.author.id
+        if retry_after and author_id != self.owner_id:
+            self._auto_spam_count[author_id] += 1
+            if self._auto_spam_count[author_id] >= 5:
+                await self.add_to_blacklist(author_id)
+                del self._auto_spam_count[author_id]
+                await self.log_spammer(ctx, message, retry_after, autoblock=True)
+            else:
+                self.log_spammer(ctx, message, retry_after)
+            return
+        else:
+            self._auto_spam_count.pop(author_id, None)
 
         try:
             await self.invoke(ctx)
