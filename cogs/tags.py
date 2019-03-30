@@ -384,7 +384,8 @@ class Tags(commands.Cog):
 
 
         self.add_in_progress_tag(ctx.guild.id, name)
-        await ctx.send(f'Neat. So the name is {name}. What about the tag\'s content?')
+        await ctx.send(f'Neat. So the name is {name}. What about the tag\'s content? ' \
+                       f'**You can type {ctx.prefix}abort to abort the tag make process.**')
 
         # release while we wait for response
         await ctx.release()
@@ -394,7 +395,10 @@ class Tags(commands.Cog):
         except asyncio.TimeoutError:
             return await ctx.send('You took too long. Goodbye.')
 
-        if msg.content:
+        if msg.content == f'{ctx.prefix}abort':
+            self.remove_in_progress_tag(ctx.guild.id, name)
+            return await ctx.send('Aborting.')
+        elif msg.content:
             clean_content = await commands.clean_content().convert(ctx, msg.content)
         else:
             # fast path I guess?
