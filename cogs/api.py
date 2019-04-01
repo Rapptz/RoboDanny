@@ -183,14 +183,8 @@ class API(commands.Cog):
 
         return result
 
-    async def build_rtfm_lookup_table(self):
+    async def build_rtfm_lookup_table(self, page_types):
         cache = {}
-        page_types = {
-            'rewrite': 'https://discordpy.readthedocs.io/en/rewrite',
-            'latest': 'https://discordpy.readthedocs.io/en/latest',
-            'python': 'https://docs.python.org/3'
-        }
-
         for key, page in page_types.items():
             sub = cache[key] = {}
             async with self.bot.session.get(page + '/objects.inv') as resp:
@@ -203,15 +197,19 @@ class API(commands.Cog):
         self._rtfm_cache = cache
 
     async def do_rtfm(self, ctx, key, obj):
-        base_url = f'https://discordpy.readthedocs.io/en/{key}/'
+        page_types = {
+            'rewrite': 'https://discordpy.readthedocs.io/en/rewrite',
+            'latest': 'https://discordpy.readthedocs.io/en/latest',
+            'python': 'https://docs.python.org/3'
+        }
 
         if obj is None:
-            await ctx.send(base_url)
+            await ctx.send(page_types[key])
             return
 
         if not hasattr(self, '_rtfm_cache'):
             await ctx.trigger_typing()
-            await self.build_rtfm_lookup_table()
+            await self.build_rtfm_lookup_table(page_types)
 
         # identifiers don't have spaces
         obj = obj.replace(' ', '_')
