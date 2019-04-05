@@ -144,15 +144,15 @@ class API(commands.Cog):
         result = {}
 
         # first line is version info
-        version = stream.readline().rstrip()
-        if version != '# Sphinx inventory version 2':
+        inv_version = stream.readline().rstrip()
+
+        if inv_version != '# Sphinx inventory version 2':
             raise RuntimeError('Invalid objects.inv file version.')
 
         # next line is "# Project: <name>"
         # then after that is "# Version: <version>"
-        # we don't care about these so skip them
-        stream.skipline()
-        stream.skipline()
+        projname = stream.readline().rstrip()[11:]
+        version = stream.readline().rstrip()[11:]
 
         # next line says if it's a zlib header
         line = stream.readline()
@@ -167,6 +167,7 @@ class API(commands.Cog):
                 continue
 
             name, directive, prio, location, dispname = match.groups()
+            domain, _, subdirective = directive.partition(':')
             if directive == 'py:module' and name in result:
                 # From the Sphinx Repository:
                 # due to a bug in 1.1 and below,
@@ -175,11 +176,20 @@ class API(commands.Cog):
                 # one is correct
                 continue
 
+            # Most documentation pages have a label
+            if directive == 'std:doc':
+                continue
+
             if location.endswith('$'):
                 location = location[:-1] + name
 
-            as_key = name.replace('discord.ext.commands.', '').replace('discord.', '')
-            result[as_key] = os.path.join(url, location)
+            key = name if dispname == '-' else dispname
+            prefix = f'{subdirective}:' if domain == 'std' else ''
+
+            if projname == 'discord.py':
+                key = key.replace('discord.ext.commands.', '').replace('discord.', '')
+
+            result[f'{prefix}{key}'] = os.path.join(url, location)
 
         return result
 
