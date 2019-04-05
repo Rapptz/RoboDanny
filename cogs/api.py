@@ -178,7 +178,7 @@ class API(commands.Cog):
 
             # Most documentation pages have a label
             if directive == 'std:doc':
-                continue
+                subdirective = 'label'
 
             if location.endswith('$'):
                 location = location[:-1] + name
@@ -220,9 +220,6 @@ class API(commands.Cog):
         if not hasattr(self, '_rtfm_cache'):
             await ctx.trigger_typing()
             await self.build_rtfm_lookup_table(page_types)
-
-        # identifiers don't have spaces
-        obj = obj.replace(' ', '_')
 
         if key == 'rewrite':
             pit_of_success_helpers = {
