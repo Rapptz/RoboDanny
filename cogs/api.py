@@ -221,6 +221,8 @@ class API(commands.Cog):
             await ctx.trigger_typing()
             await self.build_rtfm_lookup_table(page_types)
 
+        obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)(.+)', r'\1', obj)
+
         if key == 'rewrite':
             pit_of_success_helpers = {
                 'vc': 'VoiceClient',
