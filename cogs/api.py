@@ -221,7 +221,7 @@ class API(commands.Cog):
             await ctx.trigger_typing()
             await self.build_rtfm_lookup_table(page_types)
 
-        obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)(.+)', r'\1', obj)
+        obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)?(.+)', r'\1', obj)
 
         if key == 'rewrite':
             pit_of_success_helpers = {
@@ -252,7 +252,7 @@ class API(commands.Cog):
         def transform(tup):
             return tup[0]
 
-        matches = fuzzy.finder(obj, cache, key=lambda t: t[0], lazy=False)[:5]
+        matches = fuzzy.finder(obj, cache, key=lambda t: t[0], lazy=False)[:8]
 
         e = discord.Embed(colour=discord.Colour.blurple())
         if len(matches) == 0:
