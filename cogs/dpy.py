@@ -118,15 +118,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         else:
             await ctx.message.add_reaction('\N{HEAVY PLUS SIGN}')
 
-    @commands.command(hidden=True)
-    async def rewrite(self, ctx):
-        """Gives you the rewrite role.
-
-        Necessary to get rewrite help and news.
-        """
-
-        await self.toggle_role(ctx, DISCORD_PY_REWRITE_ROLE)
-
     @commands.command(hidden=True, aliases=['日本語'])
     async def nihongo(self, ctx):
         """日本語チャットに参加したい場合はこの役職を付ける"""
