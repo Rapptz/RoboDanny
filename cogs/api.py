@@ -208,7 +208,6 @@ class API(commands.Cog):
 
     async def do_rtfm(self, ctx, key, obj):
         page_types = {
-            'rewrite': 'https://discordpy.readthedocs.io/en/rewrite',
             'latest': 'https://discordpy.readthedocs.io/en/latest',
             'python': 'https://docs.python.org/3'
         }
@@ -223,7 +222,7 @@ class API(commands.Cog):
 
         obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)?(.+)', r'\1', obj)
 
-        if key == 'rewrite':
+        if key == 'latest':
             pit_of_success_helpers = {
                 'vc': 'VoiceClient',
                 'msg': 'Message',
@@ -273,11 +272,6 @@ class API(commands.Cog):
         a cruddy fuzzy algorithm.
         """
         await self.do_rtfm(ctx, 'latest', obj)
-
-    @rtfm.command(name='rewrite')
-    async def rtfm_rewrite(self, ctx, *, obj: str = None):
-        """Gives you a documentation link for a rewrite discord.py entity."""
-        await self.do_rtfm(ctx, 'rewrite', obj)
 
     @rtfm.command(name='python', aliases=['py'])
     async def rtfm_python(self, ctx, *, obj: str = None):
