@@ -208,6 +208,9 @@ class Mod(commands.Cog):
         if not isinstance(author, discord.Member):
             return
 
+        if author.bot:
+            return
+
         # we're going to ignore members with roles
         if len(author.roles) > 1:
             return
