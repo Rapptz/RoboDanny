@@ -103,6 +103,49 @@ class ActionReason(commands.Converter):
             raise commands.BadArgument(f'reason is too long ({len(argument)}/{reason_max})')
         return ret
 
+## Spam detector
+
+# TODO: add this to d.py maybe
+class CooldownByContent(commands.CooldownMapping):
+    def _bucket_key(self, message):
+        return message.content
+
+class SpamChecker:
+    """This spam checker does a few things.
+
+    1) It checks if a user has spammed more than 15 times in 17 seconds
+    2) It checks if the content has been spammed 15 times in 17 seconds.
+    3) It checks if 10 members have joined over a 10 second window.
+
+    The second case is meant to catch alternating spam bots while the first one
+    just catches regular singular spam bots.
+
+    From experience these values aren't reached unless someone is actively spamming.
+
+    The third case is used for logging purposes only.
+    """
+    def __init__(self):
+        self.by_content = CooldownByContent.from_cooldown(15, 17.0, commands.BucketType.member)
+        self.by_user = commands.CooldownMapping.from_cooldown(15, 17.0, commands.BucketType.user)
+        self.by_join = commands.Cooldown(10, 10.0, commands.BucketType.default)
+
+    def is_spamming(self, message):
+        if message.guild is None:
+            return False
+
+        user_bucket = self.by_user.get_bucket(message)
+        if user_bucket.update_rate_limit():
+            return True
+
+        content_bucket = self.by_content.get_bucket(message)
+        if content_bucket.update_rate_limit():
+            return True
+
+        return False
+
+    def is_fast_join(self):
+        return self.by_join.update_rate_limit()
+
 ## The actual cog
 
 class Mod(commands.Cog):
@@ -111,8 +154,8 @@ class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-        # guild_id: set(user_id)
-        self._recently_kicked = defaultdict(set)
+        # guild_id: SpamChecker
+        self._spam_check = defaultdict(SpamChecker)
 
     def __repr__(self):
         return '<cogs.Mod>'
@@ -138,45 +181,20 @@ class Mod(commands.Cog):
                 return await ModConfig.from_record(record, self.bot)
             return None
 
-    async def check_raid(self, config, guild, member, timestamp):
+    async def check_raid(self, config, guild_id, member, message):
         if config.raid_mode != RaidMode.strict.value:
             return
 
-        delta  = (member.joined_at - member.created_at).total_seconds() // 60
-
-        # they must have created their account at most 30 minutes before they joined.
-        if delta > 30:
-            return
-
-        delta = (timestamp - member.joined_at).total_seconds() // 60
-
-        # check if this is their first action in the 30 minutes they joined
-        if delta > 30:
+        checker = self._spam_check[guild_id]
+        if not checker.is_spamming(message):
             return
 
         try:
-            fmt = f"""Howdy. The server {guild.name} is currently in a raid mode lockdown.
-
-                   A raid is when a server is being bombarded with trolls or low effort posts.
-                   Unfortunately, what this means is that you have been automatically kicked for
-                   meeting the suspicious thresholds currently set.
-
-                   **Do not worry though, as you will be able to join again in the future!**
-                   """
-
-            fmt = cleandoc(fmt)
-            await member.send(fmt)
+            await member.ban(reason='Auto-ban from spam (strict raid mode ban)')
         except discord.HTTPException:
-            pass
-
-        # kick anyway
-        try:
-            await member.kick(reason='Strict raid mode')
-        except discord.HTTPException:
-            log.info(f'[Raid Mode] Failed to kick {member} (ID: {member.id}) from server {member.guild} via strict mode.')
+            log.info(f'[Raid Mode] Failed to ban {member} (ID: {member.id}) from server {member.guild} via strict mode.')
         else:
-            log.info(f'[Raid Mode] Kicked {member} (ID: {member.id}) from server {member.guild} via strict mode.')
-            self._recently_kicked[guild.id].add(member.id)
+            log.info(f'[Raid Mode] Banned {member} (ID: {member.id}) from server {member.guild} via strict mode.')
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -200,7 +218,7 @@ class Mod(commands.Cog):
             return
 
         # check for raid mode stuff
-        await self.check_raid(config, message.guild, author, message.created_at)
+        await self.check_raid(config, guild_id, author, message)
 
         # auto-ban tracking for mention spams begin here
         if len(message.mentions) <= 3:
@@ -240,7 +258,8 @@ class Mod(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        config = await self.get_guild_config(member.guild.id)
+        guild_id = member.guild.id
+        config = await self.get_guild_config(guild_id)
         if config is None or not config.raid_mode:
             return
 
@@ -248,32 +267,23 @@ class Mod(commands.Cog):
 
         # these are the dates in minutes
         created = (now - member.created_at).total_seconds() // 60
-        was_kicked = False
-
-        if config.raid_mode == RaidMode.strict.value:
-            was_kicked = self._recently_kicked.get(member.guild.id)
-            if was_kicked is not None:
-                try:
-                    was_kicked.remove(member.id)
-                except KeyError:
-                    was_kicked = False
-                else:
-                    was_kicked = True
+        checker = self._spam_check[guild_id]
 
         # Do the broadcasted message to the channel
-        if was_kicked:
-            title = 'Member Re-Joined'
+        title = 'Member Joined'
+        if checker.is_fast_join():
             colour = 0xdd5f53 # red
+            if created < 30:
+                title = 'Member Joined (Very New Member)'
         else:
-            title = 'Member Joined'
             colour = 0x53dda4 # green
 
             if created < 30:
                 colour = 0xdda453 # yellow
+                title = 'Member Joined (Very New Member)'
 
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = now
-        e.set_footer(text='Created')
         e.set_author(name=str(member), icon_url=member.avatar_url)
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=member.joined_at)
@@ -384,7 +394,7 @@ class Mod(commands.Cog):
                 """
 
         await ctx.db.execute(query, ctx.guild.id, RaidMode.off.value)
-        self._recently_kicked.pop(ctx.guild.id, None)
+        self._spam_check.pop(ctx.guild.id, None)
         self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
 
@@ -394,22 +404,18 @@ class Mod(commands.Cog):
         """Enables strict raid mode on the server.
 
         Strict mode is similar to regular enabled raid mode, with the added
-        benefit of auto-kicking members that meet the following requirements:
-
-        - Account creation date and join date are at most 30 minutes apart.
-        - First message recorded on the server is 30 minutes apart from join date.
-        - Joining a voice channel within 30 minutes of joining.
-
-        Members who meet these requirements will get a private message saying that the
-        server is currently in lock down.
+        benefit of auto-banning members that are spamming. The threshold for
+        spamming depends on a per-content basis and also on a per-user basis
+        of 15 messages per 17 seconds.
 
         If this is considered too strict, it is recommended to fall back to regular
         raid mode.
         """
         channel = channel or ctx.channel
 
-        if not ctx.me.guild_permissions.kick_members:
-            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick members.')
+        perms = ctx.me.guild_permissions
+        if not (perms.kick_members and perms.ban_members):
+            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick and ban members.')
 
         try:
             await ctx.guild.edit(verification_level=discord.VerificationLevel.high)
