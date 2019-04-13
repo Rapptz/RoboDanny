@@ -432,7 +432,7 @@ class Mod(commands.Cog):
                         broadcast_channel = EXCLUDED.broadcast_channel;
                 """
 
-        await ctx.db.execute(query, ctx.guild.id, RaidMode.strict.value, ctx.channel.id)
+        await ctx.db.execute(query, ctx.guild.id, RaidMode.strict.value, channel.id)
         self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled strictly. Broadcasting join messages to {channel.mention}.')
 
