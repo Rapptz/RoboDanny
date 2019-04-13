@@ -108,7 +108,7 @@ class ActionReason(commands.Converter):
 # TODO: add this to d.py maybe
 class CooldownByContent(commands.CooldownMapping):
     def _bucket_key(self, message):
-        return message.content
+        return (message.channel.id, message.content)
 
 class SpamChecker:
     """This spam checker does a few things.
