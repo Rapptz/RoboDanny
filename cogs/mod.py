@@ -248,19 +248,6 @@ class Mod(commands.Cog):
             log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, user, before, after):
-        if not isinstance(user, discord.Member):
-            return
-
-        # joined a voice channel
-        if before.channel is None and after.channel is not None:
-            config = await self.get_guild_config(user.guild.id)
-            if config is None:
-                return
-
-            await self.check_raid(config, user.guild, user, datetime.datetime.utcnow())
-
-    @commands.Cog.listener()
     async def on_member_join(self, member):
         guild_id = member.guild.id
         config = await self.get_guild_config(guild_id)
