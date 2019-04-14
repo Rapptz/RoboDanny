@@ -62,7 +62,6 @@ class RoboDanny(commands.AutoShardedBot):
         self.challonge_api_key = config.challonge_api_key
         self.session = aiohttp.ClientSession(loop=self.loop)
 
-        self.add_command(self.do)
         self._prev_events = deque(maxlen=10)
 
         # guild_id: list
