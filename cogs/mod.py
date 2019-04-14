@@ -659,8 +659,8 @@ class Mod(commands.Cog):
             return await ctx.send('No members found matching criteria.')
 
         if args.show:
-            fmt = "\n".join(f'{member.id}\t{member}' for member in members)
-            content = f'Total members: {len(members)}\n{fmt}'
+            fmt = "\n".join(f'{member.id}\t{member.joined_at}\t{member}' for member in members)
+            content = f'Current Time: {datetime.datetime.utcnow()}\nTotal members: {len(members)}\n{fmt}'
             async with self.bot.session.post('https://hastebin.com/documents', data=content) as resp:
                 if resp.status != 200:
                     return await ctx.send('Sorry, failed to post data to hastebin.')
