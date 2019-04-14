@@ -258,5 +258,17 @@ class Admin(commands.Cog):
         new_ctx._db = ctx._db
         await self.bot.invoke(new_ctx)
 
+    @commands.command(hidden=True)
+    async def do(self, ctx, times: int, *, command):
+        """Repeats a command a specified number of times."""
+        msg = copy.copy(ctx.message)
+        msg.content = ctx.prefix + command
+
+        new_ctx = await self.bot.get_context(msg, cls=type(ctx))
+        new_ctx._db = ctx._db
+
+        for i in range(times):
+            await new_ctx.reinvoke()
+
 def setup(bot):
     bot.add_cog(Admin(bot))
