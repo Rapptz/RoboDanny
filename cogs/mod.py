@@ -133,12 +133,13 @@ class SpamChecker:
         if message.guild is None:
             return False
 
+        current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
         user_bucket = self.by_user.get_bucket(message)
-        if user_bucket.update_rate_limit():
+        if user_bucket.update_rate_limit(current):
             return True
 
         content_bucket = self.by_content.get_bucket(message)
-        if content_bucket.update_rate_limit():
+        if content_bucket.update_rate_limit(current):
             return True
 
         return False
