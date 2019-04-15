@@ -6,3 +6,4 @@ click
 parsedatetime
 lru_dict
 python-dateutil
+pygit2
