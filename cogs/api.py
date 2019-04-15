@@ -242,9 +242,9 @@ class API(commands.Cog):
                     break
 
             def replace(o):
-                return pit_of_success_helpers.get(o.group(0), '')
+                return pit_of_success_helpers.get(o.group(1), '')
 
-            pattern = re.compile('|'.join(fr'(?:^{k}$|{k}\.)' for k in pit_of_success_helpers.keys()))
+            pattern = re.compile('|'.join(fr'(?:^({k})$|({k})\.)' for k in pit_of_success_helpers.keys()))
             obj = pattern.sub(replace, obj)
 
         cache = list(self._rtfm_cache[key].items())
