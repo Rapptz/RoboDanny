@@ -159,7 +159,7 @@ class UserFriendlyTime(commands.Converter):
             traceback.print_exc()
             raise
 
-def human_timedelta(dt, *, source=None):
+def human_timedelta(dt, *, source=None, accuracy=None):
     now = source or datetime.datetime.utcnow()
     if dt > now:
         delta = relativedelta(dt, now)
@@ -179,10 +179,19 @@ def human_timedelta(dt, *, source=None):
         if not elem:
             continue
 
+        if attr == 'days':
+            weeks = delta.weeks
+            if weeks:
+                elem -= delta.weeks * 7
+                output.append(str(Plural(week=weeks)))
+
         if elem > 1:
             output.append(f'{elem} {attr}')
         else:
             output.append(f'{elem} {attr[:-1]}')
+
+    if accuracy is not None:
+        output = output[:accuracy]
 
     if len(output) == 0:
         return 'now'
