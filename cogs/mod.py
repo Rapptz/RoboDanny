@@ -571,6 +571,9 @@ class Mod(commands.Cog):
         except Exception as e:
             return await ctx.send(str(e))
 
+        if not ctx.guild.chunked:
+            await self.bot.request_offline_members(ctx.guild)
+
         members = []
 
         if args.channel:
@@ -647,7 +650,8 @@ class Mod(commands.Cog):
             return await ctx.send('No members found matching criteria.')
 
         if args.show:
-            fmt = "\n".join(f'{member.id}\t{member.joined_at}\t{member}' for member in members)
+            members = sorted(members, key=lambda m: m.joined_at or now)
+            fmt = "\n".join(f'{m.id}\tJoined: {m.joined_at}\tCreated: {m.created_at}\t{m}' for m in members)
             content = f'Current Time: {datetime.datetime.utcnow()}\nTotal members: {len(members)}\n{fmt}'
             async with self.bot.session.post('https://hastebin.com/documents', data=content) as resp:
                 if resp.status != 200:
@@ -655,14 +659,14 @@ class Mod(commands.Cog):
                 js = await resp.json()
                 return await ctx.send(f'https://hastebin.com/{js["key"]}.txt')
 
+        if args.reason is None:
+            return await ctx.send('--reason flag is required.')
+        else:
+            reason = await ActionReason().convert(ctx, args.reason)
+
         confirm = await ctx.prompt(f'This will ban **{formats.Plural(member=len(members))}**. Are you sure?')
         if not confirm:
             return await ctx.send('Aborting.')
-
-        if args.reason is None:
-            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
-        else:
-            reason = await ActionReason().convert(ctx, args.reason)
 
         count = 0
         for member in members:
