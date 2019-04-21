@@ -241,8 +241,13 @@ class Stats(commands.Cog):
         embed.set_author(name=str(owner), icon_url=owner.avatar_url)
 
         # statistics
-        total_members = sum(1 for _ in self.bot.get_all_members())
-        total_online = len({m.id for m in self.bot.get_all_members() if m.status is not discord.Status.offline})
+        total_members = 0
+        total_online = 0
+        for member in self.bot.get_all_members():
+            total_members += 1
+            if member.status is not discord.Status.offline:
+                total_online += 1
+
         total_unique = len(self.bot.users)
 
         voice_channels = []
