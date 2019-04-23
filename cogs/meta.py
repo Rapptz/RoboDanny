@@ -24,6 +24,7 @@ class HelpPaginator(Pages):
         self.total = len(entries)
         self.help_command = help_command
         self.prefix = help_command.clean_prefix
+        self.is_bot = False
 
     def get_bot_page(self, page):
         cog, description, commands = self.entries[page - 1]
@@ -36,7 +37,7 @@ class HelpPaginator(Pages):
         self.embed.description = self.description
         self.embed.title = self.title
 
-        if self.get_page is self.get_bot_page:
+        if self.is_bot:
             value ='For more help, join the official bot support server: https://discord.gg/DWEaqMy'
             self.embed.add_field(name='Support', value=value, inline=False)
 
@@ -147,6 +148,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
         # swap the get_page implementation to work with our nested pages.
         pages.get_page = pages.get_bot_page
+        pages.is_bot = True
         pages.total = total
         await self.context.release()
         await pages.paginate()
