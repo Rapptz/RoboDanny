@@ -710,10 +710,10 @@ class Stats(commands.Cog):
         ]
 
         cogs_directory = os.path.dirname(__file__)
-
+        tasks_directory = os.path.join('discord', 'ext', 'tasks', '__init__.py')
         inner_tasks = [
             t for t in all_tasks
-            if cogs_directory in repr(t)
+            if cogs_directory in repr(t) or tasks_directory in repr(t)
         ]
 
         bad_inner_tasks = ", ".join(hex(id(t)) for t in inner_tasks if t.done() and t._exception is not None)
