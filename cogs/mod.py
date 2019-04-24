@@ -1427,8 +1427,14 @@ class Mod(commands.Cog):
         """
         config = await self.get_guild_config(ctx.guild.id)
         role = config.mute_role
-        role = role and f'{role} (ID: {role.id})'
-        await ctx.send(f'Role: {role}\nMembers Muted: {len(config.muted_members)}')
+        if role is not None:
+            members = config.muted_members.copy()
+            members.update(map(lambda r: r.id, role.members))
+            total = len(members)
+            role = f'{role} (ID: {role.id})'
+        else:
+            total = 0
+        await ctx.send(f'Role: {role}\nMembers Muted: {total}')
 
     @_mute_role.command(name='set')
     @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
