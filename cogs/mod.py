@@ -1305,6 +1305,9 @@ class Mod(commands.Cog):
 
         role = discord.Object(id=ctx.guild_config.mute_role_id)
         total = len(members)
+        if total == 0:
+            return await ctx.send('Missing members to mute.')
+
         failed = 0
         for member in members:
             try:
@@ -1335,6 +1338,9 @@ class Mod(commands.Cog):
 
         role = discord.Object(id=ctx.guild_config.mute_role_id)
         total = len(members)
+        if total == 0:
+            return await ctx.send('Missing members to mute.')
+
         failed = 0
         for member in members:
             try:
