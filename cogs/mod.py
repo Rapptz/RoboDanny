@@ -1463,7 +1463,7 @@ class Mod(commands.Cog):
             msg = '\N{WARNING SIGN} **There seems to be a pre-existing mute role set up.**\n\n' \
                   'If you want to abort the set-up process react with \N{CROSS MARK}.\n' \
                   'If you want to merge the pre-existing member data with the new member data react with \u2934.\n' \
-                  'If you want to replace pre-existing member data with the new member data react with \U0001f504.\n\n'
+                  'If you want to replace pre-existing member data with the new member data react with \U0001f504.\n\n' \
                   '**Note: Merging is __slow__. It will also add the role to every possible member that needs it.**'
 
             sent = await ctx.send(msg)
