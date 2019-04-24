@@ -1,4 +1,4 @@
-from discord.ext import commands
+from discord.ext import commands, tasks
 from .utils import checks, db, time, cache, formats
 from collections import Counter, defaultdict
 from inspect import cleandoc
@@ -11,6 +11,7 @@ import datetime
 import asyncio
 import argparse, shlex
 import logging
+import asyncpg
 
 log = logging.getLogger(__name__)
 
@@ -36,11 +37,14 @@ class GuildConfig(db.Table, table_name='guild_mod_config'):
     broadcast_channel = db.Column(db.Integer(big=True))
     mention_count = db.Column(db.Integer(small=True))
     safe_mention_channel_ids = db.Column(db.Array(db.Integer(big=True)))
+    mute_role_id = db.Column(db.Integer(big=True))
+    muted_members = db.Column(db.Array(db.Integer(big=True)))
 
 ## Configuration
 
 class ModConfig:
-    __slots__ = ('raid_mode', 'id', 'bot', 'broadcast_channel_id', 'mention_count', 'safe_mention_channel_ids')
+    __slots__ = ('raid_mode', 'id', 'bot', 'broadcast_channel_id', 'mention_count',
+                 'safe_mention_channel_ids', 'mute_role_id', 'muted_members')
 
     @classmethod
     async def from_record(cls, record, bot):
@@ -53,12 +57,26 @@ class ModConfig:
         self.broadcast_channel_id = record['broadcast_channel']
         self.mention_count = record['mention_count']
         self.safe_mention_channel_ids = set(record['safe_mention_channel_ids'] or [])
+        self.muted_members = set(record['muted_members'] or [])
+        self.mute_role_id = record['mute_role_id']
         return self
 
     @property
     def broadcast_channel(self):
         guild = self.bot.get_guild(self.id)
         return guild and guild.get_channel(self.broadcast_channel_id)
+
+    @property
+    def mute_role(self):
+        guild = self.bot.get_guild(self.id)
+        return guild and self.mute_role_id and guild.get_role(self.mute_role_id)
+
+    def is_muted(self, member):
+        return member.id in self.muted_members
+
+    async def apply_mute(self, member, reason):
+        if self.mute_role_id:
+            await member.add_roles(discord.Object(id=self.mute_role_id), reason=reason)
 
 ## Converters
 
@@ -147,6 +165,29 @@ class SpamChecker:
     def is_fast_join(self):
         return self.by_join.update_rate_limit()
 
+## Checks
+
+class NoMuteRole(commands.CommandError):
+    def __init__(self):
+        super().__init__('This server does not have a mute role set up.')
+
+def can_mute():
+    async def predicate(ctx):
+        is_owner = await ctx.bot.is_owner(ctx.author)
+        if ctx.guild is None:
+            return False
+
+        if not ctx.author.guild_permissions.manage_roles and not is_owner:
+            return False
+
+        # This will only be used within this cog.
+        ctx.guild_config = config = await ctx.cog.get_guild_config(ctx.guild.id)
+        role = config.mute_role
+        if role is None:
+            raise NoMuteRole()
+        return ctx.author.top_role > role
+    return commands.check(predicate)
+
 ## The actual cog
 
 class Mod(commands.Cog):
@@ -158,8 +199,22 @@ class Mod(commands.Cog):
         # guild_id: SpamChecker
         self._spam_check = defaultdict(SpamChecker)
 
+        # guild_id: List[(member_id, insertion)]
+        # A batch of data for bulk inserting mute role changes
+        # True - insert, False - remove
+        self._data_batch = defaultdict(list)
+        self._batch_lock = asyncio.Lock(loop=bot.loop)
+        # self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
+        self.batch_updates.start()
+
     def __repr__(self):
         return '<cogs.Mod>'
+
+    def cog_unload(self):
+        self.batch_updates.cancel()
+
+        if self._data_batch:
+            self.bot.loop.create_task(self.bulk_insert())
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -172,6 +227,43 @@ class Mod(commands.Cog):
                 await ctx.send(f'This entity does not exist: {original.text}')
             elif isinstance(original, discord.HTTPException):
                 await ctx.send('Somehow, an unexpected error occurred. Try again later?')
+        elif isinstance(error, NoMuteRole):
+            await ctx.send(error)
+
+    async def bulk_insert(self):
+        query = """UPDATE guild_mod_config
+                   SET muted_members = x.result_array
+                   FROM jsonb_to_recordset($1::jsonb) AS
+                   x(guild_id BIGINT, result_array BIGINT[])
+                   WHERE guild_mod_config.id = x.guild_id;
+                """
+
+        if not self._data_batch:
+            return
+
+        final_data = []
+        for guild_id, data in self._data_batch.items():
+            # If it's touched this function then chances are that this has hit cache before
+            # so it's not actually doing a query, hopefully.
+            config = await self.get_guild_config(guild_id)
+            as_set = config.muted_members
+            for member_id, insertion in data:
+                func = as_set.add if insertion else as_set.discard
+                func(member_id)
+
+            final_data.append({
+                'guild_id': guild_id,
+                'result_array': list(as_set)
+            })
+            self.get_guild_config.invalidate(self, guild_id)
+
+        await self.bot.pool.execute(query, final_data)
+        self._data_batch.clear()
+
+    @tasks.loop(seconds=15.0)
+    async def batch_updates(self):
+        async with self._batch_lock:
+            await self.bulk_insert()
 
     @cache.cache()
     async def get_guild_config(self, guild_id):
@@ -251,7 +343,13 @@ class Mod(commands.Cog):
     async def on_member_join(self, member):
         guild_id = member.guild.id
         config = await self.get_guild_config(guild_id)
-        if config is None or not config.raid_mode:
+        if config is None:
+            return
+
+        if config.is_muted(member):
+            return await config.apply_mute(member, 'Member was previously muted.')
+
+        if not config.raid_mode:
             return
 
         now = datetime.datetime.utcnow()
@@ -282,6 +380,46 @@ class Mod(commands.Cog):
 
         if config.broadcast_channel:
             await config.broadcast_channel.send(embed=e)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        # Comparing roles in memory is faster than potentially fetching from
+        # database, even if there's a cache layer
+        if before.roles == after.roles:
+            return
+
+        guild_id = after.guild.id
+        config = await self.get_guild_config(guild_id)
+        if config is None:
+            return
+
+        if config.mute_role_id is None:
+            return
+
+        # Use private API because d.py does not expose this yet
+        before_has = before._roles.has(config.mute_role_id)
+        after_has = after._roles.has(config.mute_role_id)
+
+        # No change in the mute role
+        # both didn't have it or both did have it
+        if before_has == after_has:
+            return
+
+        async with self._batch_lock:
+            # If `after_has` is true, then it's an insertion operation
+            # if it's false, then the role for removed
+            self._data_batch[guild_id].append((after.id, after_has))
+
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self, role):
+        guild_id = role.guild.id
+        config = await self.get_guild_config(guild_id)
+        if config is None or config.mute_role_id != role.id:
+            return
+
+        query = """UPDATE guild_mod_config SET (mute_role_id, muted_members) = (NULL, '{}'::bigint[]) WHERE id=$1;"""
+        await self.bot.pool.execute(query, guild_id)
+        self.get_guild_config.invalidate(self, guild_id)
 
     @commands.command(aliases=['newmembers'])
     @commands.guild_only()
@@ -733,7 +871,7 @@ class Mod(commands.Cog):
 
         The duration can be a a short time form, e.g. 30d or a more human
         duration such as "until thursday at 3PM" or a more concrete time
-        such as "2017-12-31".
+        such as "2024-12-31".
 
         Note that times are in UTC.
 
@@ -1099,6 +1237,357 @@ class Mod(commands.Cog):
 
         args.search = max(0, min(2000, args.search)) # clamp from 0-2000
         await self.do_removal(ctx, args.search, predicate, before=args.before, after=args.after)
+
+    # Mute related stuff
+
+    async def update_mute_role(self, ctx, config, role, *, merge=False):
+        guild = ctx.guild
+        if merge:
+            members = config.muted_members
+            # If the roles are being merged then the old members should get the new role
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id}): Merging mute roles'
+            for member_id in members:
+                member = guild.get_member(member_id)
+                if member is not None and not member._roles.has(role.id):
+                    try:
+                        await member.add_roles(role, reason=reason)
+                    except discord.HTTPException:
+                        pass
+        else:
+            members = set()
+
+        members.update(map(lambda m: m.id, role.members))
+        query = """UPDATE guild_mod_config
+                   SET (mute_role_id, muted_members) = ($2, $3::bigint[])
+                   WHERE id=$1;
+                """
+
+        await self.bot.pool.execute(query, config.id, role.id, list(members))
+        self.get_guild_config.invalidate(self, config.id)
+
+    @staticmethod
+    async def update_mute_role_permissions(role, guild, invoker):
+        success = 0
+        failure = 0
+        skipped = 0
+        reason = f'Action done by {invoker} (ID: {invoker.id})'
+        for channel in guild.text_channels:
+            perms = channel.permissions_for(guild.me)
+            if perms.manage_roles:
+                overwrite = channel.overwrites_for(role)
+                overwrite.send_messages = False
+                overwrite.add_reactions = False
+                try:
+                    await channel.set_permissions(role, overwrite=overwrite, reason=reason)
+                except discord.HTTPException:
+                    failure += 1
+                else:
+                    success += 1
+            else:
+                skipped += 1
+        return success, failure, skipped
+
+    @commands.group(name='mute', invoke_without_command=True)
+    @can_mute()
+    async def _mute(self, ctx, members: commands.Greedy[discord.Member], *, reason: ActionReason = None):
+        """Mutes members using the configured mute role.
+
+        The bot must have Manage Roles permission and be
+        above the muted role in the hierarchy.
+
+        To use this command you need to be higher than the
+        mute role in the hierarchy and have Manage Roles
+        permission at the server level.
+        """
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        role = discord.Object(id=ctx.guild_config.mute_role_id)
+        total = len(members)
+        failed = 0
+        for member in members:
+            try:
+                await member.add_roles(role, reason=reason)
+            except discord.HTTPException:
+                failed += 1
+
+        if failed == 0:
+            await ctx.send('\N{THUMBS UP SIGN}')
+        else:
+            await ctx.send(f'Muted [{total - failed}/{total}]')
+
+    @commands.command(name='unmute')
+    @can_mute()
+    async def _unmute(self, ctx, members: commands.Greedy[discord.Member], *, reason: ActionReason = None):
+        """Unmutes members using the configured mute role.
+
+        The bot must have Manage Roles permission and be
+        above the muted role in the hierarchy.
+
+        To use this command you need to be higher than the
+        mute role in the hierarchy and have Manage Roles
+        permission at the server level.
+        """
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        role = discord.Object(id=ctx.guild_config.mute_role_id)
+        total = len(members)
+        failed = 0
+        for member in members:
+            try:
+                await member.remove_roles(role, reason=reason)
+            except discord.HTTPException:
+                failed += 1
+
+        if failed == 0:
+            await ctx.send('\N{THUMBS UP SIGN}')
+        else:
+            await ctx.send(f'Unmuted [{total - failed}/{total}]')
+
+
+    @commands.command()
+    @can_mute()
+    async def tempmute(self, ctx, duration: time.FutureTime, member: discord.Member, *, reason: ActionReason = None):
+        """Temporarily mutes a member for the specified duration.
+
+        The duration can be a a short time form, e.g. 30d or a more human
+        duration such as "until thursday at 3PM" or a more concrete time
+        such as "2024-12-31".
+
+        Note that times are in UTC.
+
+        This has the same permissions as the `mute` command.
+        """
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        reminder = self.bot.get_cog('Reminder')
+        if reminder is None:
+            return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
+
+        role_id = ctx.guild_config.mute_role_id
+        await member.add_roles(discord.Object(id=role_id), reason=reason)
+        timer = await reminder.create_timer(duration.dt, 'tempmute', ctx.guild.id, ctx.author.id, member.id, role_id)
+        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {time.human_timedelta(duration.dt)}.')
+
+    @commands.Cog.listener()
+    async def on_tempmute_timer_complete(self, timer):
+        guild_id, mod_id, member_id, role_id = timer.args
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            # RIP
+            return
+
+        member = guild.get_member(member_id)
+        if member is None or not member._roles.has(role_id):
+            # They left or don't have the role any more so it has to be manually changed in the SQL
+            # if applicable, of course
+            async with self._batch_lock:
+                self._data_batch[guild_id].append((member_id, False))
+            return
+
+        moderator = guild.get_member(mod_id)
+        if moderator is None:
+            try:
+                moderator = await self.bot.fetch_user(mod_id)
+            except:
+                # request failed somehow
+                moderator = f'Mod ID {mod_id}'
+            else:
+                moderator = f'{moderator} (ID: {mod_id})'
+        else:
+            moderator = f'{moderator} (ID: {mod_id})'
+
+        reason = f'Automatic unmute from timer made on {timer.created_at} by {moderator}.'
+        try:
+            await member.remove_roles(discord.Object(id=role_id), reason=reason)
+        except discord.HTTPException:
+            # if the request failed then just do it manually
+            async with self._batch_lock:
+                self._data_batch[guild_id].append((member_id, False))
+
+    @_mute.group(name='role', invoke_without_command=True)
+    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    async def _mute_role(self, ctx):
+        """Shows configuration of the mute role.
+
+        To use these commands you need to have Manage Roles
+        and Manage Server permission at the server level.
+        """
+        config = await self.get_guild_config(ctx.guild.id)
+        role = config.mute_role
+        role = role and f'{role} (ID: {role.id})'
+        await ctx.send(f'Role: {role}\nMembers Muted: {len(config.muted_members)}')
+
+    @_mute_role.command(name='set')
+    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    @commands.cooldown(1, 60.0, commands.BucketType.guild)
+    async def mute_role_set(self, ctx, *, role: discord.Role):
+        """Sets the mute role to a pre-existing role.
+
+        This command can only be used once every minute.
+
+        To use these commands you need to have Manage Roles
+        and Manage Server permission at the server level.
+        """
+
+        if role.is_default():
+            return await ctx.send('Cannot use the @\u200beveryone role.')
+
+        if role > ctx.author.top_role:
+            return await ctx.send('This role is higher than your highest role.')
+
+        if role > ctx.me.top_role:
+            return await ctx.send('This role is higher than my highest role.')
+
+        config = await self.get_guild_config(ctx.guild.id)
+        has_pre_existing = config is not None and config.mute_role is not None
+        merge = False
+        author_id = ctx.author.id
+
+        if has_pre_existing:
+            if not ctx.channel.permissions_for(ctx.me).add_reactions:
+                return await ctx.send('The bot is missing Add Reactions permission.')
+
+            msg = '\N{WARNING SIGN} **There seems to be a pre-existing mute role set up.**\n\n' \
+                  'If you want to abort the set-up process react with \N{CROSS MARK}.\n' \
+                  'If you want to merge the pre-existing member data with the new member data react with \u2934.\n' \
+                  'If you want to replace pre-existing member data with the new member data react with \U0001f504.\n\n'
+                  '**Note: Merging is __slow__. It will also add the role to every possible member that needs it.**'
+
+            sent = await ctx.send(msg)
+            emojis = {
+               '\N{CROSS MARK}': ...,
+               '\u2934': True,
+               '\U0001f504': False,
+            }
+
+            def check(payload):
+                nonlocal merge
+                if payload.message_id != sent.id or payload.user_id != author_id:
+                    return False
+
+                codepoint = str(payload.emoji)
+                try:
+                    merge = emojis[codepoint]
+                except KeyError:
+                    return False
+                else:
+                    return True
+
+            for emoji in emojis:
+                await sent.add_reaction(emoji)
+
+            try:
+                await self.bot.wait_for('raw_reaction_add', check=check, timeout=120.0)
+            except asyncio.TimeoutError:
+                return await ctx.send('Took too long. Aborting.')
+            finally:
+                await sent.delete()
+        else:
+            muted_members = len(role.members)
+            if len(muted_members) > 0:
+                msg = f'Are you sure you want to make this the mute role? It has {formats.Plural(member=muted_members)}.'
+                confirm = await ctx.prompt(msg, reacquire=False)
+                if not confirm:
+                    merge = ...
+
+        if merge is ...:
+            return await ctx.send('Aborting.')
+
+        async with ctx.typing():
+            await self.update_mute_role(ctx, config, role, merge=merge)
+            escaped = discord.utils.escape_mentions(role.name)
+            await ctx.send(f'Successfully set the {escaped} role as the mute role.\n\n'
+                            '**Note: Permission overwrites have not been changed.**')
+
+    @_mute_role.command(name='update', aliases=['sync'])
+    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    async def mute_role_update(self, ctx):
+        """Updates the permission overwrites of the mute role.
+
+        This works by blocking the Send Messages and Add Reactions
+        permission on every text channel that the bot can do.
+
+        To use these commands you need to have Manage Roles
+        and Manage Server permission at the server level.
+        """
+
+        config = await self.get_guild_config(ctx.guild.id)
+        role = config and config.mute_role
+        if role is None:
+            return await ctx.send('No mute role has been set up to update.')
+
+        async with ctx.typing():
+            success, failure, skipped = await self.update_mute_role_permissions(role, ctx.guild, ctx.author)
+            total = success + failure + skipped
+            await ctx.send(f'Attempted to update {total} channel permissions. '
+                           f'[Updated: {success}, Failed: {failure}, Skipped: {skipped}]')
+
+    @_mute_role.command(name='create')
+    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    async def mute_role_create(self, ctx, *, name):
+        """Creates a mute role with the given name.
+
+        This also updates the channel overwrites accordingly
+        if wanted.
+
+        To use these commands you need to have Manage Roles
+        and Manage Server permission at the server level.
+        """
+
+        guild_id = ctx.guild.id
+        config = await self.get_guild_config(guild_id)
+        if config is not None and config.mute_role is not None:
+            return await ctx.send('A mute role already exists.')
+
+        try:
+            role = await ctx.guild.create_role(name=name, reason=f'Mute Role Created By {ctx.author} (ID: {ctx.author.id})')
+        except discord.HTTPException as e:
+            return await ctx.send(f'An error happened: {e}')
+
+        query = """UPDATE guild_mod_config SET mute_role_id=$2 WHERE id=$1;"""
+        await ctx.db.execute(query, guild_id, role.id)
+        self.get_guild_config.invalidate(self, guild_id)
+
+        confirm = await ctx.prompt('Would you like to update the channel overwrites as well?', reacquire=False)
+        if not confirm:
+            return await ctx.send('Mute role successfully created.')
+
+        async with ctx.typing():
+            success, failure, skipped = await self.update_mute_role_permissions(role, ctx.guild, ctx.author)
+            await ctx.send('Mute role successfully created. Overwrites: '
+                           f'[Updated: {success}, Failed: {failure}, Skipped: {skipped}]')
+
+    @_mute_role.command(name='unbind')
+    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    async def mute_role_unbind(self, ctx):
+        """Unbinds a mute role without deleting it.
+
+        To use these commands you need to have Manage Roles
+        and Manage Server permission at the server level.
+        """
+        guild_id = ctx.guild.id
+        config = await self.get_guild_config(guild_id)
+        if config is None or config.mute_role is None:
+            return await ctx.send('No mute role has been set up.')
+
+        muted_members = len(config.muted_members)
+        if muted_members > 0:
+            msg = f'Are you sure you want to unbind and unmute {formats.Plural(member=muted_members)}?'
+            confirm = await ctx.prompt(msg, reacquire=False)
+            if not confirm:
+                return await ctx.send('Aborting.')
+
+        query = """UPDATE guild_mod_config SET (mute_role_id, muted_members) = (NULL, '{}'::bigint[]) WHERE id=$1;"""
+        await self.bot.pool.execute(query, guild_id)
+        self.get_guild_config.invalidate(self, guild_id)
+        await ctx.send('Successfully unbound mute role.')
 
 def setup(bot):
     bot.add_cog(Mod(bot))
