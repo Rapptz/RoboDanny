@@ -182,7 +182,7 @@ def can_mute():
 
         # This will only be used within this cog.
         ctx.guild_config = config = await ctx.cog.get_guild_config(ctx.guild.id)
-        role = config.mute_role
+        role = config and config.mute_role
         if role is None:
             raise NoMuteRole()
         return ctx.author.top_role > role
