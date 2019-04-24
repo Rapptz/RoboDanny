@@ -223,15 +223,6 @@ class API(commands.Cog):
         obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)?(.+)', r'\1', obj)
 
         if key == 'latest':
-            pit_of_success_helpers = {
-                'vc': 'VoiceClient',
-                'msg': 'Message',
-                'color': 'Colour',
-                'perm': 'Permissions',
-                'channel': 'TextChannel',
-                'chan': 'TextChannel',
-            }
-
             # point the abc.Messageable types properly:
             q = obj.lower()
             for name in dir(discord.abc.Messageable):
@@ -240,12 +231,6 @@ class API(commands.Cog):
                 if q == name:
                     obj = f'abc.Messageable.{name}'
                     break
-
-            def replace(o):
-                return pit_of_success_helpers.get(o.group(1), '')
-
-            pattern = re.compile('|'.join(fr'(?:^({k})$|({k})\.)' for k in pit_of_success_helpers.keys()))
-            obj = pattern.sub(replace, obj)
 
         cache = list(self._rtfm_cache[key].items())
         def transform(tup):
