@@ -1497,7 +1497,7 @@ class Mod(commands.Cog):
                 await sent.delete()
         else:
             muted_members = len(role.members)
-            if len(muted_members) > 0:
+            if muted_members > 0:
                 msg = f'Are you sure you want to make this the mute role? It has {formats.Plural(member=muted_members)}.'
                 confirm = await ctx.prompt(msg, reacquire=False)
                 if not confirm:
