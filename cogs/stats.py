@@ -1,7 +1,7 @@
 from discord.ext import commands
 from collections import Counter, defaultdict
 
-from .utils import checks, db, time
+from .utils import checks, db, time, formats
 from .utils.paginator import CannotPaginate
 
 import logging
@@ -787,6 +787,56 @@ class Stats(commands.Cog):
 
         for page in paginator.pages:
             await ctx.send(page)
+
+    @commands.group(hidden=True)
+    @commands.is_owner()
+    async def command_history(self, ctx):
+        """Command history."""
+        pass
+
+    async def tabulate_query(self, ctx, query, *args):
+        records = await ctx.db.fetch(query, *args)
+
+        if len(records) == 0:
+            return await ctx.send('No results found.')
+
+        headers = list(records[0].keys())
+        table = formats.TabularData()
+        table.set_columns(headers)
+        table.add_rows(list(r.values()) for r in records)
+        render = table.render()
+
+        fmt = f'```\n{render}\n```'
+        if len(fmt) > 2000:
+            fp = io.BytesIO(fmt.encode('utf-8'))
+            await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
+        else:
+            await ctx.send(fmt)
+
+    @command_history.command(name='guild', aliases=['server'])
+    async def command_history_guild(self, ctx, guild_id: int):
+        """Command history for a guild."""
+
+        query = """SELECT command, author_id, used
+                   FROM commands
+                   WHERE guild_id=$1
+                   ORDER BY used DESC
+                   LIMIT 20;
+                """
+        await self.tabulate_query(ctx, query, guild_id)
+
+    @command_history.command(name='user', aliases=['member'])
+    async def command_history_user(self, ctx, user_id: int):
+        """Command history for a user."""
+
+        query = """SELECT command, guild_id, used
+                   FROM commands
+                   WHERE author_id=$1
+                   ORDER BY used DESC
+                   LIMIT 20;
+                """
+        await self.tabulate_query(ctx, query, user_id)
+
 
 old_on_error = commands.Bot.on_error
 
