@@ -15,9 +15,25 @@ USER_BOTS_ROLE    = 178558252869484544
 CONTRIBUTORS_ROLE = 111173097888993280
 DISCORD_PY_ID     = 84319995256905728
 DISCORD_PY_GUILD  = 336642139381301249
+DISCORD_PY_PROF_ROLE = 381978395270971407
+DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636)
 
-def is_discord_api():
-    return checks.is_in_guilds(DISCORD_API_ID, DISCORD_PY_GUILD)
+def can_use_block():
+    def predicate(ctx):
+        if ctx.guild is None:
+            return False
+
+        guild_id = ctx.guild.id
+        if guild_id == DISCORD_API_ID:
+            return ctx.channel.permissions_for(ctx.author).manage_roles
+        elif guild_id == DISCORD_PY_GUILD:
+            guild_level = ctx.author.guild_permissions
+            return guild_level.manage_roles or (
+                ctx.channel.id in DISCORD_PY_HELP_CHANNELS and
+                any(r.id == DISCORD_PY_PROF_ROLE for r in ctx.author.roles)
+            )
+        return False
+    return commands.check(predicate)
 
 def contributor_or_higher():
     def predicate(ctx):
@@ -318,8 +334,7 @@ class API(commands.Cog):
         return name.replace('-', '.')
 
     @commands.command()
-    @commands.has_permissions(manage_roles=True)
-    @is_discord_api()
+    @can_use_block()
     async def block(self, ctx, *, member: discord.Member):
         """Blocks a user from your channel."""
 
@@ -333,8 +348,7 @@ class API(commands.Cog):
             await ctx.send('\N{THUMBS UP SIGN}')
 
     @commands.command()
-    @commands.has_permissions(manage_roles=True)
-    @is_discord_api()
+    @can_use_block()
     async def tempblock(self, ctx, duration: time.FutureTime, *, member: discord.Member):
         """Temporarily blocks a user from your channel.
 
