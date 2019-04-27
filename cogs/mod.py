@@ -1242,7 +1242,7 @@ class Mod(commands.Cog):
 
     async def update_mute_role(self, ctx, config, role, *, merge=False):
         guild = ctx.guild
-        if merge:
+        if config and merge:
             members = config.muted_members
             # If the roles are being merged then the old members should get the new role
             reason = f'Action done by {ctx.author} (ID: {ctx.author.id}): Merging mute roles'
@@ -1257,13 +1257,14 @@ class Mod(commands.Cog):
             members = set()
 
         members.update(map(lambda m: m.id, role.members))
-        query = """UPDATE guild_mod_config
-                   SET (mute_role_id, muted_members) = ($2, $3::bigint[])
-                   WHERE id=$1;
+        query = """INSERT INTO guild_mod_config (id, mute_role_id, muted_members)
+                   VALUES ($1, $2, $3::bigint[]) ON CONFLICT (id)
+                   DO UPDATE SET
+                       mute_role_id = EXCLUDED.mute_role_id,
+                       muted_members = EXCLUDED.muted_members
                 """
-
-        await self.bot.pool.execute(query, config.id, role.id, list(members))
-        self.get_guild_config.invalidate(self, config.id)
+        await self.bot.pool.execute(query, guild.id, role.id, list(members))
+        self.get_guild_config.invalidate(self, guild.id)
 
     @staticmethod
     async def update_mute_role_permissions(role, guild, invoker):
@@ -1563,7 +1564,11 @@ class Mod(commands.Cog):
         except discord.HTTPException as e:
             return await ctx.send(f'An error happened: {e}')
 
-        query = """UPDATE guild_mod_config SET mute_role_id=$2 WHERE id=$1;"""
+        query = """INSERT INTO guild_mod_config (id, mute_role_id)
+                   VALUES ($1, $2) ON CONFLICT (id)
+                   DO UPDATE SET
+                       mute_role_id = EXCLUDED.mute_role_id;
+                """
         await ctx.db.execute(query, guild_id, role.id)
         self.get_guild_config.invalidate(self, guild_id)
 
