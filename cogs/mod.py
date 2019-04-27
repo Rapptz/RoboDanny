@@ -1426,7 +1426,7 @@ class Mod(commands.Cog):
         and Manage Server permission at the server level.
         """
         config = await self.get_guild_config(ctx.guild.id)
-        role = config.mute_role
+        role = config and config.mute_role
         if role is not None:
             members = config.muted_members.copy()
             members.update(map(lambda r: r.id, role.members))
