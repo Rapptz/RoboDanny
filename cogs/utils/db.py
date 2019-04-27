@@ -974,9 +974,15 @@ class Table(metaclass=TableMeta):
                 insert_column_diff(a, b)
 
             new_columns = self.columns[len(before.columns):]
-            added = [c._to_dict() for c in new_columns]
-            upgrade.setdefault('add_columns', []).extend(added)
-            downgrade.setdefault('remove_columns', []).extend(added)
+            add, remove = upgrade.setdefault('add_columns', []), downgrade.setdefault('remove_columns', [])
+            for column in new_columns:
+                as_dict = column._to_dict()
+                add.append(as_dict)
+                remove.append(as_dict)
+                if column.index:
+                    upgrade.setdefault('add_index', []).append({ 'name': column.name, 'index': column.index_name })
+                    downgrade.setdefault('drop_index', []).append({ 'name': column.name, 'index': column.index_name })
+
         elif len(self.columns) < len(before.columns):
             # check if we have fewer columns
             # this one is a little bit more complicated
