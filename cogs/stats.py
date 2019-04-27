@@ -32,6 +32,7 @@ class Commands(db.Table):
     used = db.Column(db.Datetime)
     prefix = db.Column(db.String)
     command = db.Column(db.String, index=True)
+    failed = db.Column(db.Boolean, index=True)
 
 _INVITE_REGEX = re.compile(r'(?:https?:\/\/)?discord(?:\.gg|\.com|app\.com\/invite)?\/[A-Za-z0-9]+')
 
@@ -74,10 +75,10 @@ class Stats(commands.Cog):
                 del dates[index]
 
     async def bulk_insert(self):
-        query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command)
-                   SELECT x.guild, x.channel, x.author, x.used, x.prefix, x.command
+        query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command, failed)
+                   SELECT x.guild, x.channel, x.author, x.used, x.prefix, x.command, x.failed
                    FROM jsonb_to_recordset($1::jsonb) AS
-                   x(guild BIGINT, channel BIGINT, author BIGINT, used TIMESTAMP, prefix TEXT, command TEXT)
+                   x(guild BIGINT, channel BIGINT, author BIGINT, used TIMESTAMP, prefix TEXT, command TEXT, failed BOOLEAN)
                 """
 
         if self._data_batch:
@@ -107,8 +108,7 @@ class Stats(commands.Cog):
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.bulk_insert_loop())
 
-    @commands.Cog.listener()
-    async def on_command(self, ctx):
+    async def register_command(self, ctx):
         command = ctx.command.qualified_name
         self.bot.command_stats[command] += 1
         message = ctx.message
@@ -128,8 +128,13 @@ class Stats(commands.Cog):
                 'author': ctx.author.id,
                 'used': message.created_at.isoformat(),
                 'prefix': ctx.prefix,
-                'command': command
+                'command': command,
+                'failed': ctx.command_failed,
             })
+
+    @commands.Cog.listener()
+    async def on_command_completion(self, ctx):
+        await self.register_command(ctx)
 
     @commands.Cog.listener()
     async def on_socket_response(self, msg):
@@ -603,6 +608,7 @@ class Stats(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
+        await self.register_command(ctx)
         if not isinstance(error, commands.CommandInvokeError):
             return
 
@@ -817,7 +823,13 @@ class Stats(commands.Cog):
     async def command_history_guild(self, ctx, guild_id: int):
         """Command history for a guild."""
 
-        query = """SELECT command, author_id, used
+        query = """SELECT
+                        CASE failed
+                            WHEN TRUE THEN command || ' [!]'
+                            ELSE command
+                        END AS "command",
+                        author_id,
+                        used
                    FROM commands
                    WHERE guild_id=$1
                    ORDER BY used DESC
@@ -829,7 +841,13 @@ class Stats(commands.Cog):
     async def command_history_user(self, ctx, user_id: int):
         """Command history for a user."""
 
-        query = """SELECT command, guild_id, used
+        query = """SELECT
+                        CASE failed
+                            WHEN TRUE THEN command || ' [!]'
+                            ELSE command
+                        END AS "command",
+                        guild_id,
+                        used
                    FROM commands
                    WHERE author_id=$1
                    ORDER BY used DESC
