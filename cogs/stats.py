@@ -109,6 +109,9 @@ class Stats(commands.Cog):
             self._task = self.bot.loop.create_task(self.bulk_insert_loop())
 
     async def register_command(self, ctx):
+        if ctx.command is None:
+            return
+
         command = ctx.command.qualified_name
         self.bot.command_stats[command] += 1
         message = ctx.message
@@ -794,12 +797,6 @@ class Stats(commands.Cog):
         for page in paginator.pages:
             await ctx.send(page)
 
-    @commands.group(hidden=True)
-    @commands.is_owner()
-    async def command_history(self, ctx):
-        """Command history."""
-        pass
-
     async def tabulate_query(self, ctx, query, *args):
         records = await ctx.db.fetch(query, *args)
 
@@ -819,7 +816,26 @@ class Stats(commands.Cog):
         else:
             await ctx.send(fmt)
 
+    @commands.group(hidden=True, invoke_without_command=True)
+    @commands.is_owner()
+    async def command_history(self, ctx):
+        """Command history."""
+        query = """SELECT
+                        CASE failed
+                            WHEN TRUE THEN command || ' [!]'
+                            ELSE command
+                        END AS "command",
+                        to_char(used, 'Mon DD HH12:MI:SS AM') AS "invoked",
+                        author_id,
+                        guild_id
+                   FROM commands
+                   ORDER BY used DESC
+                   LIMIT 15;
+                """
+        await self.tabulate_query(ctx, query)
+
     @command_history.command(name='guild', aliases=['server'])
+    @commands.is_owner()
     async def command_history_guild(self, ctx, guild_id: int):
         """Command history for a guild."""
 
@@ -838,6 +854,7 @@ class Stats(commands.Cog):
         await self.tabulate_query(ctx, query, guild_id)
 
     @command_history.command(name='user', aliases=['member'])
+    @commands.is_owner()
     async def command_history_user(self, ctx, user_id: int):
         """Command history for a user."""
 
