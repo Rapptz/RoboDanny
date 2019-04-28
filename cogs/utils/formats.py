@@ -1,13 +1,13 @@
-class Plural:
-    def __init__(self, **attr):
-        iterator = attr.items()
-        self.name, self.value = next(iter(iterator))
-
-    def __str__(self):
+class plural:
+    def __init__(self, value):
+        self.value = value
+    def __format__(self, format_spec):
         v = self.value
-        if v == 0 or v > 1:
-            return f'{v} {self.name}s'
-        return f'{v} {self.name}'
+        singular, sep, plural = format_spec.partition('|')
+        plural = plural or f'{singular}s'
+        if abs(v) != 1:
+            return f'{v} {plural}'
+        return f'{v} {singular}'
 
 def human_join(seq, delim=', ', final='or'):
     size = len(seq)

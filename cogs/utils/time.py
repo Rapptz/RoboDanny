@@ -1,7 +1,7 @@
 import datetime
 import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
-from .formats import Plural
+from .formats import plural
 from discord.ext import commands
 import re
 
@@ -183,7 +183,7 @@ def human_timedelta(dt, *, source=None, accuracy=None):
             weeks = delta.weeks
             if weeks:
                 elem -= delta.weeks * 7
-                output.append(str(Plural(week=weeks)))
+                output.append(format(plural(weeks), 'week'))
 
         if elem > 1:
             output.append(f'{elem} {attr}')

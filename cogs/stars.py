@@ -1,6 +1,6 @@
 from discord.ext import commands
 from .utils import checks, db, cache
-from .utils.formats import Plural, human_join
+from .utils.formats import plural, human_join
 from .utils.paginator import Pages
 from collections import Counter, defaultdict
 
@@ -621,8 +621,8 @@ class Stars(commands.Cog):
             data.append(f'NSFW: {channel.is_nsfw()}')
 
         data.append(f'Locked: {starboard.locked}')
-        data.append(f'Limit: {Plural(star=starboard.threshold)}')
-        data.append(f'Max Age: {Plural(day=starboard.max_age.days)}')
+        data.append(f'Limit: {plural(starboard.threshold):star}')
+        data.append(f'Max Age: {plural(starboard.max_age.days):day}')
         await ctx.send('\n'.join(data))
 
     @commands.group(invoke_without_command=True, ignore_extra=False)
@@ -708,7 +708,7 @@ class Stars(commands.Cog):
         except discord.HTTPException:
             await ctx.send('Could not delete messages.')
         else:
-            await ctx.send(f'\N{PUT LITTER IN ITS PLACE SYMBOL} Deleted {Plural(message=len(to_delete))}.')
+            await ctx.send(f'\N{PUT LITTER IN ITS PLACE SYMBOL} Deleted {plural(len(to_delete)):message}.')
 
     @star.command(name='show')
     @requires_starboard()
@@ -789,11 +789,11 @@ class Stars(commands.Cog):
 
         try:
             p = Pages(ctx, entries=members, per_page=20, show_entry_count=False)
-            base = Plural(star=len(records))
+            base = format(plural(len(records)), 'star')
             if len(records) > len(members):
                 p.embed.title = f'{base} ({len(records) - len(members)} left server)'
             else:
-                p.embed.title = str(base)
+                p.embed.title = base
             await p.paginate()
         except Exception as e:
             await ctx.send(e)
@@ -891,7 +891,7 @@ class Stars(commands.Cog):
 
         emoji = 0x1f947 # :first_place:
         fmt = fmt or (lambda o: o)
-        return '\n'.join(f'{chr(emoji + i)}: {fmt(r["ID"])} ({Plural(star=r["Stars"])})'
+        return '\n'.join(f'{chr(emoji + i)}: {fmt(r["ID"])} ({plural(r["Stars"]):star})'
                          for i, r in enumerate(records))
 
     async def star_guild_stats(self, ctx):
@@ -916,7 +916,7 @@ class Stars(commands.Cog):
         record = await ctx.db.fetchrow(query, ctx.guild.id)
         total_stars = record[0]
 
-        e.description = f'{Plural(message=total_messages)} starred with a total of {total_stars} stars.'
+        e.description = f'{plural(total_messages):message} starred with a total of {total_stars} stars.'
         e.colour = discord.Colour.gold()
 
         # this big query fetches 3 things:
@@ -1150,7 +1150,7 @@ class Stars(commands.Cog):
         await ctx.db.execute(query, ctx.guild.id, stars)
         self.get_starboard.invalidate(self, ctx.guild.id)
 
-        await ctx.send(f'Messages now require {Plural(star=stars)} to show up in the starboard.')
+        await ctx.send(f'Messages now require {plural(stars):star} to show up in the starboard.')
 
     @star.command(name='age')
     @checks.is_mod()

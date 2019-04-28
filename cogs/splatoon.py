@@ -1,6 +1,6 @@
 from discord.ext import commands
 from .utils import config, checks, maps, fuzzy, time, formats
-from .utils.formats import Plural
+from .utils.formats import plural
 from .utils.paginator import FieldPages, Pages
 
 from urllib.parse import quote as urlquote
@@ -1015,7 +1015,7 @@ class Splatoon(commands.Cog):
         if not results:
             return await ctx.send('No results found.')
 
-        output = [f'Found {Plural(weapon=len(results))}:']
+        output = [f'Found {plural(len(results)):weapon}:']
         output.extend(self.weapon_to_string(weapon) for weapon in results)
 
         if len(results) > 10:
@@ -1241,7 +1241,7 @@ class Splatoon(commands.Cog):
             return await ctx.send('No results found.')
 
         e = discord.Embed(colour=discord.Colour.blurple())
-        e.title = f'Found {Plural(weapon=len(results))}'
+        e.title = f'Found {plural(len(results)):weapon}'
 
         subs = '\n'.join(w['sub'] for w in results)
         names = '\n'.join(w['name'] for w in results)

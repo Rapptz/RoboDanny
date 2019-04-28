@@ -1,5 +1,6 @@
 from discord.ext import commands, tasks
-from .utils import checks, db, time, cache, formats
+from .utils import checks, db, time, cache
+from .utils.formats import plural
 from collections import Counter, defaultdict
 from inspect import cleandoc
 
@@ -802,7 +803,7 @@ class Mod(commands.Cog):
         else:
             reason = await ActionReason().convert(ctx, args.reason)
 
-        confirm = await ctx.prompt(f'This will ban **{formats.Plural(member=len(members))}**. Are you sure?')
+        confirm = await ctx.prompt(f'This will ban **{plural(len(members)):member}**. Are you sure?')
         if not confirm:
             return await ctx.send('Aborting.')
 
@@ -1505,7 +1506,7 @@ class Mod(commands.Cog):
         else:
             muted_members = len(role.members)
             if muted_members > 0:
-                msg = f'Are you sure you want to make this the mute role? It has {formats.Plural(member=muted_members)}.'
+                msg = f'Are you sure you want to make this the mute role? It has {plural(muted_members):member}.'
                 confirm = await ctx.prompt(msg, reacquire=False)
                 if not confirm:
                     merge = ...
@@ -1596,7 +1597,7 @@ class Mod(commands.Cog):
 
         muted_members = len(config.muted_members)
         if muted_members > 0:
-            msg = f'Are you sure you want to unbind and unmute {formats.Plural(member=muted_members)}?'
+            msg = f'Are you sure you want to unbind and unmute {plural(muted_members):member}?'
             confirm = await ctx.prompt(msg, reacquire=False)
             if not confirm:
                 return await ctx.send('Aborting.')

@@ -1,6 +1,6 @@
 from discord.ext import commands
 from .utils import db
-from .utils.formats import Plural
+from .utils.formats import plural
 from collections import defaultdict
 
 import discord
@@ -420,7 +420,7 @@ class Profile(commands.Cog):
             e.add_field(name=key, value='\n'.join(value))
 
         # a hack to allow multiple inline fields
-        e.set_footer(text=str(Plural(record=len(records))) + '\u2003' * 60 + '\u200b')
+        e.set_footer(text=format(plural(len(records)), 'record') + '\u2003' * 60 + '\u200b')
         await ctx.send(embed=e)
 
     @profile.command()
@@ -445,7 +445,7 @@ class Profile(commands.Cog):
         total_weapons = sum(r['Total'] for r in weapons)
 
         e = discord.Embed(colour=0x19D719)
-        e.title = f'Statistics for {Plural(profile=total)}'
+        e.title = f'Statistics for {plural(total):profile}'
 
         # top 3 weapons
         value = f'*{total_weapons} players with weapons*\n' + \
