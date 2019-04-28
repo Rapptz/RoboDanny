@@ -29,7 +29,7 @@ class Commands(db.Table):
     guild_id = db.Column(db.Integer(big=True), index=True)
     channel_id = db.Column(db.Integer(big=True))
     author_id = db.Column(db.Integer(big=True), index=True)
-    used = db.Column(db.Datetime)
+    used = db.Column(db.Datetime, index=True)
     prefix = db.Column(db.String)
     command = db.Column(db.String, index=True)
     failed = db.Column(db.Boolean, index=True)
