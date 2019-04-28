@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from .utils import checks, db, time, formats
 from .utils.paginator import CannotPaginate
 
+import pkg_resources
 import logging
 import discord
 import datetime
@@ -274,11 +275,11 @@ class Stats(commands.Cog):
         cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
         embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
 
-
+        version = pkg_resources.get_distribution('discord.py').version
         embed.add_field(name='Guilds', value=len(self.bot.guilds))
         embed.add_field(name='Commands Run', value=sum(self.bot.command_stats.values()))
         embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
-        embed.set_footer(text='Made with discord.py', icon_url='http://i.imgur.com/5BFecvA.png')
+        embed.set_footer(text=f'Made with discord.py v{version}', icon_url='http://i.imgur.com/5BFecvA.png')
         await ctx.send(embed=embed)
 
     def censor_object(self, obj):
