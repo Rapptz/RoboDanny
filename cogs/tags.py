@@ -126,9 +126,8 @@ class Tags(commands.Cog):
     async def cog_command_error(self, ctx, error):
         if isinstance(error, (UnavailableTagCommand, UnableToUseBox)):
             await ctx.send(error)
-        elif isinstance(error, commands.UserInputError):
+        elif isinstance(error, (commands.BadArgument, commands.MissingRequiredArgument)):
             if ctx.command.qualified_name == 'tag':
-                await ctx.acquire()
                 await ctx.send_help(ctx.command)
             else:
                 await ctx.send(error)
