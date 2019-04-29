@@ -511,11 +511,22 @@ class Stats(commands.Cog):
     async def stats_today(self, ctx):
         """Global command statistics for the day."""
 
-        query = "SELECT COUNT(*) FROM commands WHERE used > (CURRENT_TIMESTAMP - INTERVAL '1 day');"
-        total = await ctx.db.fetchrow(query)
+        query = "SELECT failed, COUNT(*) FROM commands WHERE used > (CURRENT_TIMESTAMP - INTERVAL '1 day') GROUP BY failed;"
+        total = await ctx.db.fetch(query)
+        failed = 0
+        success = 0
+        question = 0
+        for record in total:
+            if record['failed'] is True:
+                success += 1
+            elif record['failed'] is False:
+                failed += 1
+            else:
+                question += 1
 
         e = discord.Embed(title='Last 24 Hour Command Stats', colour=discord.Colour.blurple())
-        e.description = f'{total[0]} commands used today.'
+        e.description = f'{failed + success + question} commands used today. ' \
+                        f'({success} succeeded, {failed} failed, {question} unknown)'
 
         lookup = (
             '\N{FIRST PLACE MEDAL}',
