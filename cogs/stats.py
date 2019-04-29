@@ -516,13 +516,13 @@ class Stats(commands.Cog):
         failed = 0
         success = 0
         question = 0
-        for record in total:
-            if record['failed'] is True:
-                success += 1
-            elif record['failed'] is False:
-                failed += 1
+        for state, count in total:
+            if state is False:
+                success += count
+            elif state is True:
+                failed += count
             else:
-                question += 1
+                question += count
 
         e = discord.Embed(title='Last 24 Hour Command Stats', colour=discord.Colour.blurple())
         e.description = f'{failed + success + question} commands used today. ' \
