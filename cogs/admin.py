@@ -36,7 +36,7 @@ class Admin(commands.Cog):
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             result = await self.bot.loop.run_in_executor(None, process.communicate)
 
-        return [output.decode().replace(os.path.sep, '\n') for output in result]
+        return [output.decode() for output in result]
 
     def cleanup_code(self, content):
         """Automatically removes code blocks from the code."""
