@@ -371,7 +371,7 @@ class Emoji(commands.Cog):
         e.set_footer(text=f'{total} uses over {emoji_used} emoji for {per_day:.2f} uses per day.')
         top = records[:10]
         value = '\n'.join(self.emoji_fmt(emoji, count, total) for (emoji, count) in top)
-        e.add_field(name=f'Top {len(top)}', value=value)
+        e.add_field(name=f'Top {len(top)}', value=value or 'Nothing...')
 
         record_count = len(records)
         if record_count > 10:
