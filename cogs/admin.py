@@ -131,8 +131,7 @@ class Admin(commands.Cog):
                 try:
                     actual_module = sys.modules[module]
                 except KeyError:
-                    # TODO: replace with ctx.tick(None)
-                    statuses.append(('<:greyTick:563231201280917524>', module))
+                    statuses.append((ctx.tick(None), module))
                 else:
                     try:
                         importlib.reload(actual_module)
