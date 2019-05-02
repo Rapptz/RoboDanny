@@ -1,5 +1,6 @@
 import asyncio
 import discord
+from discord.ext.commands import Paginator as CommandPaginator
 
 class CannotPaginate(Exception):
     pass
@@ -80,6 +81,13 @@ class Pages:
         base = (page - 1) * self.per_page
         return self.entries[base:base + self.per_page]
 
+    def get_content(self, entries, page, *, first=False):
+        return None
+
+    def get_embed(self, entries, page, *, first=False):
+        self.prepare_embed(entries, page, first=first)
+        return self.embed
+
     def prepare_embed(self, entries, page, *, first=False):
         p = []
         for index, entry in enumerate(entries, 1 + ((page - 1) * self.per_page)):
@@ -102,16 +110,17 @@ class Pages:
     async def show_page(self, page, *, first=False):
         self.current_page = page
         entries = self.get_page(page)
-        self.prepare_embed(entries, page, first=first)
+        content = self.get_content(entries, page, first=first)
+        embed = self.get_embed(entries, page, first=first)
 
         if not self.paginating:
-            return await self.channel.send(embed=self.embed)
+            return await self.channel.send(content=content, embed=embed)
 
         if not first:
-            await self.message.edit(embed=self.embed)
+            await self.message.edit(content=content, embed=embed)
             return
 
-        self.message = await self.channel.send(embed=self.embed)
+        self.message = await self.channel.send(content=content, embed=embed)
         for (reaction, _) in self.reaction_emojis:
             if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
                 # no |<< or >>| buttons if we only have two pages
@@ -183,10 +192,11 @@ class Pages:
         for (emoji, func) in self.reaction_emojis:
             messages.append(f'{emoji} {func.__doc__}')
 
-        self.embed.description = '\n'.join(messages)
-        self.embed.clear_fields()
-        self.embed.set_footer(text=f'We were on page {self.current_page} before this message.')
-        await self.message.edit(embed=self.embed)
+        embed = self.embed.copy()
+        embed.clear_fields()
+        embed.description = '\n'.join(messages)
+        embed.set_footer(text=f'We were on page {self.current_page} before this message.')
+        await self.message.edit(content=None, embed=embed)
 
         async def go_back_to_current_page():
             await asyncio.sleep(60.0)
@@ -259,3 +269,24 @@ class FieldPages(Pages):
                 text = f'Page {page}/{self.maximum_pages}'
 
             self.embed.set_footer(text=text)
+
+class TextPages(Pages):
+    """Uses a commands.Paginator internally to paginate some text."""
+
+    def __init__(self, ctx, text, *, prefix='```', suffix='```', max_size=2000):
+        paginator = CommandPaginator(prefix=prefix, suffix=suffix, max_size=max_size - 200)
+        for line in text.split('\n'):
+            paginator.add_line(line)
+
+        super().__init__(ctx, entries=paginator.pages, per_page=1, show_entry_count=False)
+
+    def get_page(self, page):
+        return self.entries[page - 1]
+
+    def get_embed(self, entries, page, *, first=False):
+        return None
+
+    def get_content(self, entry, page, *, first=False):
+        if self.maximum_pages > 1:
+            return f'{entry}\nPage {page}/{self.maximum_pages}'
+        return entry
