@@ -6,8 +6,12 @@ import inspect
 import textwrap
 from contextlib import redirect_stdout
 import io
+import os
 import copy
+import subprocess
 from typing import Union
+
+from cogs.utils.paginator import TextPages
 
 # to expose to the eval command
 import datetime
@@ -20,6 +24,16 @@ class Admin(commands.Cog):
         self.bot = bot
         self._last_result = None
         self.sessions = set()
+
+    async def run_process(self, command):
+        try:
+            process = await asyncio.create_subprocess_shell(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = await process.communicate()
+        except NotImplementedError:
+            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = await self.bot.loop.run_in_executor(None, process.communicate)
+
+        return [output.decode().replace(os.path.sep, '\n') for output in result]
 
     def cleanup_code(self, content):
         """Automatically removes code blocks from the code."""
@@ -269,6 +283,24 @@ class Admin(commands.Cog):
 
         for i in range(times):
             await new_ctx.reinvoke()
+
+    @commands.command(hidden=True)
+    async def sh(self, ctx, *, command):
+        """Runs a shell command."""
+
+        async with ctx.typing():
+            stdout, stderr = await self.run_process(command)
+
+        if stderr:
+            text = f'stdout:\n{stdout}\nstderr:\n{stderr}'
+        else:
+            text = stdout
+
+        try:
+            pages = TextPages(ctx, text)
+            await pages.paginate()
+        except Exception as e:
+            await ctx.send(str(e))
 
 def setup(bot):
     bot.add_cog(Admin(bot))
