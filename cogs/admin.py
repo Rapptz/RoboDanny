@@ -131,6 +131,7 @@ class Admin(commands.Cog):
                 try:
                     actual_module = sys.modules[module]
                 except KeyError:
+                    # TODO: replace with ctx.tick(None)
                     statuses.append(('<:greyTick:563231201280917524>', module))
                 else:
                     try:
