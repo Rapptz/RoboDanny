@@ -11,14 +11,56 @@ import os
 import re
 import sys
 import copy
+import time
 import subprocess
 from typing import Union
-
-from cogs.utils.paginator import TextPages
 
 # to expose to the eval command
 import datetime
 from collections import Counter
+
+class PerformanceMocker:
+    """A mock object that can also be used in await expressions."""
+
+    def __init__(self):
+        self.loop = asyncio.get_event_loop()
+
+    def permissions_for(self, obj):
+        # Lie and say we don't have permissions to embed
+        # This makes it so pagination sessions just abruptly end on __init__
+        # Most checks based on permission have a bypass for the owner anyway
+        # So this lie will not affect the actual command invocation.
+        perms = discord.Permissions.all()
+        perms.administrator = False
+        perms.embed_links = False
+        perms.add_reactions = False
+        return perms
+
+    def __getattr__(self, attr):
+        return self
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __repr__(self):
+        return '<PerformanceMocker>'
+
+    def __await__(self):
+        future = self.loop.create_future()
+        future.set_result(self)
+        return future.__await__()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return self
+
+    def __len__(self):
+        return 0
+
+    def __bool__(self):
+        return False
 
 class Admin(commands.Cog):
     """Admin-only commands that make the bot dynamic."""
@@ -360,6 +402,7 @@ class Admin(commands.Cog):
     @commands.command(hidden=True)
     async def sh(self, ctx, *, command):
         """Runs a shell command."""
+        from cogs.utils.paginator import TextPages
 
         async with ctx.typing():
             stdout, stderr = await self.run_process(command)
@@ -374,6 +417,39 @@ class Admin(commands.Cog):
             await pages.paginate()
         except Exception as e:
             await ctx.send(str(e))
+
+    @commands.command(hidden=True)
+    async def perf(self, ctx, *, command):
+        """Checks the timing of a command, attempting to suppress HTTP and DB calls."""
+
+        msg = copy.copy(ctx.message)
+        msg.content = ctx.prefix + command
+
+        new_ctx = await self.bot.get_context(msg, cls=type(ctx))
+        new_ctx._db = PerformanceMocker()
+
+        # Intercepts the Messageable interface a bit
+        new_ctx._state = PerformanceMocker()
+        new_ctx.channel = PerformanceMocker()
+
+        if new_ctx.command is None:
+            return await ctx.send('No command found')
+
+        start = time.perf_counter()
+        try:
+            await new_ctx.command.invoke(new_ctx)
+        except commands.CommandError:
+            end = time.perf_counter()
+            success = False
+            try:
+                await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+            except discord.HTTPException:
+                pass
+        else:
+            end = time.perf_counter()
+            success = True
+
+        await ctx.send(f'Status: {ctx.tick(success)} Time: {(end - start) * 1000:.2f}ms')
 
 def setup(bot):
     bot.add_cog(Admin(bot))
