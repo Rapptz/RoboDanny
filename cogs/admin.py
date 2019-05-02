@@ -104,6 +104,12 @@ class Admin(commands.Cog):
         ret.sort(reverse=True)
         return ret
 
+    def reload_or_load_extension(self, module):
+        try:
+            self.bot.reload_extension(module)
+        except commands.ExtensionNotLoaded:
+            self.bot.load_extension(module)
+
     @_reload.command(name='all', hidden=True)
     async def _reload_all(self, ctx):
         """Reloads all modules, while pulling from git."""
@@ -141,7 +147,7 @@ class Admin(commands.Cog):
                         statuses.append((ctx.tick(True), module))
             else:
                 try:
-                    self.bot.reload_extension(module)
+                    self.reload_or_load_extension(module)
                 except commands.ExtensionError:
                     statuses.append((ctx.tick(False), module))
                 else:
