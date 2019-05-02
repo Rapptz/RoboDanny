@@ -118,9 +118,6 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
             if resp.status != 200:
                 return await ctx.send(f'An error occurred (status code: {resp.status}). Retry later.')
 
-            if len(resp.history) > 0:
-                return await ctx.send(resp.url)
-
             e = discord.Embed()
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
@@ -150,6 +147,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
                 e.title = 'Search Results'
                 e.description = '\n'.join(description[:15])
 
+            e.add_field(name='See More', value=f'[`{discord.utils.escape_markdown(query)}` results]({resp.url})')
             await ctx.send(embed=e)
 
 def setup(bot):
