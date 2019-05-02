@@ -258,7 +258,7 @@ class API(commands.Cog):
         if len(matches) == 0:
             return await ctx.send('Could not find anything. Sorry.')
 
-        e.description = '\n'.join(f'[{key}]({url})' for key, url in matches)
+        e.description = '\n'.join(f'[`{key}`]({url})' for key, url in matches)
         await ctx.send(embed=e)
 
         if ctx.guild and ctx.guild.id in (DISCORD_API_ID, DISCORD_PY_GUILD):
