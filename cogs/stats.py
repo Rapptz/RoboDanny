@@ -888,7 +888,7 @@ class Stats(commands.Cog):
         await self.tabulate_query(ctx, query, user_id)
 
 
-old_on_error = commands.Bot.on_error
+old_on_error = commands.AutoShardedBot.on_error
 
 async def on_error(self, event, *args, **kwargs):
     e = discord.Embed(title='Event Error', colour=0xa32952)
@@ -910,7 +910,7 @@ def setup(bot):
         bot.socket_stats = Counter()
 
     bot.add_cog(Stats(bot))
-    commands.Bot.on_error = on_error
+    commands.AutoShardedBot.on_error = on_error
 
 def teardown(bot):
-    commands.Bot.on_error = old_on_error
+    commands.AutoShardedBot.on_error = old_on_error
