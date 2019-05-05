@@ -345,16 +345,17 @@ class Stars(commands.Cog):
 
         guild_id = channel.guild.id
         starboard = await self.get_starboard(guild_id)
-        if starboard.channel is None:
+        starboard_channel = starboard.channel
+        if starboard_channel is None:
             raise StarError('\N{WARNING SIGN} Starboard channel not found.')
 
         if starboard.locked:
             raise StarError('\N{NO ENTRY SIGN} Starboard is locked.')
 
-        if channel.is_nsfw() and not starboard.channel.is_nsfw():
+        if channel.is_nsfw() and not starboard_channel.is_nsfw():
             raise StarError('\N{NO ENTRY SIGN} Cannot star NSFW in non-NSFW starboard channel.')
 
-        if channel.id == starboard.channel.id:
+        if channel.id == starboard_channel.id:
             # special case redirection code goes here
             # ergo, when we add a reaction from starboard we want it to star
             # the original message
@@ -369,6 +370,9 @@ class Stars(commands.Cog):
                 raise StarError('Could not find original channel.')
 
             return await self._star_message(ch, record['message_id'], starrer_id, connection=connection)
+
+        if not starboard_channel.permissions_for(starboard_channel.guild.me).send_messages:
+            raise StarError('\N{NO ENTRY SIGN} Cannot post messages in starboard channel.')
 
         msg = await self.get_message(channel, message_id)
 
@@ -430,11 +434,11 @@ class Stars(commands.Cog):
         bot_message_id = record[0]
 
         if bot_message_id is None:
-            new_msg = await starboard.channel.send(content, embed=embed)
+            new_msg = await starboard_channel.send(content, embed=embed)
             query = "UPDATE starboard_entries SET bot_message_id=$1 WHERE message_id=$2;"
             await connection.execute(query, new_msg.id, message_id)
         else:
-            new_msg = await self.get_message(starboard.channel, bot_message_id)
+            new_msg = await self.get_message(starboard_channel, bot_message_id)
             if new_msg is None:
                 # deleted? might as well purge the data
                 query = "DELETE FROM starboard_entries WHERE message_id=$1;"
@@ -479,13 +483,14 @@ class Stars(commands.Cog):
 
         guild_id = channel.guild.id
         starboard = await self.get_starboard(guild_id)
-        if starboard.channel is None:
+        starboard_channel = starboard.channel
+        if starboard_channel is None:
             raise StarError('\N{WARNING SIGN} Starboard channel not found.')
 
         if starboard.locked:
             raise StarError('\N{NO ENTRY SIGN} Starboard is locked.')
 
-        if channel.id == starboard.channel.id:
+        if channel.id == starboard_channel.id:
             query = "SELECT channel_id, message_id FROM starboard_entries WHERE bot_message_id=$1;"
             record = await connection.fetchrow(query, message_id)
             if record is None:
@@ -496,6 +501,9 @@ class Stars(commands.Cog):
                 raise StarError('Could not find original channel.')
 
             return await self._unstar_message(ch, record['message_id'], starrer_id, connection=connection)
+
+        if not starboard_channel.permissions_for(starboard_channel.guild.me).send_messages:
+            raise StarError('\N{NO ENTRY SIGN} Cannot edit messages in starboard channel.')
 
         query = """DELETE FROM starrers USING starboard_entries entry
                    WHERE entry.message_id=$1
@@ -523,7 +531,7 @@ class Stars(commands.Cog):
         if bot_message_id is None:
             return
 
-        bot_message = await self.get_message(starboard.channel, bot_message_id)
+        bot_message = await self.get_message(starboard_channel, bot_message_id)
         if bot_message is None:
             return
 
