@@ -184,6 +184,8 @@ def human_timedelta(dt, *, source=None, accuracy=None):
             if weeks:
                 elem -= delta.weeks * 7
                 output.append(format(plural(weeks), 'week'))
+                if elem == 0:
+                    continue
 
         if elem > 1:
             output.append(f'{elem} {attr}')
