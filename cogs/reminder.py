@@ -271,7 +271,7 @@ class Reminder(commands.Cog):
             author = self.bot.get_user(author_id)
             try:
                 channel = await author.dm_channel()
-            except:
+            except discord.HTTPException:
                 return
 
         guild_id = channel.guild.id if isinstance(channel, discord.TextChannel) else '@me'
@@ -281,7 +281,10 @@ class Reminder(commands.Cog):
         if message_id:
             msg = f'{msg}\n\n<https://discordapp.com/channels/{guild_id}/{channel.id}/{message_id}>'
 
-        await channel.send(msg)
+        try:
+            await channel.send(msg)
+        except discord.HTTPException:
+            return
 
 def setup(bot):
     bot.add_cog(Reminder(bot))
