@@ -270,7 +270,7 @@ class Reminder(commands.Cog):
             # Check if it's a DM channel
             author = self.bot.get_user(author_id)
             try:
-                channel = await author.dm_channel()
+                channel = await author.create_dm()
             except discord.HTTPException:
                 return
 
