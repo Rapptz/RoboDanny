@@ -713,16 +713,7 @@ class Tags(commands.Cog):
         except RuntimeError as e:
             return await ctx.send(e)
 
-        transformations = {
-            re.escape(c): '\\' + c
-            for c in ('*', '`', '_', '~', '\\', '<')
-        }
-
-        def replace(obj):
-            return transformations.get(re.escape(obj.group(0)), '')
-
-        pattern = re.compile('|'.join(transformations.keys()))
-        await ctx.send(pattern.sub(replace, tag['content']))
+        await ctx.send(discord.utils.escape_markdown(tag['content']))
 
     @tag.command(name='list')
     @suggest_box()
