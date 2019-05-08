@@ -374,7 +374,7 @@ class API(commands.Cog):
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
-            await ctx.send(f'Blocked {member} for {time.human_timedelta(duration.dt)}.')
+            await ctx.send(f'Blocked {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
 
     @commands.Cog.listener()
     async def on_tempblock_timer_complete(self, timer):

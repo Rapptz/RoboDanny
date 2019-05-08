@@ -893,7 +893,7 @@ class Mod(commands.Cog):
 
         await ctx.guild.ban(discord.Object(id=member), reason=reason)
         timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id, ctx.author.id, member, connection=ctx.db)
-        await ctx.send(f'Banned ID {member} for {time.human_timedelta(duration.dt)}.')
+        await ctx.send(f'Banned ID {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
 
     @commands.Cog.listener()
     async def on_tempban_timer_complete(self, timer):
@@ -1380,7 +1380,8 @@ class Mod(commands.Cog):
         role_id = ctx.guild_config.mute_role_id
         await member.add_roles(discord.Object(id=role_id), reason=reason)
         timer = await reminder.create_timer(duration.dt, 'tempmute', ctx.guild.id, ctx.author.id, member.id, role_id)
-        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {time.human_timedelta(duration.dt)}.')
+        delta = time.human_timedelta(duration.dt, source=timer.created_at)
+        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {delta}.')
 
     @commands.Cog.listener()
     async def on_tempmute_timer_complete(self, timer):

@@ -163,12 +163,12 @@ class Reminder(commands.Cog):
             self.bot.loop.create_task(self.short_timer_optimisation(delta, timer))
             return timer
 
-        query = """INSERT INTO reminders (event, extra, expires)
-                   VALUES ($1, $2::jsonb, $3)
+        query = """INSERT INTO reminders (event, extra, expires, created)
+                   VALUES ($1, $2::jsonb, $3, $4)
                    RETURNING id;
                 """
 
-        row = await connection.fetchrow(query, event, { 'args': args, 'kwargs': kwargs }, when)
+        row = await connection.fetchrow(query, event, { 'args': args, 'kwargs': kwargs }, when, now)
         timer.id = row[0]
 
         # only set the data check if it can be waited on
@@ -203,13 +203,13 @@ class Reminder(commands.Cog):
                                                              when.arg,
                                                              connection=ctx.db,
                                                              message_id=ctx.message.id)
-        delta = time.human_timedelta(when.dt)
+        delta = time.human_timedelta(when.dt, source=timer.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, in {delta}: {when.arg}")
 
     @reminder.command(name='list')
     async def reminder_list(self, ctx):
         """Shows the 10 latest currently running reminders."""
-        query = """SELECT id, expires, extra #>> '{args,2}'
+        query = """SELECT id, expires, created, extra #>> '{args,2}'
                    FROM reminders
                    WHERE event = 'reminder'
                    AND extra #>> '{args,0}' = $1
@@ -229,8 +229,8 @@ class Reminder(commands.Cog):
         else:
             e.set_footer(text=f'{len(records)} reminder{"s" if len(records) > 1 else ""}')
 
-        for _id, expires, message in records:
-            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=message, inline=False)
+        for _id, expires, created, message in records:
+            e.add_field(name=f'{_id}: In {time.human_timedelta(expires, source=created)}', value=message, inline=False)
 
         await ctx.send(embed=e)
 
