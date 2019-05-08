@@ -169,6 +169,9 @@ class UserFriendlyTime(commands.Converter):
 
 def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
     now = source or datetime.datetime.utcnow()
+    # Microsecond free zone
+    now = now.replace(microsecond=0)
+    dt = dt.replace(microsecond=0)
     if dt > now:
         seconds = int((dt - now).total_seconds())
         suffix = ''
