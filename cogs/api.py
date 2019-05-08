@@ -365,7 +365,8 @@ class API(commands.Cog):
 
         timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id,
                                                                       ctx.channel.id, member.id,
-                                                                      connection=ctx.db)
+                                                                      connection=ctx.db,
+                                                                      created=ctx.message.created_at)
 
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 

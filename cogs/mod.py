@@ -892,7 +892,11 @@ class Mod(commands.Cog):
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
         await ctx.guild.ban(discord.Object(id=member), reason=reason)
-        timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id, ctx.author.id, member, connection=ctx.db)
+        timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id,
+                                                                    ctx.author.id,
+                                                                    member,
+                                                                    connection=ctx.db,
+                                                                    created=ctx.message.created_at)
         await ctx.send(f'Banned ID {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
 
     @commands.Cog.listener()
@@ -1379,7 +1383,11 @@ class Mod(commands.Cog):
 
         role_id = ctx.guild_config.mute_role_id
         await member.add_roles(discord.Object(id=role_id), reason=reason)
-        timer = await reminder.create_timer(duration.dt, 'tempmute', ctx.guild.id, ctx.author.id, member.id, role_id)
+        timer = await reminder.create_timer(duration.dt, 'tempmute', ctx.guild.id,
+                                                                     ctx.author.id,
+                                                                     member.id,
+                                                                     role_id,
+                                                                     created=ctx.message.created_at)
         delta = time.human_timedelta(duration.dt, source=timer.created_at)
         await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {delta}.')
 
