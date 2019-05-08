@@ -13,7 +13,7 @@ import sys
 import copy
 import time
 import subprocess
-from typing import Union
+from typing import Union, Optional
 
 # to expose to the eval command
 import datetime
@@ -61,6 +61,22 @@ class PerformanceMocker:
 
     def __bool__(self):
         return False
+
+class GlobalChannel(commands.Converter):
+    async def convert(self, ctx, argument):
+        try:
+            return await commands.TextChannelConverter().convert(ctx, argument)
+        except commands.BadArgument:
+            # Not found... so fall back to ID + global lookup
+            try:
+                channel_id = int(argument, base=10)
+            except ValueError:
+                raise commands.BadArgument(f'Could not find a channel by ID {argument!r}.')
+            else:
+                channel = ctx.bot.get_channel(channel_id)
+                if channel is None:
+                    raise commands.BadArgument(f'Could not find a channel by ID {argument!r}.')
+                return channel
 
 class Admin(commands.Cog):
     """Admin-only commands that make the bot dynamic."""
@@ -378,10 +394,12 @@ class Admin(commands.Cog):
             await ctx.send(fmt)
 
     @commands.command(hidden=True)
-    async def sudo(self, ctx, who: Union[discord.Member, discord.User], *, command: str):
-        """Run a command as another user."""
+    async def sudo(self, ctx, channel: Optional[GlobalChannel], who: discord.User, *, command: str):
+        """Run a command as another user optionally in another channel."""
         msg = copy.copy(ctx.message)
-        msg.author = who
+        channel = channel or ctx.channel
+        msg.channel = channel
+        msg.author = channel.guild.get_member(who.id) or who
         msg.content = ctx.prefix + command
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
         new_ctx._db = ctx._db
