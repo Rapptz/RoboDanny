@@ -880,6 +880,11 @@ async def on_error(self, event, *args, **kwargs):
     e.description = f'```py\n{traceback.format_exc()}\n```'
     e.timestamp = datetime.datetime.utcnow()
 
+    args_str = ['```py']
+    for index, arg in enumerate(args):
+        args_str.append(f'[{index}]: {arg!r}')
+    args_str.append('```')
+    e.add_field(name='Args', value='\n'.join(args_str), inline=False)
     hook = self.get_cog('Stats').webhook
     try:
         await hook.send(embed=e)
