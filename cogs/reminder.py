@@ -217,7 +217,7 @@ class Reminder(commands.Cog):
     @reminder.command(name='list')
     async def reminder_list(self, ctx):
         """Shows the 10 latest currently running reminders."""
-        query = """SELECT id, expires, created, extra #>> '{args,2}'
+        query = """SELECT id, expires, extra #>> '{args,2}'
                    FROM reminders
                    WHERE event = 'reminder'
                    AND extra #>> '{args,0}' = $1
@@ -237,8 +237,8 @@ class Reminder(commands.Cog):
         else:
             e.set_footer(text=f'{len(records)} reminder{"s" if len(records) > 1 else ""}')
 
-        for _id, expires, created, message in records:
-            e.add_field(name=f'{_id}: In {time.human_timedelta(expires, source=created)}', value=message, inline=False)
+        for _id, expires, message in records:
+            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=message, inline=False)
 
         await ctx.send(embed=e)
 
