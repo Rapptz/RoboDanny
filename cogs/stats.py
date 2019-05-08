@@ -198,23 +198,7 @@ class Stats(commands.Cog):
         await ctx.send(f'{total} socket events observed ({cpm:.2f}/minute):\n{self.bot.socket_stats}')
 
     def get_bot_uptime(self, *, brief=False):
-        now = datetime.datetime.utcnow()
-        delta = now - self.bot.uptime
-        hours, remainder = divmod(int(delta.total_seconds()), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        days, hours = divmod(hours, 24)
-
-        if not brief:
-            if days:
-                fmt = '{d} days, {h} hours, {m} minutes, and {s} seconds'
-            else:
-                fmt = '{h} hours, {m} minutes, and {s} seconds'
-        else:
-            fmt = '{h}h {m}m {s}s'
-            if days:
-                fmt = '{d}d ' + fmt
-
-        return fmt.format(d=days, h=hours, m=minutes, s=seconds)
+        return time.human_timedelta(self.bot.uptime, accuracy=None, brief=brief, suffix=False)
 
     @commands.command()
     async def uptime(self, ctx):

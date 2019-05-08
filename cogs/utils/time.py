@@ -1,7 +1,7 @@
 import datetime
 import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
-from .formats import plural
+from .formats import plural, human_join
 from discord.ext import commands
 import re
 
@@ -159,47 +159,45 @@ class UserFriendlyTime(commands.Converter):
             traceback.print_exc()
             raise
 
-def human_timedelta(dt, *, source=None, accuracy=None):
+def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
     now = source or datetime.datetime.utcnow()
     if dt > now:
-        delta = relativedelta(dt, now)
+        seconds = int((dt - now).total_seconds())
         suffix = ''
     else:
-        delta = relativedelta(now, dt)
-        suffix = ' ago'
+        seconds = int((now - dt).total_seconds())
+        suffix = ' ago' if suffix else ''
 
-    if delta.microseconds and delta.seconds:
-        delta = delta + relativedelta(seconds=+1)
-
-    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
+    day = 60 * 60 * 24
+    periods = [
+        ('year', 'y', day * 365),
+        ('month', 'mo', day * 30),
+        ('week', 'w', day * 7),
+        ('day', 'd', day),
+        ('hour', 'h', 60 * 60),
+        ('minute', 'm', 60),
+        ('second', 's', 1)
+    ]
 
     output = []
-    for attr in attrs:
-        elem = getattr(delta, attr)
-        if not elem:
-            continue
+    for name, brief_name, period in periods:
+        if seconds >= period:
+            value, seconds = divmod(seconds, period)
+            if value == 0:
+                continue
 
-        if attr == 'days':
-            weeks = delta.weeks
-            if weeks:
-                elem -= delta.weeks * 7
-                output.append(format(plural(weeks), 'week'))
-                if elem == 0:
-                    continue
-
-        if elem > 1:
-            output.append(f'{elem} {attr}')
-        else:
-            output.append(f'{elem} {attr[:-1]}')
+            if brief:
+                output.append(f'{value}{brief_name}')
+            else:
+                output.append(format(plural(value), name))
 
     if accuracy is not None:
         output = output[:accuracy]
 
     if len(output) == 0:
         return 'now'
-    elif len(output) == 1:
-        return output[0] + suffix
-    elif len(output) == 2:
-        return f'{output[0]} and {output[1]}{suffix}'
     else:
-        return f'{output[0]}, {output[1]} and {output[2]}{suffix}'
+        if not brief:
+            return human_join(output, final='and') + suffix
+        else:
+            return ' '.join(output) + suffix
