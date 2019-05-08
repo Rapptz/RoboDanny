@@ -1,4 +1,4 @@
-from .utils import checks, db, time
+from .utils import checks, db, time, formats
 from discord.ext import commands
 import discord
 import asyncio
@@ -268,6 +268,32 @@ class Reminder(commands.Cog):
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
         await ctx.send('Successfully deleted reminder.')
+
+    @reminder.command(name='clear')
+    async def reminder_clear(self, ctx):
+        """Clears all reminders you have set."""
+
+        # For UX purposes this has to be two queries.
+
+        query = """SELECT COUNT(*)
+                   FROM reminders
+                   WHERE event = 'reminder'
+                   AND extra #>> '{args,0}' = $1;
+                """
+
+        author_id = str(ctx.author.id)
+        total = await ctx.db.fetchrow(query, author_id)
+        total = total[0]
+        if total == 0:
+            return await ctx.send('You do not have any reminders to delete.')
+
+        confirm = await ctx.prompt(f'Are you sure you want to delete {formats.plural(total):reminder}?')
+        if not confirm:
+            return await ctx.send('Aborting')
+
+        query = """DELETE FROM reminders WHERE event = 'reminder' AND extra #>> '{args,0}' = $1;"""
+        await ctx.db.execute(query, author_id)
+        await ctx.send(f'Successfully deleted {formats.plural(total):reminder}.')
 
     @commands.Cog.listener()
     async def on_reminder_timer_complete(self, timer):
