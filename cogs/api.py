@@ -225,7 +225,8 @@ class API(commands.Cog):
     async def do_rtfm(self, ctx, key, obj):
         page_types = {
             'latest': 'https://discordpy.readthedocs.io/en/latest',
-            'python': 'https://docs.python.org/3'
+            'python': 'https://docs.python.org/3',
+            'python-jp': 'https://docs.python.org/ja/3',
         }
 
         if obj is None:
@@ -278,6 +279,11 @@ class API(commands.Cog):
     async def rtfm_python(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a Python entity."""
         await self.do_rtfm(ctx, 'python', obj)
+
+    @rtfm.command(name='py-jp', aliases=['py-ja'])
+    async def rtfm_python_jp(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a Python entity (Japanese)."""
+        await self.do_rtfm(ctx, 'python-jp', obj)
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
