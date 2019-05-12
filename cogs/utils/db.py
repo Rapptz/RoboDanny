@@ -106,7 +106,7 @@ class Datetime(SQLType):
 
     def to_sql(self):
         if self.timezone:
-            return 'TIMESTAMP WITH TIMEZONE'
+            return 'TIMESTAMP WITH TIME ZONE'
         return 'TIMESTAMP'
 
 class Double(SQLType):
