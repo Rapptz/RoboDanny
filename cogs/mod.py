@@ -1117,10 +1117,10 @@ class Mod(commands.Cog):
 
         await self.do_removal(ctx, search, predicate)
 
-    @remove.command(name='emoji')
+    @remove.command(name='emoji', aliases=['emojis'])
     async def _emoji(self, ctx, search=100):
         """Removes all messages containing custom emoji."""
-        custom_emoji = re.compile(r'<:(\w+):(\d+)>')
+        custom_emoji = re.compile(r'<a?:[a-zA-Z0-9\_]+:([0-9]+)>')
         def predicate(m):
             return custom_emoji.search(m.content)
 
