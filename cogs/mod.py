@@ -665,8 +665,8 @@ class Mod(commands.Cog):
         `--regex`: Regex that usernames must match.
         `--created`: Matches users whose accounts were created less than specified minutes ago.
         `--joined`: Matches users that joined less than specified minutes ago.
-        `--joined-before`: Matches users who joined before the member given.
-        `--joined-after`: Matches users who joined after the member given.
+        `--joined-before`: Matches users who joined before the member ID given.
+        `--joined-after`: Matches users who joined after the member ID given.
         `--no-avatar`: Matches users who have no avatar. (no arguments)
         `--no-roles`: Matches users that have no role. (no arguments)
         `--show`: Show members instead of banning them (no arguments).
@@ -693,8 +693,8 @@ class Mod(commands.Cog):
         parser.add_argument('--no-roles', action='store_true')
         parser.add_argument('--created', type=int)
         parser.add_argument('--joined', type=int)
-        parser.add_argument('--joined-before')
-        parser.add_argument('--joined-after')
+        parser.add_argument('--joined-before', type=int)
+        parser.add_argument('--joined-after', type=int)
         parser.add_argument('--contains')
         parser.add_argument('--starts')
         parser.add_argument('--ends')
@@ -709,9 +709,6 @@ class Mod(commands.Cog):
             args = parser.parse_args(shlex.split(args))
         except Exception as e:
             return await ctx.send(str(e))
-
-        if not ctx.guild.chunked:
-            await self.bot.request_offline_members(ctx.guild)
 
         members = []
 
@@ -751,6 +748,15 @@ class Mod(commands.Cog):
             lambda m: m.discriminator != '0000', # No deleted users
         ]
 
+        async def _resolve_member(member_id):
+            r = ctx.guild.get_member(member_id)
+            if r is None:
+                try:
+                    return await ctx.guild.fetch_member(member_id)
+                except discord.HTTPException as e:
+                    raise commands.BadArgument(f'Could not fetch member by ID {member_id}: {e}') from None
+            return r
+
         if args.regex:
             try:
                 _regex = re.compile(args.regex)
@@ -774,12 +780,12 @@ class Mod(commands.Cog):
                 return member.joined_at and member.joined_at > offset
             predicates.append(joined)
         if args.joined_after:
-            _joined_after_member = await commands.MemberConverter().convert(ctx, args.joined_after)
+            _joined_after_member = await _resolve_member(args.joined_after)
             def joined_after(member, *, _other=_joined_after_member):
                 return member.joined_at and _other.joined_at and member.joined_at > _other.joined_at
             predicates.append(joined_after)
         if args.joined_before:
-            _joined_before_member = await commands.MemberConverter().convert(ctx, args.joined_before)
+            _joined_before_member = await _resolve_member(args.joined_before)
             def joined_before(member, *, _other=_joined_before_member):
                 return member.joined_at and _other.joined_at and member.joined_at < _other.joined_at
             predicates.append(joined_before)
