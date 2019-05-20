@@ -1,6 +1,7 @@
 from discord.ext import commands
 import random as rng
 from collections import Counter
+from typing import Optional
 from .utils.formats import plural
 
 class RNG(commands.Cog):
@@ -154,7 +155,7 @@ class RNG(commands.Cog):
         await ctx.send(rng.choice(choices))
 
     @commands.command()
-    async def multichoose(self, ctx, times: int, *choices: commands.clean_content):
+    async def choosebestof(self, ctx, times: Optional[int] = 5, *choices: commands.clean_content):
         """Chooses between multiple choices N times.
 
         To denote multiple choices, you should use double quotes.
