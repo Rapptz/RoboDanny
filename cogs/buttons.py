@@ -282,9 +282,9 @@ class Buttons(commands.Cog):
             return None
 
         try:
-            original_message = await channel.get_message(message_id)
+            original_message = await channel.fetch_message(message_id)
             storage_message_id = int(original_message.embeds[0].footer.text)
-            message = await storage.get_message(storage_message_id)
+            message = await storage.fetch_message(storage_message_id)
         except:
             # this message is probably not the proper format or the storage died
             return None
