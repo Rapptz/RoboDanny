@@ -1,5 +1,7 @@
 from discord.ext import commands
 import random as rng
+from collections import Counter
+from .utils.formats import plural
 
 class RNG(commands.Cog):
     """Utilities that provide pseudo-RNG."""
@@ -150,6 +152,27 @@ class RNG(commands.Cog):
             return await ctx.send('Not enough choices to pick from.')
 
         await ctx.send(rng.choice(choices))
+
+    @commands.command()
+    async def multichoose(self, ctx, times: int, *choices: commands.clean_content):
+        """Chooses between multiple choices N times.
+
+        To denote multiple choices, you should use double quotes.
+
+        You can only choose up to 100 times and only the top 10 results are shown.
+        """
+        if len(choices) < 2:
+            return await ctx.send('Not enough choices to pick from.')
+
+        times = min(100, max(1, times))
+        results = Counter(rng.choice(choices) for i in range(times))
+        builder = []
+        if len(results) > 10:
+            builder.append('Only showing top 10 results...')
+        for index, (elem, count) in enumerate(results.most_common(10), start=1):
+            builder.append(f'{index}. {elem} ({plural(count):time}, {count/times:.2%})')
+
+        await ctx.send('\n'.join(builder))
 
 def setup(bot):
     bot.add_cog(RNG(bot))
