@@ -305,5 +305,10 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         await ctx.send('Your bot has been requested to the moderators. It will DM you the status of your request.')
 
+    @addbot.error
+    async def on_addbot_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            return await ctx.send(error)
+
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
