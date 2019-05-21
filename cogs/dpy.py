@@ -10,35 +10,13 @@ DISCORD_PY_BOTS_ROLE = 381980817125015563
 DISCORD_PY_REWRITE_ROLE = 381981861041143808
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
-DISCORD_PY_BOT_LIST = 579998326557114368
 
 class GithubError(commands.CommandError):
     pass
 
-class BotUser(commands.Converter):
-    async def convert(self, ctx, argument):
-        if not argument.isdigit():
-            raise commands.BadArgument('Not a valid bot user ID.')
-        try:
-            user = await ctx.bot.fetch_user(argument)
-        except discord.NotFound:
-            raise commands.BadArgument('Bot user not found (404).')
-        except discord.HTTPException as e:
-            raise commands.BadArgument(f'Error fetching bot user: {e}')
-        else:
-            if not user.bot:
-                raise commands.BadArgument('This is not a bot.')
-            return user
-
 def is_proficient():
     def predicate(ctx):
         return ctx.author._roles.has(DISCORD_PY_PROF_ROLE)
-    return commands.check(predicate)
-
-def in_testing():
-    def predicate(ctx):
-        #                         #testing            #playground         #mod-testing
-        return ctx.channel.id in (381963689470984203, 559455534965850142, 568662293190148106)
     return commands.check(predicate)
 
 class DPYExclusive(commands.Cog, name='discord.py'):
@@ -200,115 +178,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             await ctx.send('Missing labels to assign.')
         js = await self.edit_issue(number, labels=labels)
         await ctx.send(f'Successfully labelled <{js["html_url"]}>')
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
-        if payload.channel_id != DISCORD_PY_BOT_LIST:
-            return
-
-        if str(payload.emoji) not in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
-            return
-
-        channel = self.bot.get_guild(payload.guild_id).get_channel(payload.channel_id)
-        try:
-            message = await channel.fetch_message(payload.message_id)
-        except (AttributeError, discord.HTTPException):
-            return
-
-        if len(message.embeds) != 1:
-            return
-
-        embed = message.embeds[0]
-        user = self.bot.get_user(payload.user_id)
-        if user is None or user.bot:
-            return
-
-        # Already been handled.
-        if embed.colour != discord.Colour.blurple():
-            return
-
-        author_id = int(embed.footer.text)
-        bot_id = embed.author.name
-        if str(payload.emoji) == '\N{WHITE HEAVY CHECK MARK}':
-            to_send = f"Your bot, <@{bot_id}>, has been added."
-            colour = discord.Colour.dark_green()
-        else:
-            to_send = f"Your bot, <@{bot_id}>, has been rejected."
-            colour = discord.Colour.dark_magenta()
-
-        try:
-            await self.bot.get_user(author_id).send(to_send)
-        except (AttributeError, discord.HTTPException):
-            colour = discord.Colour.gold()
-
-        as_dict = embed.to_dict()
-        as_dict['color'] = colour.value
-        await self.bot.http.edit_message(payload.channel_id, payload.message_id, embed=as_dict)
-
-    @commands.command()
-    @in_testing()
-    async def addbot(self, ctx, *, user: BotUser):
-        """Requests your bot to be added to the server.
-
-        To request your bot you must pass your bot's user ID.
-
-        You will get a DM regarding the status of your bot, so make sure you
-        have them on.
-        """
-
-        confirm = None
-        def terms_acceptance(msg):
-            nonlocal confirm
-            if msg.author.id != ctx.author.id:
-                return False
-            if msg.channel.id != ctx.channel.id:
-                return False
-            if msg.content in ('**I agree**', 'I agree'):
-                confirm = True
-                return True
-            elif msg.content in ('**Abort**', 'Abort'):
-                confirm = False
-                return True
-            return False
-
-        msg = 'By requesting to add your bot, you must agree to the guidelines presented in the <#381974649019432981>.\n\n' \
-              'If you agree, reply to this message with **I agree** within 1 minute. If you do not, reply with **Abort**.'
-        prompt = await ctx.send(msg)
-
-        try:
-            await self.bot.wait_for('message', check=terms_acceptance, timeout=60.0)
-        except asyncio.TimeoutError:
-            return await ctx.send('Took too long. Aborting.')
-        finally:
-            await prompt.delete()
-
-        if not confirm:
-            return await ctx.send('Aborting.')
-
-        embed = discord.Embed(title='Bot Request', colour=discord.Colour.blurple())
-        embed.description = f'[Invite URL](https://discordapp.com/oauth2/authorize?client_id={user.id}&scope=bot)'
-        embed.add_field(name='Author', value=f'{ctx.author} (ID: {ctx.author.id})', inline=False)
-        embed.add_field(name='Bot', value=f'{user} (ID: {user.id})', inline=False)
-        embed.timestamp = ctx.message.created_at
-
-        # data for the bot to retrieve later
-        embed.set_footer(text=ctx.author.id)
-        embed.set_author(name=user.id, icon_url=user.avatar_url_as(format='png'))
-
-        channel = ctx.guild.get_channel(DISCORD_PY_BOT_LIST)
-        try:
-            msg = await channel.send(embed=embed)
-            await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
-            await msg.add_reaction('\N{CROSS MARK}')
-        except discord.HTTPException as e:
-            return await ctx.send(f'Failed to request your bot somehow. Tell Danny, {str(e)!r}')
-
-        await ctx.send('Your bot has been requested to the moderators. It will DM you the status of your request.')
-
-    @addbot.error
-    async def on_addbot_error(self, ctx, error):
-        if isinstance(error, commands.BadArgument):
-            return await ctx.send(error)
 
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))

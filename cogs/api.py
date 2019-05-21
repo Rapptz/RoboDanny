@@ -17,6 +17,33 @@ DISCORD_PY_ID     = 84319995256905728
 DISCORD_PY_GUILD  = 336642139381301249
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636)
+BOT_LIST_INFO = {
+    DISCORD_API_ID: {
+        'channel':580184108794380298,
+        'testing': (
+            381896832399310868, #testing
+            381896931724492800, #playground
+        ),
+        'terms': 'By requesting to add your bot, you agree to not spam or do things without user input.'
+    },
+    DISCORD_PY_GUILD: {
+        'channel': 579998326557114368,
+        'testing': (
+            381963689470984203, #testing
+            559455534965850142, #playground
+            568662293190148106, #mod-testing
+        ),
+        'terms': 'By requesting to add your bot, you must agree to the guidelines presented in the <#381974649019432981>.'
+    }
+}
+
+def in_testing(info=BOT_LIST_INFO):
+    def predicate(ctx):
+        try:
+            return ctx.channel.id in info[ctx.guild.id]['testing']
+        except KeyError:
+            return False
+    return commands.check(predicate)
 
 def can_use_block():
     def predicate(ctx):
@@ -91,6 +118,20 @@ class SphinxObjectFileReader:
                 buf = buf[pos + 1:]
                 pos = buf.find(b'\n')
 
+class BotUser(commands.Converter):
+    async def convert(self, ctx, argument):
+        if not argument.isdigit():
+            raise commands.BadArgument('Not a valid bot user ID.')
+        try:
+            user = await ctx.bot.fetch_user(argument)
+        except discord.NotFound:
+            raise commands.BadArgument('Bot user not found (404).')
+        except discord.HTTPException as e:
+            raise commands.BadArgument(f'Error fetching bot user: {e}')
+        else:
+            if not user.bot:
+                raise commands.BadArgument('This is not a bot.')
+            return user
 
 class API(commands.Cog):
     """Discord API exclusive things."""
@@ -613,6 +654,120 @@ class API(commands.Cog):
 
         fmt = '\n'.join(f'**{key}**\n{value}' for key, _, value in matches)
         await ctx.send(fmt)
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        if payload.guild_id not in BOT_LIST_INFO.keys():
+            return
+
+        if str(payload.emoji) not in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
+            return
+
+        channel_id = BOT_LIST_INFO[payload.guild_id]['channel']
+        if payload.channel_id != channel_id:
+            return
+
+        channel = self.bot.get_guild(payload.guild_id).get_channel(payload.channel_id)
+        try:
+            message = await channel.fetch_message(payload.message_id)
+        except (AttributeError, discord.HTTPException):
+            return
+
+        if len(message.embeds) != 1:
+            return
+
+        embed = message.embeds[0]
+        user = self.bot.get_user(payload.user_id)
+        if user is None or user.bot:
+            return
+
+        # Already been handled.
+        if embed.colour != discord.Colour.blurple():
+            return
+
+        author_id = int(embed.footer.text)
+        bot_id = embed.author.name
+        if str(payload.emoji) == '\N{WHITE HEAVY CHECK MARK}':
+            to_send = f"Your bot, <@{bot_id}>, has been added to {channel.guild.name}."
+            colour = discord.Colour.dark_green()
+        else:
+            to_send = f"Your bot, <@{bot_id}>, has been rejected from {channel.guild.name}."
+            colour = discord.Colour.dark_magenta()
+
+        try:
+            await self.bot.get_user(author_id).send(to_send)
+        except (AttributeError, discord.HTTPException):
+            colour = discord.Colour.gold()
+
+        embed.add_field(name='Responsible Moderator', value=f'{user} (ID: {user.id})', inline=False)
+        embed.colour = colour
+        await self.bot.http.edit_message(payload.channel_id, payload.message_id, embed=embed.to_dict())
+
+    @commands.command()
+    @in_testing()
+    async def addbot(self, ctx, user: BotUser, *, reason: str):
+        """Requests your bot to be added to the server.
+
+        To request your bot you must pass your bot's user ID and a reason
+
+        You will get a DM regarding the status of your bot, so make sure you
+        have them on.
+        """
+
+        info = BOT_LIST_INFO[ctx.guild.id]
+        confirm = None
+        def terms_acceptance(msg):
+            nonlocal confirm
+            if msg.author.id != ctx.author.id:
+                return False
+            if msg.channel.id != ctx.channel.id:
+                return False
+            if msg.content in ('**I agree**', 'I agree'):
+                confirm = True
+                return True
+            elif msg.content in ('**Abort**', 'Abort'):
+                confirm = False
+                return True
+            return False
+
+        msg = f'{info["terms"]}. Moderators reserve the right to kick or reject your bot for any reason.\n\n' \
+               'If you agree, reply to this message with **I agree** within 1 minute. If you do not, reply with **Abort**.'
+        prompt = await ctx.send(msg)
+
+        try:
+            await self.bot.wait_for('message', check=terms_acceptance, timeout=60.0)
+        except asyncio.TimeoutError:
+            return await ctx.send('Took too long. Aborting.')
+        finally:
+            await prompt.delete()
+
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        description = f'{reason}\n\n[Invite URL](https://discordapp.com/oauth2/authorize?client_id={user.id}&scope=bot)'
+        embed = discord.Embed(title='Bot Request', colour=discord.Colour.blurple(), description=description)
+        embed.add_field(name='Author', value=f'{ctx.author} (ID: {ctx.author.id})', inline=False)
+        embed.add_field(name='Bot', value=f'{user} (ID: {user.id})', inline=False)
+        embed.timestamp = ctx.message.created_at
+
+        # data for the bot to retrieve later
+        embed.set_footer(text=ctx.author.id)
+        embed.set_author(name=user.id, icon_url=user.avatar_url_as(format='png'))
+
+        channel = ctx.guild.get_channel(info['channel'])
+        try:
+            msg = await channel.send(embed=embed)
+            await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
+            await msg.add_reaction('\N{CROSS MARK}')
+        except discord.HTTPException as e:
+            return await ctx.send(f'Failed to request your bot somehow. Tell Danny, {str(e)!r}')
+
+        await ctx.send('Your bot has been requested to the moderators. It will DM you the status of your request.')
+
+    @addbot.error
+    async def on_addbot_error(self, ctx, error):
+        if isinstance(error, (commands.BadArgument, commands.MissingRequiredArgument)):
+            return await ctx.send(error)
 
 def setup(bot):
     bot.add_cog(API(bot))
