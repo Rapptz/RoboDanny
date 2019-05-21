@@ -135,7 +135,6 @@ class SpamChecker:
 
     1) It checks if a user has spammed more than 15 times in 17 seconds
     2) It checks if the content has been spammed 15 times in 17 seconds.
-    3) It checks if 10 members have joined over a 10 second window.
 
     The second case is meant to catch alternating spam bots while the first one
     just catches regular singular spam bots.
@@ -147,7 +146,7 @@ class SpamChecker:
     def __init__(self):
         self.by_content = CooldownByContent.from_cooldown(15, 17.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(15, 17.0, commands.BucketType.user)
-        self.by_join = commands.Cooldown(10, 10.0, commands.BucketType.default)
+        self.last_join = None
         self.new_user = commands.Cooldown(30, 35.0, commands.BucketType.channel)
 
     def is_new(self, member):
@@ -179,8 +178,14 @@ class SpamChecker:
 
         return False
 
-    def is_fast_join(self):
-        return self.by_join.update_rate_limit()
+    def is_fast_join(self, member):
+        joined = member.joined_at or datetime.datetime.utcnow()
+        if self.last_join is None:
+            self.last_join = joined
+            return False
+        is_fast = (joined - self.last_join).total_seconds() <= 2.0
+        self.last_join = joined
+        return is_fast
 
 ## Checks
 
@@ -377,7 +382,7 @@ class Mod(commands.Cog):
 
         # Do the broadcasted message to the channel
         title = 'Member Joined'
-        if checker.is_fast_join():
+        if checker.is_fast_join(member):
             colour = 0xdd5f53 # red
             if created < 30:
                 title = 'Member Joined (Very New Member)'
