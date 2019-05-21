@@ -13,6 +13,7 @@ import asyncio
 import argparse, shlex
 import logging
 import asyncpg
+import io
 
 log = logging.getLogger(__name__)
 
@@ -798,11 +799,8 @@ class Mod(commands.Cog):
             members = sorted(members, key=lambda m: m.joined_at or now)
             fmt = "\n".join(f'{m.id}\tJoined: {m.joined_at}\tCreated: {m.created_at}\t{m}' for m in members)
             content = f'Current Time: {datetime.datetime.utcnow()}\nTotal members: {len(members)}\n{fmt}'
-            async with self.bot.session.post('https://hastebin.com/documents', data=content) as resp:
-                if resp.status != 200:
-                    return await ctx.send('Sorry, failed to post data to hastebin.')
-                js = await resp.json()
-                return await ctx.send(f'https://hastebin.com/{js["key"]}.txt')
+            file = discord.File(io.BytesIO(content.encode('utf-8')), filename='members.txt')
+            return await ctx.send(file=file)
 
         if args.reason is None:
             return await ctx.send('--reason flag is required.')
