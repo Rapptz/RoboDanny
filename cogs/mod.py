@@ -148,12 +148,27 @@ class SpamChecker:
         self.by_content = CooldownByContent.from_cooldown(15, 17.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(15, 17.0, commands.BucketType.user)
         self.by_join = commands.Cooldown(10, 10.0, commands.BucketType.default)
+        self.new_user = commands.Cooldown(30, 35.0, commands.BucketType.channel)
+
+    def is_new(self, member):
+        now = datetime.datetime.utcnow()
+        seven_days_ago = now - datetime.timedelta(days=7)
+        ninety_days_ago = now - datetime.timedelta(days=90)
+        return member.created_at > ninety_days_ago and member.joined_at > seven_days_ago
 
     def is_spamming(self, message):
         if message.guild is None:
             return False
 
         current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+
+        if self.is_new(message.author):
+            # This is a trial-run, it has not banned anyone yet.
+            new_bucket = self.new_user.get_bucket(message)
+            if new_bucket.update_rate_limit(current):
+                log.info(f'[Raid Mode] User {message.author} (ID: {message.author.id}) in '
+                         f'{message.guild.name} (ID: {message.guild.id}) would have been banned as a new user.')
+
         user_bucket = self.by_user.get_bucket(message)
         if user_bucket.update_rate_limit(current):
             return True
