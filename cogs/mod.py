@@ -147,7 +147,7 @@ class SpamChecker:
         self.by_content = CooldownByContent.from_cooldown(15, 17.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(15, 17.0, commands.BucketType.user)
         self.last_join = None
-        self.new_user = commands.Cooldown(30, 35.0, commands.BucketType.channel)
+        self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
 
     def is_new(self, member):
         now = datetime.datetime.utcnow()
