@@ -41,7 +41,7 @@ def in_testing(info=BOT_LIST_INFO):
     def predicate(ctx):
         try:
             return ctx.channel.id in info[ctx.guild.id]['testing']
-        except KeyError:
+        except (AttributeError, KeyError):
             return False
     return commands.check(predicate)
 
