@@ -322,6 +322,7 @@ class Meta(commands.Cog):
         or by spaces.
         """
         source_url = 'https://github.com/Rapptz/RoboDanny'
+        branch = 'rewrite'
         if command is None:
             return await ctx.send(source_url)
 
@@ -347,8 +348,9 @@ class Meta(commands.Cog):
         else:
             location = module.replace('.', '/') + '.py'
             source_url = 'https://github.com/Rapptz/discord.py'
+            branch = 'master'
 
-        final_url = f'<{source_url}/blob/rewrite/{location}#L{firstlineno}-L{firstlineno + len(lines) - 1}>'
+        final_url = f'<{source_url}/blob/{branch}/{location}#L{firstlineno}-L{firstlineno + len(lines) - 1}>'
         await ctx.send(final_url)
 
     @commands.command(name='quit', hidden=True)
