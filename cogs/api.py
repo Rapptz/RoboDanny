@@ -266,6 +266,7 @@ class API(commands.Cog):
     async def do_rtfm(self, ctx, key, obj):
         page_types = {
             'latest': 'https://discordpy.readthedocs.io/en/latest',
+            'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
             'python': 'https://docs.python.org/3',
             'python-jp': 'https://docs.python.org/ja/3',
         }
@@ -315,6 +316,11 @@ class API(commands.Cog):
         a cruddy fuzzy algorithm.
         """
         await self.do_rtfm(ctx, 'latest', obj)
+
+    @rtfm.command(name='jp')
+    async def rtfm_jp(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity (Japanese)."""
+        await self.do_rtfm(ctx, 'latest-jp', obj)
 
     @rtfm.command(name='python', aliases=['py'])
     async def rtfm_python(self, ctx, *, obj: str = None):
