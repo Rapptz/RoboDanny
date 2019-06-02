@@ -845,11 +845,11 @@ class Tags(commands.Cog):
         if row is None:
             return await ctx.send(f'A tag with the name of "{tag}" does not exist.')
 
-        # just to be sure
-        if not ctx.guild.chunked:
-            await self.bot.request_offline_members(ctx.guild)
+        try:
+            member = ctx.guild.get_member(row[1]) or await ctx.guild.fetch_member(row[1])
+        except discord.NotFound:
+            member = None
 
-        member = ctx.guild.get_member(row[1])
         if member is not None:
             return await ctx.send('Tag owner is still in server.')
 
