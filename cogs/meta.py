@@ -1,5 +1,5 @@
 from discord.ext import commands
-from .utils import checks, formats
+from .utils import checks, formats, time
 from .utils.paginator import Pages
 import discord
 from collections import OrderedDict, deque, Counter
@@ -9,6 +9,7 @@ import copy
 import unicodedata
 import inspect
 import itertools
+from typing import Union
 
 class Prefix(commands.Converter):
     async def convert(self, ctx, argument):
@@ -16,6 +17,17 @@ class Prefix(commands.Converter):
         if argument.startswith((f'<@{user_id}>', f'<@!{user_id}>')):
             raise commands.BadArgument('That is a reserved prefix already in use.')
         return argument
+
+class FetchedUser(commands.Converter):
+    async def convert(self, ctx, argument):
+        if not argument.isdigit():
+            raise commands.BadArgument('Not a valid user ID.')
+        try:
+            return await ctx.bot.fetch_user(argument)
+        except discord.NotFound:
+            raise commands.BadArgument('User not found.') from None
+        except discord.HTTPException:
+            raise commands.BadArgument('An error occurred while fetching the user.') from None
 
 class HelpPaginator(Pages):
     def __init__(self, help_command, ctx, entries, *, per_page=4):
@@ -360,39 +372,47 @@ class Meta(commands.Cog):
         await self.bot.logout()
 
     @commands.group(invoke_without_command=True)
-    @commands.guild_only()
-    async def info(self, ctx, *, member: discord.Member = None):
-        """Shows info about a member.
+    async def info(self, ctx, *, user: Union[discord.User, FetchedUser] = None):
+        """Shows info about a user."""
 
-        This cannot be used in private messages. If you don't specify
-        a member then the info returned will be yours.
-        """
-
-        if member is None:
-            member = ctx.author
+        user = user or ctx.author
+        if isinstance(user, discord.User):
+            user = ctx.guild.get_member(user.id) or user
 
         e = discord.Embed()
-        roles = [role.name.replace('@', '@\u200b') for role in member.roles]
-        shared = sum(1 for m in self.bot.get_all_members() if m.id == member.id)
-        voice = member.voice
+        roles = [role.name.replace('@', '@\u200b') for role in getattr(user, 'roles', [])]
+        shared = sum(g.get_member(user.id) is not None for g in self.bot.guilds)
+        e.set_author(name=str(user))
+
+        def format_date(dt):
+            if dt is None:
+                return 'N/A'
+            return f'{dt:%Y-%m-%d %H:%M} ({time.human_timedelta(dt, accuracy=3)})'
+
+        e.add_field(name='ID', value=user.id, inline=False)
+        e.add_field(name='Servers', value=f'{shared} shared', inline=False)
+        e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)
+        e.add_field(name='Created', value=format_date(user.created_at), inline=False)
+
+        voice = getattr(user, 'voice', None)
         if voice is not None:
             vc = voice.channel
             other_people = len(vc.members) - 1
             voice = f'{vc.name} with {other_people} others' if other_people else f'{vc.name} by themselves'
-        else:
-            voice = 'Not connected.'
+            e.add_field(name='Voice', value=voice, inline=False)
 
-        e.set_author(name=str(member))
-        e.set_footer(text='Member since').timestamp = member.joined_at
-        e.add_field(name='ID', value=member.id)
-        e.add_field(name='Servers', value=f'{shared} shared')
-        e.add_field(name='Created', value=member.created_at)
-        e.add_field(name='Voice', value=voice)
-        e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
-        e.colour = member.colour
+        if roles:
+            e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles', inline=False)
 
-        if member.avatar:
-            e.set_thumbnail(url=member.avatar_url)
+        colour = user.colour
+        if colour.value:
+            e.colour = colour
+
+        if user.avatar:
+            e.set_thumbnail(url=user.avatar_url)
+
+        if isinstance(user, discord.User):
+            e.set_footer(text='This member is not in this server.')
 
         await ctx.send(embed=e)
 
