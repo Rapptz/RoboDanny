@@ -371,7 +371,7 @@ class Meta(commands.Cog):
         """Quits the bot."""
         await self.bot.logout()
 
-    @commands.group(invoke_without_command=True)
+    @commands.command()
     async def info(self, ctx, *, user: Union[discord.User, FetchedUser] = None):
         """Shows info about a user."""
 
@@ -416,9 +416,9 @@ class Meta(commands.Cog):
 
         await ctx.send(embed=e)
 
-    @info.command(name='server', aliases=['guild'])
+    @commands.command(aliases=['guildinfo'])
     @commands.guild_only()
-    async def server_info(self, ctx):
+    async def serverinfo(self, ctx):
         """Shows info about the current server."""
 
         guild = ctx.guild
@@ -433,24 +433,21 @@ class Meta(commands.Cog):
         secret_member.roles = [guild.default_role]
 
         # figure out what channels are 'secret'
-        secret_channels = 0
-        secret_voice = 0
-        text_channels = 0
+        secret = Counter()
+        totals = Counter()
         for channel in guild.channels:
             perms = channel.permissions_for(secret_member)
-            is_text = isinstance(channel, discord.TextChannel)
-            text_channels += is_text
-            if is_text and not perms.read_messages:
-                secret_channels += 1
-            elif not is_text and (not perms.connect or not perms.speak):
-                secret_voice += 1
+            channel_type = type(channel)
+            totals[channel_type] += 1
+            if not perms.read_messages:
+                secret[channel_type] += 1
+            elif isinstance(channel, discord.VoiceChannel) and (not perms.connect or not perms.speak):
+                secret[channel_type] += 1
 
-        regular_channels = len(guild.channels) - secret_channels
-        voice_channels = len(guild.channels) - text_channels
         member_by_status = Counter(str(m.status) for m in guild.members)
 
         e = discord.Embed()
-        e.title = 'Info for ' + guild.name
+        e.title = guild.name
         e.add_field(name='ID', value=guild.id)
         e.add_field(name='Owner', value=guild.owner)
         if guild.icon:
@@ -459,17 +456,47 @@ class Meta(commands.Cog):
         if guild.splash:
             e.set_image(url=guild.splash_url)
 
+        channel_info = []
+        key_to_emoji = {
+            discord.TextChannel: '<:text_channel:586339098172850187>',
+            discord.VoiceChannel: '<:voice_channel:586339098524909604>',
+        }
+        for key, total in totals.items():
+            secrets = secret[key]
+            try:
+                emoji = key_to_emoji[key]
+            except KeyError:
+                continue
+
+            if secrets:
+                channel_info.append(f'{emoji} {total} ({secrets} locked)')
+            else:
+                channel_info.append(f'{emoji} {total}')
+
+        e.add_field(name='Channels', value='\n'.join(channel_info))
+
         info = []
-        info.append(ctx.tick(len(guild.features) >= 3, 'Partnered'))
+        features = set(guild.features)
+        all_features = {
+            'PARTNERED': 'Partnered',
+            'VERIFIED': 'Verified',
+            'DISCOVERABLE': 'Server Discovery',
+            'INVITE_SPLASH': 'Invite Splash',
+            'VIP_REGIONS': 'VIP Voice Servers',
+            'VANITY_URL': 'Vanity Invite',
+            'MORE_EMOJI': 'More Emoji',
+            'COMMERCE': 'Commerce',
+            'LURKABLE': 'Lurkable',
+            'NEWS': 'News Channels',
+            'ANIMATED_ICON': 'Animated Icon',
+            'BANNER': 'Banner'
+        }
 
-        sfw = guild.explicit_content_filter is not discord.ContentFilter.disabled
-        info.append(ctx.tick(sfw, 'Scanning Images'))
-        info.append(ctx.tick(guild.member_count > 100, 'Large'))
+        for feature, label in all_features.items():
+            if feature in features:
+                info.append(f'{ctx.tick(True)}: {label}')
 
-        e.add_field(name='Info', value='\n'.join(map(str, info)))
-
-        fmt = f'Text {text_channels} ({secret_channels} secret)\nVoice {voice_channels} ({secret_voice} locked)'
-        e.add_field(name='Channels', value=fmt)
+        e.add_field(name='Features', value='\n'.join(info) or 'None')
 
         fmt = f'<:online:316856575413321728> {member_by_status["online"]} ' \
               f'<:idle:316856575098880002> {member_by_status["idle"]} ' \
@@ -477,7 +504,12 @@ class Meta(commands.Cog):
               f'<:offline:316856575501402112> {member_by_status["offline"]}\n' \
               f'Total: {guild.member_count}'
 
-        e.add_field(name='Members', value=fmt)
+        e.add_field(name='Members', value=fmt, inline=False)
+
+        # TODO: boost stuff
+        # TODO: maybe chunk and stuff for top role members
+        # requires max-concurrency d.py check to work though.
+
         e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
         e.set_footer(text='Created').timestamp = guild.created_at
         await ctx.send(embed=e)
