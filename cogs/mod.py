@@ -226,6 +226,7 @@ class Mod(commands.Cog):
         # True - insert, False - remove
         self._data_batch = defaultdict(list)
         self._batch_lock = asyncio.Lock(loop=bot.loop)
+        self._disable_lock = asyncio.Lock(loop=bot.loop)
         # self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
         self.batch_updates.start()
 
@@ -401,7 +402,11 @@ class Mod(commands.Cog):
         e.add_field(name='Created', value=time.human_timedelta(member.created_at), inline=False)
 
         if config.broadcast_channel:
-            await config.broadcast_channel.send(embed=e)
+            try:
+                await config.broadcast_channel.send(embed=e)
+            except discord.Forbidden:
+                async with self._disable_lock:
+                    await self.disable_raid_mode(guild_id)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
@@ -522,6 +527,18 @@ class Mod(commands.Cog):
         self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled. Broadcasting join messages to {channel.mention}.')
 
+    async def disable_raid_mode(self, guild_id):
+        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
+                   VALUES ($1, $2, NULL) ON CONFLICT (id)
+                   DO UPDATE SET
+                        raid_mode = EXCLUDED.raid_mode,
+                        broadcast_channel = NULL;
+                """
+
+        await self.bot.pool.execute(query, guild_id, RaidMode.off.value)
+        self._spam_check.pop(guild_id, None)
+        self.get_guild_config.invalidate(self, guild_id)
+
     @raid.command(name='off', aliases=['disable', 'disabled'])
     @checks.is_mod()
     async def raid_off(self, ctx):
@@ -537,16 +554,7 @@ class Mod(commands.Cog):
         except discord.HTTPException:
             await ctx.send('\N{WARNING SIGN} Could not set verification level.')
 
-        query = """INSERT INTO guild_mod_config (id, raid_mode, broadcast_channel)
-                   VALUES ($1, $2, NULL) ON CONFLICT (id)
-                   DO UPDATE SET
-                        raid_mode = EXCLUDED.raid_mode,
-                        broadcast_channel = NULL;
-                """
-
-        await ctx.db.execute(query, ctx.guild.id, RaidMode.off.value)
-        self._spam_check.pop(ctx.guild.id, None)
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        await self.disable_raid_mode(ctx.guild.id)
         await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
 
     @raid.command(name='strict')
