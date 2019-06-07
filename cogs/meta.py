@@ -376,7 +376,7 @@ class Meta(commands.Cog):
         """Shows info about a user."""
 
         user = user or ctx.author
-        if isinstance(user, discord.User):
+        if ctx.guild and isinstance(user, discord.User):
             user = ctx.guild.get_member(user.id) or user
 
         e = discord.Embed()
