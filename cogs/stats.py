@@ -871,6 +871,49 @@ class Stats(commands.Cog):
                 """
         await self.tabulate_query(ctx, query, user_id)
 
+    @command_history.command(name='log')
+    @commands.is_owner()
+    async def command_history_log(self, ctx, days=7):
+        """Command history log for the last N days."""
+
+        query = """SELECT command, COUNT(*)
+                   FROM commands
+                   WHERE used > (CURRENT_TIMESTAMP - $1::interval)
+                   GROUP BY command
+                   ORDER BY 2 DESC
+                """
+
+        all_commands = {
+            c.qualified_name: 0
+            for c in self.bot.walk_commands()
+        }
+
+        records = await ctx.db.fetch(query, datetime.timedelta(days=days))
+        for name, uses in records:
+            if name in all_commands:
+                all_commands[name] = uses
+
+        as_data = sorted(all_commands.items(), key=lambda t: t[1], reverse=True)
+        table = formats.TabularData()
+        table.set_columns(['Command', 'Uses'])
+        table.add_rows(tup for tup in as_data)
+        render = table.render()
+
+        embed = discord.Embed(title='Summary', colour=discord.Colour.green())
+        embed.set_footer(text='Since').timestamp = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+
+        top_ten = '\n'.join(f'{command}: {uses}' for command, uses in records[:10])
+        bottom_ten = '\n'.join(f'{command}: {uses}' for command, uses in records[-10:])
+        embed.add_field(name='Top 10', value=top_ten)
+        embed.add_field(name='Bottom 10', value=bottom_ten)
+
+        unused = ', '.join(name for name, uses in as_data if uses == 0)
+        if len(unused) > 1024:
+            unused = 'Way too many...'
+
+        embed.add_field(name='Unused', value=unused, inline=False)
+
+        await ctx.send(embed=embed, file=discord.File(io.BytesIO(render.encode()), filename='full_results.txt'))
 
 old_on_error = commands.AutoShardedBot.on_error
 
