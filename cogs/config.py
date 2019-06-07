@@ -209,9 +209,10 @@ class Config(commands.Cog):
             return True
 
         # see if they can bypass:
-        bypass = ctx.author.guild_permissions.manage_guild
-        if bypass:
-            return True
+        if isinstance(ctx.author, discord.Member):
+            bypass = ctx.author.guild_permissions.manage_guild
+            if bypass:
+                return True
 
         # check if we're plonked
         is_plonked = await self.is_plonked(ctx.guild.id, ctx.author.id, channel_id=ctx.channel.id,
