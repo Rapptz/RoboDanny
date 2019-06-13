@@ -769,7 +769,7 @@ class API(commands.Cog):
         except discord.HTTPException as e:
             return await ctx.send(f'Failed to request your bot somehow. Tell Danny, {str(e)!r}')
 
-        await ctx.send('Your bot has been requested to the moderators. It will DM you the status of your request.')
+        await ctx.send('Your bot has been requested to the moderators. I will DM you the status of your request.')
 
     @addbot.error
     async def on_addbot_error(self, ctx, error):
