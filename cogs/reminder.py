@@ -112,7 +112,7 @@ class Reminder(commands.Cog):
 
                 await self.call_timer(timer)
         except asyncio.CancelledError:
-            pass
+            raise
         except (OSError, discord.ConnectionClosed, asyncpg.PostgresConnectionError):
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.dispatch_timers())
