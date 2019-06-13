@@ -473,8 +473,6 @@ class Meta(commands.Cog):
             else:
                 channel_info.append(f'{emoji} {total}')
 
-        e.add_field(name='Channels', value='\n'.join(channel_info))
-
         info = []
         features = set(guild.features)
         all_features = {
@@ -496,7 +494,17 @@ class Meta(commands.Cog):
             if feature in features:
                 info.append(f'{ctx.tick(True)}: {label}')
 
-        e.add_field(name='Features', value='\n'.join(info) or 'None')
+        if info:
+            e.add_field(name='Features', value='\n'.join(info))
+
+        e.add_field(name='Channels', value='\n'.join(channel_info))
+
+        if guild.premium_tier != 0:
+            boosts = f'Level {guild.premium_tier}\n{guild.premium_subscription_count} boosts'
+            last_boost = max(guild.members, key=lambda m: m.premium_since or guild.created_at)
+            if last_boost.premium_since is not None:
+                boosts = f'{boosts}\nLast Boost: {last_boost} ({time.human_timedelta(last_boost.premium_since, accuracy=2)})'
+            e.add_field(name='Boosts', value=boosts, inline=False)
 
         fmt = f'<:online:316856575413321728> {member_by_status["online"]} ' \
               f'<:idle:316856575098880002> {member_by_status["idle"]} ' \
@@ -506,7 +514,6 @@ class Meta(commands.Cog):
 
         e.add_field(name='Members', value=fmt, inline=False)
 
-        # TODO: boost stuff
         # TODO: maybe chunk and stuff for top role members
         # requires max-concurrency d.py check to work though.
 
