@@ -37,7 +37,6 @@ initial_extensions = (
     'cogs.stats',
     'cogs.emoji',
     'cogs.config',
-    'cogs.tournament',
     'cogs.dpy',
 )
 
