@@ -227,17 +227,14 @@ class Mod(commands.Cog):
         self._data_batch = defaultdict(list)
         self._batch_lock = asyncio.Lock(loop=bot.loop)
         self._disable_lock = asyncio.Lock(loop=bot.loop)
-        # self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
+        self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
         self.batch_updates.start()
 
     def __repr__(self):
         return '<cogs.Mod>'
 
     def cog_unload(self):
-        self.batch_updates.cancel()
-
-        if self._data_batch:
-            self.bot.loop.create_task(self.bulk_insert())
+        self.batch_updates.stop()
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):

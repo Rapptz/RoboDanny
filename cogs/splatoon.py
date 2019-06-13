@@ -718,7 +718,7 @@ class Splatoon(commands.Cog):
                 log.info('Authenticated to SplatNet 2. Session: %s Expires: %s', iksm, expires)
                 self._is_authenticated.set()
         except asyncio.CancelledError:
-            pass
+            raise
         except (OSError, discord.ConnectionClosed):
             self._authenticator.cancel()
             self._authenticator = self.bot.loop.create_task(self.splatnet2_authenticator())
@@ -957,7 +957,7 @@ class Splatoon(commands.Cog):
                 seconds.append(await self.parse_splatnet2_splatfest())
                 await asyncio.sleep(min(seconds))
         except asyncio.CancelledError:
-            pass
+            raise
         except (OSError, discord.ConnectionClosed):
             self._splatnet2.cancel()
             self._splatnet2 = self.bot.loop.create_task(self.splatnet2())

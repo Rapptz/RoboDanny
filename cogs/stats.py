@@ -1,4 +1,4 @@
-from discord.ext import commands
+from discord.ext import commands, tasks
 from collections import Counter, defaultdict
 
 from .utils import checks, db, time, formats
@@ -56,8 +56,9 @@ class Stats(commands.Cog):
         self.bot = bot
         self.process = psutil.Process()
         self._batch_lock = asyncio.Lock(loop=bot.loop)
-        self._task = bot.loop.create_task(self.bulk_insert_loop())
         self._data_batch = []
+        self.bulk_insert_loop.add_exception_type(asyncpg.PostgresConnectionError)
+        self.bulk_insert_loop.start()
 
         # This is a datetime list
         self._resumes = []
@@ -90,24 +91,12 @@ class Stats(commands.Cog):
             self._data_batch.clear()
 
     def cog_unload(self):
-        # cancel the task we have looping...
-        self._task.cancel()
+        self.bulk_insert_loop.stop()
 
-        # if there's some remaining data, then write it
-        if self._data_batch:
-            self.bot.loop.create_task(self.bulk_insert())
-
+    @tasks.loop(seconds=10.0)
     async def bulk_insert_loop(self):
-        try:
-            while not self.bot.is_closed():
-                async with self._batch_lock:
-                    await self.bulk_insert()
-                await asyncio.sleep(10)
-        except asyncio.CancelledError:
-            pass
-        except (OSError, asyncpg.PostgresConnectionError):
-            self._task.cancel()
-            self._task = self.bot.loop.create_task(self.bulk_insert_loop())
+        async with self._batch_lock:
+            await self.bulk_insert()
 
     async def register_command(self, ctx):
         if ctx.command is None:

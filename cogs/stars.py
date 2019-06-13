@@ -1,4 +1,4 @@
-from discord.ext import commands
+from discord.ext import commands, tasks
 from .utils import checks, db, cache
 from .utils.formats import plural, human_join
 from .utils.paginator import Pages
@@ -109,7 +109,7 @@ class Stars(commands.Cog):
 
         # cache message objects to save Discord some HTTP requests.
         self._message_cache = {}
-        self._cleaner = self.bot.loop.create_task(self.clean_message_cache())
+        self.clean_message_cache.start()
 
         # if it's in this set,
         self._about_to_be_deleted = set()
@@ -117,19 +117,15 @@ class Stars(commands.Cog):
         self._locks = weakref.WeakValueDictionary()
 
     def cog_unload(self):
-        self._cleaner.cancel()
+        self.clean_message_cache.cancel()
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, StarError):
             await ctx.send(error)
 
+    @tasks.loop(hours=1.0)
     async def clean_message_cache(self):
-        try:
-            while not self.bot.is_closed():
-                self._message_cache.clear()
-                await asyncio.sleep(3600)
-        except asyncio.CancelledError:
-            pass
+        self._message_cache.clear()
 
     @cache.cache(strategy=cache.Strategy.raw)
     async def get_starboard(self, guild_id, *, connection=None):

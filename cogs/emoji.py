@@ -1,4 +1,4 @@
-from discord.ext import commands
+from discord.ext import commands, tasks
 from .utils import db, checks
 
 from collections import Counter, defaultdict
@@ -78,39 +78,33 @@ class Emoji(commands.Cog):
         self.bot = bot
         self._batch_of_data = defaultdict(Counter)
         self._batch_lock = asyncio.Lock(loop=bot.loop)
-        self._task = bot.loop.create_task(self.bulk_insert())
+        self.bulk_insert.add_exception_type(asyncpg.PostgresConnectionError)
+        self.bulk_insert.start()
 
     def cog_unload(self):
-        self._task.cancel()
+        self.bulk_insert.stop()
 
     async def cog_command_error(self, ctx, error):
        if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
+    @tasks.loop(seconds=60.0)
     async def bulk_insert(self):
-        try:
-            while not self.bot.is_closed():
-                query = """INSERT INTO emoji_stats (guild_id, emoji_id, total)
-                           SELECT x.guild, x.emoji, x.added
-                           FROM jsonb_to_recordset($1::jsonb) AS x(guild BIGINT, emoji BIGINT, added INT)
-                           ON CONFLICT (guild_id, emoji_id) DO UPDATE
-                           SET total = emoji_stats.total + excluded.total;
-                        """
+        query = """INSERT INTO emoji_stats (guild_id, emoji_id, total)
+                   SELECT x.guild, x.emoji, x.added
+                   FROM jsonb_to_recordset($1::jsonb) AS x(guild BIGINT, emoji BIGINT, added INT)
+                   ON CONFLICT (guild_id, emoji_id) DO UPDATE
+                   SET total = emoji_stats.total + excluded.total;
+                """
 
-                async with self._batch_lock:
-                    transformed = [
-                        {'guild': guild_id, 'emoji': emoji_id, 'added': count}
-                        for guild_id, data in self._batch_of_data.items()
-                        for emoji_id, count in data.items()
-                    ]
-                    self._batch_of_data.clear()
-                    await self.bot.pool.execute(query, transformed)
-                await asyncio.sleep(60)
-        except asyncio.CancelledError:
-            pass
-        except (OSError, asyncpg.PostgresConnectionError):
-            self._task.cancel()
-            self._task = self.bot.loop.create_task(self.bulk_insert())
+        async with self._batch_lock:
+            transformed = [
+                {'guild': guild_id, 'emoji': emoji_id, 'added': count}
+                for guild_id, data in self._batch_of_data.items()
+                for emoji_id, count in data.items()
+            ]
+            self._batch_of_data.clear()
+            await self.bot.pool.execute(query, transformed)
 
     async def do_redirect(self, message):
         if len(message.attachments) == 0:
