@@ -10,6 +10,7 @@ import discord
 import datetime
 import traceback
 import itertools
+import typing
 import asyncpg
 import asyncio
 import pygit2
@@ -821,6 +822,27 @@ class Stats(commands.Cog):
                    LIMIT 15;
                 """
         await self.tabulate_query(ctx, query)
+
+    @command_history.command(name='for')
+    @commands.is_owner()
+    async def command_history_for(self, ctx, days: typing.Optional[int] = 7, *, command: str):
+        """Command history for a command."""
+
+        query = """SELECT *, t.success + t.failed AS "total"
+                   FROM (
+                       SELECT guild_id,
+                              SUM(CASE WHEN failed THEN 0 ELSE 1 END) AS "success",
+                              SUM(CASE WHEN failed THEN 1 ELSE 0 END) AS "failed"
+                       FROM commands
+                       WHERE command=$1
+                       AND used > (CURRENT_TIMESTAMP - $2::interval)
+                       GROUP BY guild_id
+                   ) AS t
+                   ORDER BY "total" DESC
+                   LIMIT 30;
+                """
+
+        await self.tabulate_query(ctx, query, command, datetime.timedelta(days=days))
 
     @command_history.command(name='guild', aliases=['server'])
     @commands.is_owner()
