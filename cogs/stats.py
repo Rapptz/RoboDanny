@@ -25,6 +25,17 @@ log = logging.getLogger(__name__)
 
 LOGGING_CHANNEL = 309632009427222529
 
+class GatewayHandler(logging.Handler):
+    def __init__(self, cog):
+        self.cog = cog
+        super().__init__(logging.INFO)
+
+    def filter(self, record):
+        return record.name == 'discord.gateway' or 'Shard ID' in record.msg or 'Websocket closed ' in record.msg
+
+    def emit(self, record):
+        self.cog.add_record(record)
+
 class Commands(db.Table):
     id = db.PrimaryKeyColumn()
 
@@ -60,6 +71,8 @@ class Stats(commands.Cog):
         self._data_batch = []
         self.bulk_insert_loop.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert_loop.start()
+        self._gateway_queue = asyncio.Queue(loop=bot.loop)
+        self.gateway_worker.start()
 
         # This is a datetime list
         self._resumes = []
@@ -93,11 +106,17 @@ class Stats(commands.Cog):
 
     def cog_unload(self):
         self.bulk_insert_loop.stop()
+        self._gateway_worker.cancel()
 
     @tasks.loop(seconds=10.0)
     async def bulk_insert_loop(self):
         async with self._batch_lock:
             await self.bulk_insert()
+
+    @tasks.loop(seconds=0.0)
+    async def gateway_worker(self):
+        record = await self._gateway_queue.get()
+        await self.notify_gateway_status(record)
 
     async def register_command(self, ctx):
         if ctx.command is None:
@@ -641,6 +660,22 @@ class Stats(commands.Cog):
         # don't want to permanently grow memory
         self._clear_gateway_data()
 
+    def add_record(self, record):
+        # if self.bot.config.debug:
+        #     return
+        self._gateway_queue.put_nowait(record)
+
+    async def notify_gateway_status(self, record):
+        attributes = {
+            'INFO': '\N{INFORMATION SOURCE}',
+            'WARNING': '\N{WARNING SIGN}'
+        }
+
+        emoji = attributes.get(record.levelname, '\N{CROSS MARK}')
+        dt = datetime.datetime.utcfromtimestamp(record.created)
+        msg = f'{emoji} `[{dt:%Y-%m-%d %H:%M:%S}] {record.message}`'
+        await self.webhook.send(msg, username='Gateway', avatar_url='https://i.imgur.com/4PnCKB3.png')
+
     @commands.command(hidden=True)
     @commands.is_owner()
     async def bothealth(self, ctx):
@@ -952,8 +987,13 @@ def setup(bot):
     if not hasattr(bot, 'socket_stats'):
         bot.socket_stats = Counter()
 
-    bot.add_cog(Stats(bot))
+    cog = Stats(bot)
+    bot.add_cog(cog)
+    bot._stats_cog_gateway_handler = handler = GatewayHandler(cog)
+    logging.getLogger().addHandler(handler)
     commands.AutoShardedBot.on_error = on_error
 
 def teardown(bot):
     commands.AutoShardedBot.on_error = old_on_error
+    logging.getLogger().removeHandler(bot._stats_cog_gateway_handler)
+    del bot._stats_cog_gateway_handler
