@@ -281,7 +281,7 @@ class API(commands.Cog):
 
         obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)?(.+)', r'\1', obj)
 
-        if key == 'latest':
+        if key.startswith('latest'):
             # point the abc.Messageable types properly:
             q = obj.lower()
             for name in dir(discord.abc.Messageable):
@@ -315,7 +315,16 @@ class API(commands.Cog):
         Events, objects, and functions are all supported through a
         a cruddy fuzzy algorithm.
         """
-        await self.do_rtfm(ctx, 'latest', obj)
+        key = 'latest'
+        if ctx.guild is not None:
+            #                             日本語 category
+            if ctx.channel.category_id == 490287576670928914:
+                key = 'latest-jp'
+            #                    d.py unofficial JP
+            elif ctx.guild.id == 463986890190749698:
+                key = 'latest-jp'
+
+        await self.do_rtfm(ctx, key, obj)
 
     @rtfm.command(name='jp')
     async def rtfm_jp(self, ctx, *, obj: str = None):
