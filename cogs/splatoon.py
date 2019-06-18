@@ -378,15 +378,12 @@ def iso8601(argument, *, _re=_iso_regex):
     return datetime.datetime(*map(int, m.groups()))
 
 class BrandOrAbility(commands.Converter):
-    def __init__(self, splatoon2=True):
-        self.splatoon2 = splatoon2
-
     async def convert(self, ctx, argument):
         query = argument.lower()
         if len(query) < 4:
             raise commands.BadArgument('The query must be at least 5 characters long.')
 
-        data = ctx.cog.splat1_data if not self.splatoon2 else ctx.cog.splat2_data
+        data = ctx.cog.splat2_data
         brands = data.get('brands', [])
 
         result = None
@@ -546,7 +543,6 @@ class Splatoon(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.splat1_data = config.Config('splatoon.json', loop=bot.loop)
         self.splat2_data = config.Config('splatoon2.json', loop=bot.loop,
                                          object_hook=splatoon2_decoder, encoder=Splatoon2Encoder)
         self.map_data = []
@@ -962,66 +958,13 @@ class Splatoon(commands.Cog):
             self._splatnet2.cancel()
             self._splatnet2 = self.bot.loop.create_task(self.splatnet2())
 
-    def get_weapons_named(self, name, *, splatoon2=True):
-        data = self.splat2_data if splatoon2 else self.splat1_data
-        data = data.get('weapons', [])
+    def get_weapons_named(self, name):
+        data = self.splat2_data.get('weapons', [])
         name = name.lower()
 
         choices = {w['name'].lower(): w for w in data}
         results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
         return [v for k, _, v in results]
-
-    @commands.group(aliases=['sp1', 'splatoon1'])
-    async def splat1(self, ctx):
-        """Commands for Splatoon 1, rather than Splatoon 2."""
-        if ctx.invoked_subcommand is None:
-            return await ctx.send("That doesn't seem like a valid Splatoon command.")
-
-    @splat1.command(name='maps', aliases=['rotation'])
-    async def splat1_maps(self, ctx):
-        """Shows the current maps in the Splatoon schedule."""
-        try:
-            await ctx.send(self.map_data[0])
-        except IndexError:
-            await ctx.send('No map data found. Try again later.')
-
-    @splat1.command(name='schedule')
-    async def splat1_schedule(self, ctx):
-        """Shows the current Splatoon schedule."""
-        if self.map_data:
-            await ctx.send('\n'.join(str(x) for x in self.map_data))
-        else:
-            await ctx.send('No map data found. Try again later.')
-
-    def weapon_to_string(self, weapon):
-        return f'**{weapon["name"]}**\nSub: {weapon["sub"]}, Special: {weapon["special"]}'
-
-    @splat1.command(name='weapon')
-    async def splat1_weapon(self, ctx, *, query: str):
-        """Displays Splatoon weapon info from a query.
-
-        The query must be at least 3 characters long, otherwise it'll tell you it failed.
-        """
-        query = query.strip().lower()
-        weapons = self.splat1_data.get('weapons', [])
-        if len(query) < 3:
-            return await ctx.send('The query must be at least 3 characters long.')
-
-        def predicate(weapon):
-            lowered = [weapon.lower() for weapon in weapon.values()]
-            return any(query in wep for wep in lowered)
-
-        results = list(filter(predicate, weapons))
-        if not results:
-            return await ctx.send('No results found.')
-
-        output = [f'Found {plural(len(results)):weapon}:']
-        output.extend(self.weapon_to_string(weapon) for weapon in results)
-
-        if len(results) > 10:
-            await ctx.author.send('\n'.join(output))
-        else:
-            await ctx.send('\n'.join(output))
 
     async def generate_scrims(self, ctx, maps, games, mode):
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control', 'Clam Blitz']
@@ -1057,43 +1000,6 @@ class Splatoon(commands.Cog):
             result = [f'Game {game}: {scrim.mode} on {scrim.stage}' for game, scrim in enumerate(scrims, 1)]
 
         await ctx.send('\n'.join(result))
-
-    async def _do_brand(self, ctx, brand):
-        e = discord.Embed(colour=0x19D719)
-        if brand.is_brand():
-            e.add_field(name='Name', value=brand.info['name'])
-            e.add_field(name='Common', value=brand.info['buffed'])
-            e.add_field(name='Uncommon', value=brand.info['nerfed'])
-            return await ctx.send(embed=e)
-
-        e.description = f'The following brands deal with {brand.ability_name}.'
-        e.add_field(name='Common', value='\n'.join(brand.buffs))
-        e.add_field(name='Uncommon', value='\n'.join(brand.nerfs))
-        await ctx.send(embed=e)
-
-    @splat1.command(name='scrim')
-    async def splat1_scrim(self, ctx, games=5, *, mode: str = None):
-        """Generates Splatoon scrim map and mode combinations.
-
-        The mode combinations do not have Turf War.
-
-        The mode is rotated unless you pick a mode to play, in which all map
-        combinations will use that mode instead.
-        """
-
-        maps = self.splat1_data.get('maps', [])
-        await self.generate_scrims(ctx, maps, games, mode)
-
-    @splat1.command(name='brand', invoke_without_command=True)
-    async def splat1_brand(self, ctx, *, query: BrandOrAbility(splatoon2=False)):
-        """Shows Splatoon brand info based on either the name or the ability given.
-
-        If the query is an ability then it attempts to find out what brands
-        influence that ability, otherwise it just looks for the brand being given.
-
-        The query must be at least 4 characters long.
-        """
-        await self._do_brand(ctx, query)
 
     @commands.command(hidden=True)
     async def marie(self, ctx):
@@ -1300,7 +1206,17 @@ class Splatoon(commands.Cog):
 
         The query must be at least 4 characters long.
         """
-        await self._do_brand(ctx, query)
+        e = discord.Embed(colour=0x19D719)
+        if query.is_brand():
+            e.add_field(name='Name', value=query.info['name'])
+            e.add_field(name='Common', value=query.info['buffed'])
+            e.add_field(name='Uncommon', value=query.info['nerfed'])
+            return await ctx.send(embed=e)
+
+        e.description = f'The following brands deal with {query.ability_name}.'
+        e.add_field(name='Common', value='\n'.join(query.buffs))
+        e.add_field(name='Uncommon', value='\n'.join(query.nerfs))
+        await ctx.send(embed=e)
 
     @commands.command(hidden=True)
     @commands.is_owner()
