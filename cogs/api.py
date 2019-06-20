@@ -308,6 +308,16 @@ class API(commands.Cog):
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
 
+    def transform_rtfm_language_key(self, ctx, prefix):
+        if ctx.guild is not None:
+            #                             日本語 category
+            if ctx.channel.category_id == 490287576670928914:
+                return prefix + '-jp'
+            #                    d.py unofficial JP
+            elif ctx.guild.id == 463986890190749698:
+                return prefix + '-jp'
+        return prefix
+
     @commands.group(aliases=['rtfd'], invoke_without_command=True)
     async def rtfm(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity.
@@ -315,15 +325,7 @@ class API(commands.Cog):
         Events, objects, and functions are all supported through a
         a cruddy fuzzy algorithm.
         """
-        key = 'latest'
-        if ctx.guild is not None:
-            #                             日本語 category
-            if ctx.channel.category_id == 490287576670928914:
-                key = 'latest-jp'
-            #                    d.py unofficial JP
-            elif ctx.guild.id == 463986890190749698:
-                key = 'latest-jp'
-
+        key = self.transform_rtfm_language_key(ctx, 'latest')
         await self.do_rtfm(ctx, key, obj)
 
     @rtfm.command(name='jp')
@@ -334,7 +336,8 @@ class API(commands.Cog):
     @rtfm.command(name='python', aliases=['py'])
     async def rtfm_python(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a Python entity."""
-        await self.do_rtfm(ctx, 'python', obj)
+        key = self.transform_rtfm_language_key(ctx, 'python')
+        await self.do_rtfm(ctx, key, obj)
 
     @rtfm.command(name='py-jp', aliases=['py-ja'])
     async def rtfm_python_jp(self, ctx, *, obj: str = None):
