@@ -99,7 +99,7 @@ class MemberID(commands.Converter):
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
         if not can_execute_action(ctx, ctx.author, m):
             raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
-        return m.id
+        return m
 
 class BannedMember(commands.Converter):
     async def convert(self, ctx, argument):
@@ -670,7 +670,7 @@ class Mod(commands.Cog):
         if reason is None:
             reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
-        await ctx.guild.ban(discord.Object(id=member), reason=reason)
+        await ctx.guild.ban(member, reason=reason)
         await ctx.send('\N{OK HAND SIGN}')
 
     @commands.command()
@@ -700,7 +700,7 @@ class Mod(commands.Cog):
         failed = 0
         for member in members:
             try:
-                await ctx.guild.ban(discord.Object(id=member), reason=reason)
+                await ctx.guild.ban(member, reason=reason)
             except discord.HTTPException:
                 failed += 1
 
@@ -898,9 +898,8 @@ class Mod(commands.Cog):
         if reason is None:
             reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
-        obj = discord.Object(id=member)
-        await ctx.guild.ban(obj, reason=reason)
-        await ctx.guild.unban(obj, reason=reason)
+        await ctx.guild.ban(member, reason=reason)
+        await ctx.guild.unban(member, reason=reason)
         await ctx.send('\N{OK HAND SIGN}')
 
     @commands.command()
@@ -953,7 +952,7 @@ class Mod(commands.Cog):
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
-        await ctx.guild.ban(discord.Object(id=member), reason=reason)
+        await ctx.guild.ban(member, reason=reason)
         timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id,
                                                                     ctx.author.id,
                                                                     member,
