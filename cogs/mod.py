@@ -87,6 +87,20 @@ def can_execute_action(ctx, user, target):
            user == ctx.guild.owner or \
            user.top_role > target.top_role
 
+class MemberNotFound(Exception):
+    pass
+
+async def resolve_member(guild, member_id):
+    member = guild.get_member(member_id)
+    if member is None:
+        if guild.chunked:
+            raise MemberNotFound()
+        try:
+            member = await guild.fetch_member(member_id)
+        except discord.NotFound:
+            raise MemberNotFound() from None
+    return member
+
 class MemberID(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -94,10 +108,10 @@ class MemberID(commands.Converter):
         except commands.BadArgument:
             try:
                 member_id = int(argument, base=10)
-                m = ctx.guild.get_member(member_id) or await ctx.guild.fetch_member(member_id)
+                m = await resolve_member(ctx.guild, member_id)
             except ValueError:
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
-            except discord.NotFound:
+            except MemberNotFound:
                 # hackban case
                 return discord.Object(id=member_id)
 
