@@ -123,6 +123,12 @@ class ActionReason(commands.Converter):
             raise commands.BadArgument(f'reason is too long ({len(argument)}/{reason_max})')
         return ret
 
+def safe_reason_append(base, to_append):
+    appended = base + f'({to_append})'
+    if len(appended) > 512:
+        return base
+    return appended
+
 ## Spam detector
 
 # TODO: add this to d.py maybe
@@ -961,6 +967,7 @@ class Mod(commands.Cog):
             # best attempt, oh well.
             pass
 
+        reason = safe_reason_append(reason, until)
         await ctx.guild.ban(member, reason=reason)
         timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id,
                                                                     ctx.author.id,
