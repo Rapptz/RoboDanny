@@ -95,8 +95,12 @@ class MemberID(commands.Converter):
             try:
                 member_id = int(argument, base=10)
                 m = ctx.guild.get_member(member_id) or await ctx.guild.fetch_member(member_id)
-            except (ValueError, discord.NotFound):
+            except ValueError:
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
+            except discord.NotFound:
+                # hackban case
+                return discord.Object(id=member_id)
+
         if not can_execute_action(ctx, ctx.author, m):
             raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
         return m
@@ -962,7 +966,7 @@ class Mod(commands.Cog):
 
         try:
             await member.send(heads_up_message)
-        except discord.HTTPException:
+        except (AttributeError, discord.HTTPException):
             # best attempt, oh well.
             pass
 
