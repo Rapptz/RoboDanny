@@ -380,20 +380,19 @@ class Mod(commands.Cog):
 
         now = datetime.datetime.utcnow()
 
-        # these are the dates in minutes
-        created = (now - member.created_at).total_seconds() // 60
+        is_new = member.created_at > (now - datetime.timedelta(days=7))
         checker = self._spam_check[guild_id]
 
         # Do the broadcasted message to the channel
         title = 'Member Joined'
         if checker.is_fast_join(member):
             colour = 0xdd5f53 # red
-            if created < 30:
+            if is_new:
                 title = 'Member Joined (Very New Member)'
         else:
             colour = 0x53dda4 # green
 
-            if created < 30:
+            if is_new:
                 colour = 0xdda453 # yellow
                 title = 'Member Joined (Very New Member)'
 
