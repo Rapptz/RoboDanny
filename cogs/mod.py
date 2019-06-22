@@ -93,13 +93,13 @@ class MemberID(commands.Converter):
             m = await commands.MemberConverter().convert(ctx, argument)
         except commands.BadArgument:
             try:
-                return int(argument, base=10)
-            except ValueError:
+                member_id = int(argument, base=10)
+                m = ctx.guild.get_member(member_id) or await ctx.guild.fetch_member(member_id)
+            except (ValueError, discord.NotFound):
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
-        else:
-            if not can_execute_action(ctx, ctx.author, m):
-                raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
-            return m.id
+        if not can_execute_action(ctx, ctx.author, m):
+            raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
+        return m.id
 
 class BannedMember(commands.Converter):
     async def convert(self, ctx, argument):
