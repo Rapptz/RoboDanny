@@ -676,6 +676,39 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.has_permissions(ban_members=True)
+    async def multiban(self, ctx, members: commands.Greedy[MemberID], *, reason: ActionReason = None):
+        """Bans multiple members from the server.
+
+        This only works through banning via ID.
+
+        In order for this to work, the bot must have Ban Member permissions.
+
+        To use this command you must have Ban Members permission.
+        """
+
+        if reason is None:
+            reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        total_members = len(members)
+        if total_members == 0:
+            return await ctx.send('Missing members to ban.')
+
+        confirm = await ctx.prompt(f'This will ban **{plural(total_members):member}**. Are you sure?', reacquire=False)
+        if not confirm:
+            return await ctx.send('Aborting.')
+
+        failed = 0
+        for member in members:
+            try:
+                await ctx.guild.ban(discord.Object(id=member), reason=reason)
+            except discord.HTTPException:
+                failed += 1
+
+        await ctx.send(f'Banned {total_members - failed}/{total_members} members.')
+
+    @commands.command()
+    @commands.guild_only()
+    @checks.has_permissions(ban_members=True)
     async def massban(self, ctx, *, args):
         """Mass bans multiple members from the server.
 
