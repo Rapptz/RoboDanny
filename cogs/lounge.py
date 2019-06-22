@@ -118,6 +118,9 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
             if resp.status != 200:
                 return await ctx.send(f'An error occurred (status code: {resp.status}). Retry later.')
 
+            if resp.history:
+                return await ctx.send(resp.url)
+
             e = discord.Embed()
             root = etree.fromstring(await resp.text(), etree.HTMLParser())
 
