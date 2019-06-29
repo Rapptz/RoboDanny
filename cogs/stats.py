@@ -7,6 +7,7 @@ from .utils.paginator import CannotPaginate
 import pkg_resources
 import logging
 import discord
+import textwrap
 import datetime
 import traceback
 import itertools
@@ -636,6 +637,7 @@ class Stats(commands.Cog):
             fmt = f'{fmt}\nGuild: {ctx.guild} (ID: {ctx.guild.id})'
 
         e.add_field(name='Location', value=fmt, inline=False)
+        e.add_field(name='Content', value=textwrap.shorten(ctx.message.content, width=512))
 
         exc = ''.join(traceback.format_exception(type(error), error, error.__traceback__, chain=False))
         e.description = f'```py\n{exc}\n```'
