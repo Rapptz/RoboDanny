@@ -766,6 +766,18 @@ class Mod(commands.Cog):
         `--embeds`: Checks if the message has embeds (no arguments).
         """
 
+        # For some reason there are cases due to caching that ctx.author
+        # can be a User even in a guild only context
+        # Rather than trying to work out the kink with it
+        # Just upgrade the member itself.
+        if not isinstance(ctx.author, discord.Member):
+            try:
+                author = await ctx.guild.fetch_member(ctx.author.id)
+            except discord.HTTPException:
+                return await ctx.send('Somehow, Discord does not seem to think you are in this server.')
+        else:
+            author = ctx.author
+
         parser = Arguments(add_help=False, allow_abbrev=False)
         parser.add_argument('--channel', '-c')
         parser.add_argument('--reason', '-r')
@@ -825,7 +837,7 @@ class Mod(commands.Cog):
 
         # member filters
         predicates = [
-            lambda m: can_execute_action(ctx, ctx.author, m), # Only if applicable
+            lambda m: can_execute_action(ctx, author, m), # Only if applicable
             lambda m: not m.bot, # No bots
             lambda m: m.discriminator != '0000', # No deleted users
         ]
