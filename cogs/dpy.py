@@ -197,5 +197,22 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         js = await self.edit_issue(number, labels=labels)
         await ctx.send(f'Successfully labelled <{js["html_url"]}>')
 
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def emojipost(self, ctx):
+        """Fancy post the emoji lists"""
+        emojis = sorted([e for e in ctx.guild.emojis if len(e.roles) == 0 and e.available], key=lambda e: e.name)
+        paginator = commands.Paginator(suffix='', prefix='')
+        channel = ctx.guild.get_channel(596549678393327616)
+
+        for emoji in emojis:
+            paginator.add_line(f'{emoji} -- `{emoji}`')
+
+        await channel.purge()
+        for page in paginator.pages:
+            await channel.send(page)
+
+        await ctx.send(ctx.tick(True))
+
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
