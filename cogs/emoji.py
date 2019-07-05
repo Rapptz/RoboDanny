@@ -8,6 +8,7 @@ import asyncio
 import asyncpg
 import datetime
 import logging
+import yarl
 import re
 import io
 
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 
 BLOB_GUILD_ID = 272885620769161216
 EMOJI_REGEX = re.compile(r'<a?:.+?:([0-9]{15,21})>')
+EMOJI_NAME_REGEX = re.compile(r'[0-9a-zA-Z\_]{2,32}')
 
 class BlobEmoji(commands.Converter):
     async def convert(self, ctx, argument):
@@ -42,6 +44,35 @@ def partial_emoji(argument, *, regex=EMOJI_REGEX):
     if m is None:
         raise commands.BadArgument("That's not a custom emoji...")
     return int(m.group(1))
+
+def emoji_name(argument, *, regex=EMOJI_NAME_REGEX):
+    m = regex.match(argument)
+    if m is None:
+        raise commands.BadArgument('Invalid emoji name.')
+    return argument
+
+class EmojiURL:
+    def __init__(self, *, animated, url):
+        self.url = url
+        self.animated = animated
+
+    @classmethod
+    async def convert(cls, ctx, argument):
+        try:
+            partial = await commands.PartialEmojiConverter().convert(ctx, argument)
+        except commands.BadArgument:
+            try:
+                url = yarl.URL(argument)
+                if url.scheme not in ('http', 'https'):
+                    raise RuntimeError
+                path = url.path.lower()
+                if not path.endswith(('.png', '.jpeg', '.jpg', '.gif')):
+                    raise RuntimeError
+                return cls(animated=url.path.endswith('.gif'), url=url)
+            except Exception:
+                raise commands.BadArgument('Not a valid or supported emoji URL.') from None
+        else:
+            return cls(animated=partial.animated, url=str(partial.url))
 
 def usage_per_day(dt, usages):
     tracking_started = datetime.datetime(2017, 3, 31)
@@ -374,6 +405,43 @@ class Emoji(commands.Cog):
             e.add_field(name=f'Bottom {len(bottom)}', value=value)
 
         await ctx.send(embed=e)
+
+    @commands.group(name='emoji')
+    @commands.guild_only()
+    @checks.has_guild_permissions(manage_emoji=True)
+    async def _emoji(self, ctx):
+        """Emoji management commands."""
+        if ctx.subcommand_passed is None:
+            await ctx.send_help(ctx.command)
+
+    @_emoji.command(name='create')
+    async def _emoji_create(self, ctx, name: emoji_name, *, emoji: EmojiURL):
+        """Create an emoji for the server under the given name.
+
+        You must have Manage Emoji permission to use this.
+        The bot must have this permission too.
+        """
+        if not ctx.me.guild_permissions.manage_emojis:
+            return await ctx.send('Bot does not have permission to add emoji.')
+
+        reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
+
+        emoji_count = sum(e.animated == emoji.animated for e in ctx.guild.emojis)
+        if emoji_count >= ctx.guild.emoji_limit:
+            return await ctx.send('There are no more emoji slots in this server.')
+
+        async with self.bot.session.get(emoji.url) as resp:
+            if resp.status >= 400:
+                return await ctx.send('Could not fetch the image.')
+            if int(resp.headers['Content-Length']) >= (256 * 1024):
+                return await ctx.send('Image is too big.')
+            data = await resp.read()
+            try:
+                created = await ctx.guild.create_custom_emoji(name=name, image=data, reason=reason)
+            except discord.HTTPException as e:
+                return await ctx.send(f'Failed to create emoji somehow: {e}')
+            else:
+                return await ctx.send(f'Created {created}')
 
 def setup(bot):
     bot.add_cog(Emoji(bot))
