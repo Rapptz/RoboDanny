@@ -95,6 +95,24 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
             return
 
+        # Handle some #emoji-suggestions auto moderator and things
+        # Process is mainly informal anyway
+        if message.channel.id == 596308497671520256:
+            emoji = self.bot.get_cog('Emoji')
+            if emoji is None:
+                return
+            matches = emoji.find_all_emoji(message)
+            # Don't want multiple emoji per message
+            if len(matches) > 1:
+                return await message.delete()
+            elif len(message.attachments) > 1:
+                # Nor multiple attachments
+                return await message.delete()
+
+            # Add voting reactions
+            await message.add_reaction('<:greenTick:330090705336664065>')
+            await message.add_reaction('<:redTick:330090723011592193>')
+
         m = self.issue.search(message.content)
         if m is not None:
             url = 'https://github.com/Rapptz/discord.py/issues/'

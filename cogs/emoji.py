@@ -150,6 +150,9 @@ class Emoji(commands.Cog):
             fmt = f'Suggestion from {message.author}: {message.clean_content}'
             await ch.send(fmt, file=discord.File(data, message.attachments[0].filename))
 
+    def find_all_emoji(self, message, *, regex=EMOJI_REGEX):
+        return regex.findall(message.content)
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.guild is None:
