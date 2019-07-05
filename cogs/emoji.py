@@ -439,12 +439,16 @@ class Emoji(commands.Cog):
             if int(resp.headers['Content-Length']) >= (256 * 1024):
                 return await ctx.send('Image is too big.')
             data = await resp.read()
-            try:
-                created = await ctx.guild.create_custom_emoji(name=name, image=data, reason=reason)
-            except discord.HTTPException as e:
-                return await ctx.send(f'Failed to create emoji somehow: {e}')
-            else:
-                return await ctx.send(f'Created {created}')
+            coro = ctx.guild.create_custom_emoji(name=name, image=data, reason=reason)
+            async with ctx.typing():
+                try:
+                    created = await asyncio.wait_for(coro, timeout=10.0)
+                except asyncio.TimeoutError:
+                    return await ctx.send('Sorry, the bot is rate limited or it took too long.')
+                except discord.HTTPException as e:
+                    return await ctx.send(f'Failed to create emoji somehow: {e}')
+                else:
+                    return await ctx.send(f'Created {created}')
 
 def setup(bot):
     bot.add_cog(Emoji(bot))
