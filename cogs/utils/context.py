@@ -1,5 +1,7 @@
 from discord.ext import commands
 import asyncio
+import discord
+import io
 
 class _ContextDBAcquire:
     __slots__ = ('ctx', 'timeout')
@@ -214,3 +216,19 @@ class Context(commands.Context):
         cmd = self.bot.get_command('help')
         command = command or self.command.qualified_name
         await self.invoke(cmd, command=command)
+
+    async def safe_send(self, content, *, escape_mentions=True, **kwargs):
+        """Same as send except with some safe guards.
+
+        1) If the message is too long then it sends a file with the results instead.
+        2) If ``escape_mentions`` is ``True`` then it escapes mentions.
+        """
+        if escape_mentions:
+            content = discord.utils.escape_mentions(content)
+
+        if len(content) > 2000:
+            fp = io.BytesIO(content.encode())
+            kwargs.pop('file', None)
+            return await self.send(file=discord.File(fp, filename='message_too_long.txt'), **kwargs)
+        else:
+            return await self.send(content)
