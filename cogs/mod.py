@@ -113,7 +113,7 @@ class MemberID(commands.Converter):
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
             except MemberNotFound:
                 # hackban case
-                return discord.Object(id=member_id)
+                return type('_Hackban', (), {'id': member_id, '__str__': lambda s: f'Member ID {s.id}'})()
 
         if not can_execute_action(ctx, ctx.author, m):
             raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
@@ -1000,10 +1000,10 @@ class Mod(commands.Cog):
         await ctx.guild.ban(member, reason=reason)
         timer = await reminder.create_timer(duration.dt, 'tempban', ctx.guild.id,
                                                                     ctx.author.id,
-                                                                    member,
+                                                                    member.id,
                                                                     connection=ctx.db,
                                                                     created=ctx.message.created_at)
-        await ctx.send(f'Banned ID {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
+        await ctx.send(f'Banned {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
 
     @commands.Cog.listener()
     async def on_tempban_timer_complete(self, timer):
