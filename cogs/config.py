@@ -162,7 +162,7 @@ class ResolvedCommandPermissions:
         if len(self._lookup) == 0:
             return False
 
-        if ctx.author.guild_permissions.manage_guild:
+        if isinstance(ctx.author, discord.Member) and ctx.author.guild_permissions.manage_guild:
             return False
 
         return self._is_command_blocked(ctx.command.qualified_name, ctx.channel.id)
