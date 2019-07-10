@@ -4,6 +4,7 @@ import discord
 import asyncio
 import asyncpg
 import datetime
+import textwrap
 
 class Reminders(db.Table):
     id = db.PrimaryKeyColumn()
@@ -238,7 +239,8 @@ class Reminder(commands.Cog):
             e.set_footer(text=f'{len(records)} reminder{"s" if len(records) > 1 else ""}')
 
         for _id, expires, message in records:
-            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=message, inline=False)
+            shorten = textwrap.shorten(message, width=512)
+            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=shorten, inline=False)
 
         await ctx.send(embed=e)
 
