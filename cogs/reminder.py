@@ -302,7 +302,7 @@ class Reminder(commands.Cog):
         channel = self.bot.get_channel(channel_id)
         if channel is None:
             # Check if it's a DM channel
-            author = self.bot.get_user(author_id)
+            author = self.bot.get_user(author_id) or (await self.bot.fetch_user(author_id))
             try:
                 channel = await author.create_dm()
             except discord.HTTPException:
