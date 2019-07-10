@@ -586,6 +586,7 @@ class Stats(commands.Cog):
     async def send_guild_stats(self, e, guild):
         e.add_field(name='Name', value=guild.name)
         e.add_field(name='ID', value=guild.id)
+        e.add_field(name='Shard ID', value=guild.shard_id or 'N/A')
         e.add_field(name='Owner', value=f'{guild.owner} (ID: {guild.owner.id})')
 
         bots = sum(m.bot for m in guild.members)
