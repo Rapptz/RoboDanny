@@ -56,17 +56,21 @@ class RedditMediaURL:
         except Exception as e:
             raise commands.BadArgument('Not a valid URL.')
 
+        headers = {
+            'User-Agent': 'Discord:RoboDanny:v4.0 (by /u/Rapptz)'
+        }
+        await ctx.trigger_typing()
         if url.host == 'v.redd.it':
-            return cls(url=url / 'DASH_480')
+            # have to do a request to fetch the 'main' URL.
+            async with ctx.session.get(url, headers=headers) as resp:
+                url = resp.url
 
-        if not url.host.endswith('.reddit.com'):
+        is_valid_path = url.host.endswith('.reddit.com') and cls.VALID_PATH.match(url.path)
+        if not is_valid_path:
             raise commands.BadArgument('Not a reddit URL.')
 
-        if not cls.VALID_PATH.match(url.path):
-            raise commands.BadArgument('Must be a reddit submission URL.')
-
         # Now we go the long way
-        async with ctx.session.get(url / '.json') as resp:
+        async with ctx.session.get(url / '.json', headers=headers) as resp:
             if resp.status != 200:
                 raise commands.BadArgument(f'Reddit API failed with {resp.status}.')
 
@@ -407,16 +411,15 @@ class Buttons(commands.Cog):
 
         Regular reddit URLs or v.redd.it URLs are supported.
         """
-        async with ctx.typing():
-            async with ctx.session.get(reddit.url) as resp:
-                if resp.status != 200:
-                    return await ctx.send('Could not download video.')
+        async with ctx.session.get(reddit.url) as resp:
+            if resp.status != 200:
+                return await ctx.send('Could not download video.')
 
-                if int(resp.headers['Content-Length']) >= ctx.guild.filesize_limit:
-                    return await ctx.send('Video is too big to be uploaded.')
+            if int(resp.headers['Content-Length']) >= ctx.guild.filesize_limit:
+                return await ctx.send('Video is too big to be uploaded.')
 
-                data = await resp.read()
-                await ctx.send(file=discord.File(io.BytesIO(data), filename=reddit.filename))
+            data = await resp.read()
+            await ctx.send(file=discord.File(io.BytesIO(data), filename=reddit.filename))
 
     @vreddit.error
     async def on_vreddit_error(self, ctx, error):
