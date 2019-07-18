@@ -398,6 +398,11 @@ class API(commands.Cog):
             name = name[index + 1:]
         return name.replace('-', '.')
 
+    def get_block_channels(self, guild, channel):
+        if guild.id == DISCORD_PY_GUILD and channel.id in DISCORD_PY_HELP_CHANNELS:
+            return [guild.get_channel(x) for x in DISCORD_PY_HELP_CHANNELS]
+        return [channel]
+
     @commands.command()
     @can_use_block()
     async def block(self, ctx, *, member: discord.Member):
@@ -405,8 +410,11 @@ class API(commands.Cog):
 
         reason = f'Block by {ctx.author} (ID: {ctx.author.id})'
 
+        channels = self.get_block_channels(ctx.guild, ctx.channel)
+
         try:
-            await ctx.channel.set_permissions(member, send_messages=False, reason=reason)
+            for channel in channels:
+                await channel.set_permissions(member, send_messages=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -428,6 +436,7 @@ class API(commands.Cog):
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
+        channels = self.get_block_channels(ctx.guild, ctx.channel)
         timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id,
                                                                       ctx.channel.id, member.id,
                                                                       connection=ctx.db,
@@ -436,7 +445,8 @@ class API(commands.Cog):
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
         try:
-            await ctx.channel.set_permissions(member, send_messages=False, reason=reason)
+            for channel in channels:
+                await channel.set_permissions(member, send_messages=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -476,10 +486,11 @@ class API(commands.Cog):
 
         reason = f'Automatic unblock from timer made on {timer.created_at} by {moderator}.'
 
-        try:
-            await channel.set_permissions(to_unblock, send_messages=None, reason=reason)
-        except:
-            pass
+        for ch in self.get_block_channels(guild, channel):
+            try:
+                await ch.set_permissions(to_unblock, send_messages=None, reason=reason)
+            except:
+                pass
 
     @cache.cache()
     async def get_feeds(self, channel_id, *, connection=None):
