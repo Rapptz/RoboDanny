@@ -8,7 +8,9 @@ import random
 import logging
 from urllib.parse import quote as uriquote
 from lru import LRU
+import yarl
 import io
+import re
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +41,57 @@ def can_use_spoiler():
     return commands.check(predicate)
 
 SPOILER_EMOJI_ID = 430469957042831371
+
+class RedditMediaURL:
+    VALID_PATH = re.compile(r'/r/[A-Za-z0-9]+/comments/[A-Za-z0-9]+(?:/.+)?')
+
+    def __init__(self, url):
+        self.url = url
+        self.filename = url.parts[1] + '.mp4'
+
+    @classmethod
+    async def convert(cls, ctx, argument):
+        try:
+            url = yarl.URL(argument)
+        except Exception as e:
+            raise commands.BadArgument('Not a valid URL.')
+
+        if url.host == 'v.redd.it':
+            return cls(url=url / 'DASH_480')
+
+        if not url.host.endswith('.reddit.com'):
+            raise commands.BadArgument('Not a reddit URL.')
+
+        if not cls.VALID_PATH.match(url.path):
+            raise commands.BadArgument('Must be a reddit submission URL.')
+
+        # Now we go the long way
+        async with ctx.session.get(url / '.json') as resp:
+            if resp.status != 200:
+                raise commands.BadArgument(f'Reddit API failed with {resp.status}.')
+
+            data = await resp.json()
+            try:
+                submission = data[0]['data']['children'][0]['data']
+            except (KeyError, TypeError, IndexError):
+                raise commands.BadArgument('Could not fetch submission.')
+
+            try:
+                media = submission['media']['reddit_video']
+            except (KeyError, TypeError):
+                try:
+                    # maybe it's a cross post
+                    crosspost = submission['crosspost_parent_list'][0]
+                    media = crosspost['media']['reddit_video']
+                except (KeyError, TypeError, IndexError):
+                    raise commands.BadArgument('Could not fetch media information.')
+
+            try:
+                fallback_url = yarl.URL(media['fallback_url'])
+            except KeyError:
+                raise commands.BadArgument('Could not fetch fall back URL.')
+
+            return cls(fallback_url)
 
 class SpoilerCache:
     __slots__ = ('author_id', 'channel_id', 'title', 'text', 'attachments')
@@ -346,6 +399,29 @@ class Buttons(commands.Cog):
         spoiler_message = await ctx.send(embed=cache.to_spoiler_embed(ctx, storage_message))
         self._spoiler_cache[spoiler_message.id] = cache
         await spoiler_message.add_reaction(':spoiler:430469957042831371')
+
+    @commands.command(usage='<url>')
+    @commands.cooldown(1, 5.0, commands.BucketType.member)
+    async def vreddit(self, ctx, *, reddit: RedditMediaURL):
+        """Downloads a v.redd.it submission.
+
+        Regular reddit URLs or v.redd.it URLs are supported.
+        """
+        async with ctx.typing():
+            async with ctx.session.get(reddit.url) as resp:
+                if resp.status != 200:
+                    return await ctx.send('Could not download video.')
+
+                if int(resp.headers['Content-Length']) >= ctx.guild.filesize_limit:
+                    return await ctx.send('Video is too big to be uploaded.')
+
+                data = await resp.read()
+                await ctx.send(file=discord.File(io.BytesIO(data), filename=reddit.filename))
+
+    @vreddit.error
+    async def on_vreddit_error(self, ctx, error):
+        if isinstance(error, commands.BadArgument):
+            await ctx.send(error)
 
 def setup(bot):
     bot.add_cog(Buttons(bot))
