@@ -414,7 +414,7 @@ class API(commands.Cog):
 
         try:
             for channel in channels:
-                await channel.set_permissions(member, send_messages=False, reason=reason)
+                await channel.set_permissions(member, send_messages=False, add_reactions=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -446,7 +446,7 @@ class API(commands.Cog):
 
         try:
             for channel in channels:
-                await channel.set_permissions(member, send_messages=False, reason=reason)
+                await channel.set_permissions(member, ssend_messages=False, add_reactions=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -488,7 +488,7 @@ class API(commands.Cog):
 
         for ch in self.get_block_channels(guild, channel):
             try:
-                await ch.set_permissions(to_unblock, send_messages=None, reason=reason)
+                await ch.set_permissions(to_unblock, send_messages=None, add_reactions=None, reason=reason)
             except:
                 pass
 
