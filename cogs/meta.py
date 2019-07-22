@@ -372,9 +372,10 @@ class Meta(commands.Cog):
         await self.bot.logout()
 
     @commands.command()
-    async def avatar(self, ctx, *, user: Union[discord.Member, discord.User, FetchedUser]):
+    async def avatar(self, ctx, *, user: Union[discord.Member, discord.User, FetchedUser] = None):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
+        user = user or ctx.author
         avatar = user.avatar_url_as(static_format='png')
         embed.set_author(name=str(user), url=avatar)
         embed.set_image(url=avatar)
