@@ -372,7 +372,7 @@ class Meta(commands.Cog):
         await self.bot.logout()
 
     @commands.command()
-    async def info(self, ctx, *, user: Union[discord.User, FetchedUser] = None):
+    async def info(self, ctx, *, user: Union[discord.Member, discord.User, FetchedUser] = None):
         """Shows info about a user."""
 
         user = user or ctx.author
