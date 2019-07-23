@@ -372,7 +372,7 @@ class Meta(commands.Cog):
         await self.bot.logout()
 
     @commands.command()
-    async def avatar(self, ctx, *, user: Union[discord.Member, discord.User, FetchedUser] = None):
+    async def avatar(self, ctx, *, user: Union[discord.Member, FetchedUser] = None):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
         user = user or ctx.author
@@ -382,7 +382,7 @@ class Meta(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def info(self, ctx, *, user: Union[discord.Member, discord.User, FetchedUser] = None):
+    async def info(self, ctx, *, user: Union[discord.Member, FetchedUser] = None):
         """Shows info about a user."""
 
         user = user or ctx.author
