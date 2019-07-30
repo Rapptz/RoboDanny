@@ -3,6 +3,7 @@ from discord.ext import commands
 from datetime import datetime
 import discord
 from .utils import checks
+from .utils.paginator import Pages
 from lxml import etree
 import random
 import logging
@@ -41,6 +42,48 @@ def can_use_spoiler():
     return commands.check(predicate)
 
 SPOILER_EMOJI_ID = 430469957042831371
+
+class UrbanDictionaryPages(Pages):
+    BRACKETED = re.compile(r'(\[(.+?)\])')
+    def __init__(self, ctx, data):
+        super().__init__(ctx, entries=data, per_page=1)
+
+    def get_page(self, page):
+        return self.entries[page - 1]
+
+    def cleanup_definition(self, definition, *, regex=BRACKETED):
+        def repl(m):
+            word = m.group(2)
+            return f'[{word}](http://{word.replace(" ", "-")}.urbanup.com)'
+
+        ret = regex.sub(repl, definition)
+        if len(ret) >= 2048:
+            return ret[0:2000] + ' [...]'
+        return ret
+
+    def prepare_embed(self, entry, page, *, first=False):
+        if self.maximum_pages > 1:
+            title = f'{entry["word"]}: {page} out of {self.maximum_pages}'
+        else:
+            title = entry['word']
+
+        self.embed = e = discord.Embed(colour=0xE86222, title=title, url=entry['permalink'])
+        e.set_footer(text=f'by {entry["author"]}')
+        e.description = self.cleanup_definition(entry['definition'])
+
+        try:
+            up, down = entry['thumbs_up'], entry['thumbs_down']
+        except KeyError:
+            pass
+        else:
+            e.add_field(name='Votes', value=f'\N{THUMBS UP SIGN} {up} \N{THUMBS DOWN SIGN} {down}', inline=False)
+
+        try:
+            date = discord.utils.parse_time(entry['written_on'][0:-1])
+        except (ValueError, KeyError):
+            pass
+        else:
+            e.timestamp = date
 
 class RedditMediaURL:
     VALID_PATH = re.compile(r'/r/[A-Za-z0-9]+/comments/[A-Za-z0-9]+(?:/.+)?')
@@ -425,6 +468,26 @@ class Buttons(commands.Cog):
     async def on_vreddit_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
+
+    @commands.command(name='urban')
+    async def _urban(self, ctx, *, word):
+        """Searches urban dictionary."""
+
+        url = 'https://api.urbandictionary.com/v0/define'
+        async with ctx.session.get(url, params={'term': word}) as resp:
+            if resp.status != 200:
+                return await ctx.send(f'An error occurred: {resp.status} {resp.reason}')
+
+            js = await resp.json()
+            data = js.get('list', [])
+            if not data:
+                return await ctx.send('No results found, sorry.')
+
+        try:
+            pages = UrbanDictionaryPages(ctx, data)
+            await pages.paginate()
+        except Exception as e:
+            await ctx.send(e)
 
 def setup(bot):
     bot.add_cog(Buttons(bot))
