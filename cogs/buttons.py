@@ -1,8 +1,6 @@
 import asyncio
 from discord.ext import commands
-from datetime import datetime
 import discord
-from .utils import checks
 from .utils.paginator import Pages
 from lxml import etree
 import random
@@ -14,20 +12,6 @@ import io
 import re
 
 log = logging.getLogger(__name__)
-
-def date(argument):
-    formats = (
-        '%Y/%m/%d',
-        '%Y-%m-%d',
-    )
-
-    for fmt in formats:
-        try:
-            return datetime.strptime(argument, fmt)
-        except ValueError:
-            continue
-
-    raise commands.BadArgument('Cannot convert to date. Expected YYYY/MM/DD or YYYY-MM-DD.')
 
 def can_use_spoiler():
     def predicate(ctx):
@@ -233,37 +217,6 @@ class Buttons(commands.Cog):
     async def bored(self, ctx):
         """boredom looms"""
         await ctx.send('http://i.imgur.com/BuTKSzf.png')
-
-    @commands.command(pass_context=True)
-    @checks.mod_or_permissions(manage_messages=True)
-    async def nostalgia(self, ctx, date: date, *, channel: discord.TextChannel = None):
-        """Pins an old message from a specific date.
-
-        If a channel is not given, then pins from the channel the
-        command was ran on.
-
-        The format of the date must be either YYYY-MM-DD or YYYY/MM/DD.
-        """
-        channel = channel or ctx.channel
-
-        message = await channel.history(after=date, limit=1).flatten()
-
-        if len(message) == 0:
-            return await ctx.send('Could not find message.')
-
-        message = message[0]
-
-        try:
-            await message.pin()
-        except discord.HTTPException:
-            await ctx.send('Could not pin message.')
-        else:
-            await ctx.send('Pinned message.')
-
-    @nostalgia.error
-    async def nostalgia_error(self, ctx, error):
-        if isinstance(error, commands.BadArgument):
-            await ctx.send(error)
 
     @commands.command()
     @commands.cooldown(rate=1, per=60.0, type=commands.BucketType.user)
