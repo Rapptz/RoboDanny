@@ -392,6 +392,7 @@ class Tags(commands.Cog):
         try:
             msg = await self.bot.wait_for('message', check=check, timeout=300.0)
         except asyncio.TimeoutError:
+            self.remove_in_progress_tag(ctx.guild.id, name)
             return await ctx.send('You took too long. Goodbye.')
 
         if msg.content == f'{ctx.prefix}abort':
