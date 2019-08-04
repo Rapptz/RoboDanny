@@ -662,7 +662,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.has_permissions(kick_members=True)
-    async def kick(self, ctx, member: discord.Member, *, reason: ActionReason = None):
+    async def kick(self, ctx, member: MemberID, *, reason: ActionReason = None):
         """Kicks a member from the server.
 
         In order for this to work, the bot must have Kick Member permissions.
@@ -673,7 +673,7 @@ class Mod(commands.Cog):
         if reason is None:
             reason = f'Action done by {ctx.author} (ID: {ctx.author.id})'
 
-        await member.kick(reason=reason)
+        await ctx.guild.kick(member, reason=reason)
         await ctx.send('\N{OK HAND SIGN}')
 
     @commands.command()
