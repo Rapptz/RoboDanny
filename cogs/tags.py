@@ -868,6 +868,8 @@ class Tags(commands.Cog):
         You must own the tag before doing this.
         """
 
+        if member.bot:
+            return await ctx.send('You cannot transfer a tag to a bot.')
         query = "SELECT id FROM tags WHERE location_id=$1 AND LOWER(name)=$2 AND owner_id=$3;"
         row = await ctx.db.fetchrow(query, ctx.guild.id, tag.lower(), ctx.author.id)
         if row is None:
