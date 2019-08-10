@@ -994,12 +994,12 @@ class Splatoon(commands.Cog):
             for index, stage in enumerate(random.sample(maps, game_count), 1):
                 result.append(f'Game {index}: {stage}')
         else:
-            game_count = max(min(games, len(maps) * 3), 3)
+            game_count = max(min(games, len(maps) * 4), 3)
             random.shuffle(modes)
             scrims = get_random_scrims(modes, maps, game_count)
             result = [f'Game {game}: {scrim.mode} on {scrim.stage}' for game, scrim in enumerate(scrims, 1)]
 
-        await ctx.send('\n'.join(result))
+        await ctx.safe_send('\n'.join(result))
 
     @commands.command(hidden=True)
     async def marie(self, ctx):
