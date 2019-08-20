@@ -407,11 +407,13 @@ class Buttons(commands.Cog):
 
         Regular reddit URLs or v.redd.it URLs are supported.
         """
+
+        filesize = ctx.guild.filesize_limit if ctx.guild else 8388608
         async with ctx.session.get(reddit.url) as resp:
             if resp.status != 200:
                 return await ctx.send('Could not download video.')
 
-            if int(resp.headers['Content-Length']) >= ctx.guild.filesize_limit:
+            if int(resp.headers['Content-Length']) >= filesize:
                 return await ctx.send('Video is too big to be uploaded.')
 
             data = await resp.read()
