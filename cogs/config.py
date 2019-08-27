@@ -220,7 +220,7 @@ class Config(commands.Cog):
 
         return not is_plonked
 
-    @cache.cache(strategy=cache.Strategy.raw)
+    @cache.cache()
     async def get_command_permissions(self, guild_id, *, connection=None):
         connection = connection or self.bot.pool
         query = "SELECT name, channel_id, whitelist FROM command_config WHERE guild_id=$1;"

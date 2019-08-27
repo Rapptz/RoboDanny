@@ -127,7 +127,7 @@ class Stars(commands.Cog):
     async def clean_message_cache(self):
         self._message_cache.clear()
 
-    @cache.cache(strategy=cache.Strategy.raw)
+    @cache.cache()
     async def get_starboard(self, guild_id, *, connection=None):
         connection = connection or self.bot.pool
         query = "SELECT * FROM starboard WHERE id=$1;"
