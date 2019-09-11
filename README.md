@@ -29,6 +29,7 @@ in the `psql` tool:
 CREATE ROLE rdanny WITH LOGIN PASSWORD 'yourpw';
 CREATE DATABASE rdanny OWNER rdanny;
 CREATE EXTENSION pg_trgm;
+CREATE EXTENSION tsm_system_rows;
 ```
 
 5. **Setup configuration**

@@ -1056,15 +1056,9 @@ class Stars(commands.Cog):
 
         query = """SELECT bot_message_id
                    FROM starboard_entries
+                   TABLESAMPLE SYSTEM_ROWS(1)
                    WHERE guild_id=$1
                    AND bot_message_id IS NOT NULL
-                   OFFSET FLOOR(RANDOM() * (
-                       SELECT COUNT(*)
-                       FROM starboard_entries
-                       WHERE guild_id=$1
-                       AND bot_message_id IS NOT NULL
-                   ))
-                   LIMIT 1
                 """
 
         record = await ctx.db.fetchrow(query, ctx.guild.id)

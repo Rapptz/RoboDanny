@@ -166,13 +166,8 @@ class Tags(commands.Cog):
         pred = 'location_id IS NULL' if guild is None else 'location_id=$1'
         query = f"""SELECT name, content
                     FROM tags
+                    TABLESAMPLE SYSTEM_ROWS(1)
                     WHERE {pred}
-                    OFFSET FLOOR(RANDOM() * (
-                        SELECT COUNT(*)
-                        FROM tags
-                        WHERE {pred}
-                    ))
-                    LIMIT 1;
                  """
 
         if guild is None:
