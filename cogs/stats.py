@@ -964,6 +964,76 @@ class Stats(commands.Cog):
 
         await ctx.send(embed=embed, file=discord.File(io.BytesIO(render.encode()), filename='full_results.txt'))
 
+    @command_history.command(name='cog')
+    @commands.is_owner()
+    async def command_history_cog(self, ctx, days: typing.Optional[int] = 7, *, cog: str = None):
+        """Command history for a cog or grouped by a cog."""
+
+        interval = datetime.timedelta(days=days)
+        if cog is not None:
+            cog = self.bot.get_cog(cog)
+            if cog is None:
+                return await ctx.send(f'Unknown cog: {cog}')
+
+            query = """SELECT *, t.success + t.failed AS "total"
+                       FROM (
+                           SELECT command,
+                                  SUM(CASE WHEN failed THEN 0 ELSE 1 END) AS "success",
+                                  SUM(CASE WHEN failed THEN 1 ELSE 0 END) AS "failed"
+                           FROM commands
+                           WHERE command = any($1::text[])
+                           AND used > (CURRENT_TIMESTAMP - $2::interval)
+                           GROUP BY command
+                       ) AS t
+                       ORDER BY "total" DESC
+                       LIMIT 30;
+                    """
+            return await self.tabulate_query(ctx, query, [c.qualified_name for c in cog.walk_commands()], interval)
+
+        # A more manual query with a manual grouper.
+        query = """SELECT *, t.success + t.failed AS "total"
+                   FROM (
+                       SELECT command,
+                              SUM(CASE WHEN failed THEN 0 ELSE 1 END) AS "success",
+                              SUM(CASE WHEN failed THEN 1 ELSE 0 END) AS "failed"
+                       FROM commands
+                       WHERE used > (CURRENT_TIMESTAMP - $1::interval)
+                       GROUP BY command
+                   ) AS t;
+                """
+
+        class Count:
+            __slots__ = ('success', 'failed', 'total')
+            def __init__(self):
+                self.success = 0
+                self.failed = 0
+                self.total = 0
+
+            def add(self, record):
+                self.success += record['success']
+                self.failed += record['failed']
+                self.total += record['total']
+
+        data = defaultdict(Count)
+        records = await ctx.db.fetch(query, interval)
+        for record in records:
+            command = self.bot.get_command(record['command'])
+            if command is None or command.cog is None:
+                data['No Cog'].add(record)
+            else:
+                data[command.cog.qualified_name].add(record)
+
+        table = formats.TabularData()
+        table.set_columns(['Cog', 'Success', 'Failed', 'Total'])
+        data = sorted([
+            (cog, e.success, e.failed, e.total)
+            for cog, e in data.items()
+        ], key=lambda t: t[-1], reverse=True)
+
+        table.add_rows(data)
+        render = table.render()
+        await ctx.safe_send(f'```\n{render}\n```')
+
 old_on_error = commands.AutoShardedBot.on_error
 
 async def on_error(self, event, *args, **kwargs):
