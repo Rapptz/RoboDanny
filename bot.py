@@ -178,7 +178,7 @@ class RoboDanny(commands.AutoShardedBot):
         author_id = message.author.id
         if retry_after and author_id != self.owner_id:
             self._auto_spam_count[author_id] += 1
-            if self._auto_spam_count[author_id] >= 2:
+            if self._auto_spam_count[author_id] >= 5:
                 await self.add_to_blacklist(author_id)
                 del self._auto_spam_count[author_id]
                 await self.log_spammer(ctx, message, retry_after, autoblock=True)
