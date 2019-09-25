@@ -512,7 +512,8 @@ class Mod(commands.Cog):
             fmt = 'Raid Mode: off\nBroadcast Channel: None'
         else:
             ch = f'<#{row[1]}>' if row[1] else None
-            fmt = f'Raid Mode: {RaidMode(row[0])}\nBroadcast Channel: {ch}'
+            mode = RaidMode(row[0]) if row[0] is not None else RaidMode.off
+            fmt = f'Raid Mode: {mode}\nBroadcast Channel: {ch}'
 
         await ctx.send(fmt)
 
