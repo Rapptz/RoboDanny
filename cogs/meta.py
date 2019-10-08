@@ -426,12 +426,18 @@ class Meta(commands.Cog):
 
         await ctx.send(embed=e)
 
-    @commands.command(aliases=['guildinfo'])
+    @commands.command(aliases=['guildinfo'], usage='')
     @commands.guild_only()
-    async def serverinfo(self, ctx):
+    async def serverinfo(self, ctx, *, guild_id: int = None):
         """Shows info about the current server."""
 
-        guild = ctx.guild
+        if guild_id is not None and await self.bot.is_owner(ctx.author):
+            guild = self.bot.get_guild(guild_id)
+            if guild is None:
+                return await ctx.send(f'Invalid Guild ID given.')
+        else:
+            guild = ctx.guild
+
         roles = [role.name.replace('@', '@\u200b') for role in guild.roles]
 
         # we're going to duck type our way here
@@ -489,6 +495,7 @@ class Meta(commands.Cog):
             'PARTNERED': 'Partnered',
             'VERIFIED': 'Verified',
             'DISCOVERABLE': 'Server Discovery',
+            'PUBLIC': 'Server Discovery/Public',
             'INVITE_SPLASH': 'Invite Splash',
             'VIP_REGIONS': 'VIP Voice Servers',
             'VANITY_URL': 'Vanity Invite',
