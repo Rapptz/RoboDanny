@@ -209,15 +209,16 @@ class Pages:
         await self.message.delete()
         self.paginating = False
 
-    def react_check(self, reaction, user):
-        if user is None or user.id != self.author.id:
+    def react_check(self, payload):
+        if payload.user_id != self.author.id:
             return False
 
-        if reaction.message.id != self.message.id:
+        if payload.message_id != self.message.id:
             return False
 
+        to_check = str(payload.emoji)
         for (emoji, func) in self.reaction_emojis:
-            if reaction.emoji == emoji:
+            if to_check == emoji:
                 self.match = func
                 return True
         return False
@@ -233,7 +234,7 @@ class Pages:
 
         while self.paginating:
             try:
-                reaction, user = await self.bot.wait_for('reaction_add', check=self.react_check, timeout=120.0)
+                payload = await self.bot.wait_for('raw_reaction_add', check=self.react_check, timeout=120.0)
             except asyncio.TimeoutError:
                 self.paginating = False
                 try:
@@ -244,7 +245,7 @@ class Pages:
                     break
 
             try:
-                await self.message.remove_reaction(reaction, user)
+                await self.message.remove_reaction(payload.emoji, discord.Object(id=payload.user_id))
             except:
                 pass # can't remove it so don't bother doing so
 
