@@ -38,6 +38,7 @@ initial_extensions = (
     'cogs.emoji',
     'cogs.config',
     'cogs.dpy',
+    'cogs.funhouse',
 )
 
 def _prefix_callable(bot, msg):
