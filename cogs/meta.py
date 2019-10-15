@@ -469,9 +469,6 @@ class Meta(commands.Cog):
         if guild.icon:
             e.set_thumbnail(url=guild.icon_url)
 
-        if guild.splash:
-            e.set_image(url=guild.splash_url)
-
         channel_info = []
         key_to_emoji = {
             discord.TextChannel: '<:text_channel:586339098172850187>',
