@@ -10,16 +10,22 @@ class Funhouse(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    def is_outside_voice(self, state):
+        return state.channel is None or state.channel.id != GENERAL_VOICE_ID
+
+    def is_inside_voice(self, state):
+        return state.channel is not None and state.channel.id == GENERAL_VOICE_ID
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         if member.guild.id != GUILD_ID:
             return
 
         voice_room = member.guild.get_channel(VOICE_ROOM_ID)
-        if before.channel is None and after.channel is not None and after.channel.id == GENERAL_VOICE_ID:
+        if self.is_outside_voice(before) and self.is_inside_voice(after):
             # joined a channel
             await voice_room.set_permissions(member, read_messages=True)
-        elif after.channel is None and before.channel is not None and before.channel.id == GENERAL_VOICE_ID:
+        elif self.is_outside_voice(after) and self.is_inside_voice(before):
             # left the channel
             await voice_room.set_permissions(member, read_messages=False)
 
