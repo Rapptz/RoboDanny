@@ -27,7 +27,7 @@ class Funhouse(commands.Cog):
             await voice_room.set_permissions(member, read_messages=True)
         elif self.is_outside_voice(after) and self.is_inside_voice(before):
             # left the channel
-            await voice_room.set_permissions(member, read_messages=False)
+            await voice_room.set_permissions(member, read_messages=None)
 
     @commands.command(hidden=True)
     async def cat(self, ctx):
