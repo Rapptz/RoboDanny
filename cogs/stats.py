@@ -277,6 +277,7 @@ class Stats(commands.Cog):
         embed.add_field(name='Commands Run', value=sum(self.bot.command_stats.values()))
         embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
         embed.set_footer(text=f'Made with discord.py v{version}', icon_url='http://i.imgur.com/5BFecvA.png')
+        embed.timestamp = datetime.datetime.utcnow()
         await ctx.send(embed=embed)
 
     def censor_object(self, obj):
