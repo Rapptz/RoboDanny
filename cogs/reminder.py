@@ -301,14 +301,10 @@ class Reminder(commands.Cog):
     async def on_reminder_timer_complete(self, timer):
         author_id, channel_id, message = timer.args
 
-        channel = self.bot.get_channel(channel_id)
-        if channel is None:
-            # Check if it's a DM channel
-            author = self.bot.get_user(author_id) or (await self.bot.fetch_user(author_id))
-            try:
-                channel = await author.create_dm()
-            except discord.HTTPException:
-                return
+        try:
+            channel = self.bot.get_channel(channel_id) or (await self.bot.fetch_channel(channel_id))
+        except discord.HTTPException:
+            return
 
         guild_id = channel.guild.id if isinstance(channel, discord.TextChannel) else '@me'
         message_id = timer.kwargs.get('message_id')
