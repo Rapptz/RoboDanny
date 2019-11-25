@@ -1515,19 +1515,23 @@ class Mod(commands.Cog):
                 self._data_batch[guild_id].append((member_id, False))
             return
 
-        moderator = guild.get_member(mod_id)
-        if moderator is None:
-            try:
-                moderator = await self.bot.fetch_user(mod_id)
-            except:
-                # request failed somehow
-                moderator = f'Mod ID {mod_id}'
+        if mod_id != member_id:
+            moderator = guild.get_member(mod_id)
+            if moderator is None:
+                try:
+                    moderator = await self.bot.fetch_user(mod_id)
+                except:
+                    # request failed somehow
+                    moderator = f'Mod ID {mod_id}'
+                else:
+                    moderator = f'{moderator} (ID: {mod_id})'
             else:
                 moderator = f'{moderator} (ID: {mod_id})'
-        else:
-            moderator = f'{moderator} (ID: {mod_id})'
 
-        reason = f'Automatic unmute from timer made on {timer.created_at} by {moderator}.'
+            reason = f'Automatic unmute from timer made on {timer.created_at} by {moderator}.'
+        else:
+            reason = f'Expiring self-mute made on {timer.created_at} by {member}'
+
         try:
             await member.remove_roles(discord.Object(id=role_id), reason=reason)
         except discord.HTTPException:
@@ -1722,6 +1726,50 @@ class Mod(commands.Cog):
         await self.bot.pool.execute(query, guild_id)
         self.get_guild_config.invalidate(self, guild_id)
         await ctx.send('Successfully unbound mute role.')
+
+    @commands.command()
+    @commands.guild_only()
+    async def selfmute(self, ctx, *, duration: time.ShortTime):
+        """Temporarily mutes yourself for the specified duration.
+
+        The duration must be in a short time form, e.g. 4h. Can
+        only mute yourself for a maximum of 24 hours and a minimum
+        of 5 minutes.
+
+        Do not ask a moderator to unmute you.
+        """
+
+        reminder = self.bot.get_cog('Reminder')
+        if reminder is None:
+            return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
+
+        config = await self.get_guild_config(ctx.guild.id)
+        role_id = config and config.mute_role_id
+        if role_id is None:
+            raise NoMuteRole()
+
+        created_at = ctx.message.created_at
+        if duration.dt > (created_at + datetime.timedelta(days=1)):
+            return await ctx.send('Duration is too long. Must be up to 24 hours.')
+
+        if duration.dt <= (created_at + datetime.timedelta(minutes=5)):
+            return await ctx.send('Duration is too short. Must be at least 5 minutes.')
+
+        delta = time.human_timedelta(duration.dt, source=created_at)
+        warning = f'Are you sure you want to be muted for {delta}?\n**Do not ask the moderators to undo this!**'
+        confirm = await ctx.prompt(warning, reacquire=False)
+        if not confirm:
+            return await ctx.send('Aborting', delete_after=5.0)
+
+        reason = f'Self-mute for {ctx.author} (ID: {ctx.author.id}) for {delta}'
+        await ctx.author.add_roles(discord.Object(id=role_id), reason=reason)
+        timer = await reminder.create_timer(duration.dt, 'tempmute', ctx.guild.id,
+                                                                     ctx.author.id,
+                                                                     ctx.author.id,
+                                                                     role_id,
+                                                                     created=created_at)
+
+        await ctx.send(f'\N{OK HAND SIGN} Muted for {delta}. Be sure not to bother anyone about it.')
 
 def setup(bot):
     bot.add_cog(Mod(bot))
