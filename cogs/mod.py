@@ -1752,7 +1752,7 @@ class Mod(commands.Cog):
         if duration.dt > (created_at + datetime.timedelta(days=1)):
             return await ctx.send('Duration is too long. Must be up to 24 hours.')
 
-        if duration.dt <= (created_at + datetime.timedelta(minutes=5)):
+        if duration.dt < (created_at + datetime.timedelta(minutes=5)):
             return await ctx.send('Duration is too short. Must be at least 5 minutes.')
 
         delta = time.human_timedelta(duration.dt, source=created_at)
