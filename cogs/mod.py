@@ -1748,6 +1748,9 @@ class Mod(commands.Cog):
         if role_id is None:
             raise NoMuteRole()
 
+        if ctx.author._roles.has(role_id):
+            return await ctx.send('Somehow you are already muted <:rooThink:596576798351949847>')
+
         created_at = ctx.message.created_at
         if duration.dt > (created_at + datetime.timedelta(days=1)):
             return await ctx.send('Duration is too long. Must be up to 24 hours.')
