@@ -1573,7 +1573,7 @@ class Mod(commands.Cog):
         if role.is_default():
             return await ctx.send('Cannot use the @\u200beveryone role.')
 
-        if role > ctx.author.top_role:
+        if role > ctx.author.top_role and ctx.author.id != ctx.guild.owner_id:
             return await ctx.send('This role is higher than your highest role.')
 
         if role > ctx.me.top_role:
