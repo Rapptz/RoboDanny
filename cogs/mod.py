@@ -1753,7 +1753,7 @@ class Mod(commands.Cog):
 
         created_at = ctx.message.created_at
         if duration.dt > (created_at + datetime.timedelta(days=1)):
-            return await ctx.send('Duration is too long. Must be up to 24 hours.')
+            return await ctx.send('Duration is too long. Must be at most 24 hours.')
 
         if duration.dt < (created_at + datetime.timedelta(minutes=5)):
             return await ctx.send('Duration is too short. Must be at least 5 minutes.')
@@ -1773,6 +1773,11 @@ class Mod(commands.Cog):
                                                                      created=created_at)
 
         await ctx.send(f'\N{OK HAND SIGN} Muted for {delta}. Be sure not to bother anyone about it.')
+
+    @selfmute.error
+    async def on_selfmute_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send('Missing a duration to selfmute for.')
 
 def setup(bot):
     bot.add_cog(Mod(bot))
