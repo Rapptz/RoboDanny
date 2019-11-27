@@ -48,11 +48,15 @@ class Funhouse(commands.Cog):
 
             filename = await resp.text()
             url = f'https://random.dog/{filename}'
+            filesize = ctx.guild.filesize_limit if ctx.guild else 8388608
             if filename.endswith(('.mp4', '.webm')):
                 async with ctx.typing():
                     async with ctx.session.get(url) as other:
                         if other.status != 200:
                             return await ctx.send('Could not download dog video :(')
+
+                        if int(other.headers['Content-Length']) >= filesize:
+                            return await ctx.send(f'Video was too big to upload... See it here: {url} instead.')
 
                         fp = io.BytesIO(await other.read())
                         await ctx.send(file=discord.File(fp, filename=filename))
