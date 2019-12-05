@@ -1009,6 +1009,7 @@ class Mod(commands.Cog):
     @commands.Cog.listener()
     async def on_tempban_timer_complete(self, timer):
         guild_id, mod_id, member_id = timer.args
+        await self.bot.wait_until_ready()
 
         guild = self.bot.get_guild(guild_id)
         if guild is None:
@@ -1501,6 +1502,7 @@ class Mod(commands.Cog):
     @commands.Cog.listener()
     async def on_tempmute_timer_complete(self, timer):
         guild_id, mod_id, member_id, role_id = timer.args
+        await self.bot.wait_until_ready()
 
         guild = self.bot.get_guild(guild_id)
         if guild is None:
