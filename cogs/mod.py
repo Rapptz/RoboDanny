@@ -159,6 +159,7 @@ class SpamChecker:
 
     1) It checks if a user has spammed more than 10 times in 12 seconds
     2) It checks if the content has been spammed 15 times in 17 seconds.
+    3) It checks if new users have spammed 30 times in 35 seconds.
 
     The second case is meant to catch alternating spam bots while the first one
     just catches regular singular spam bots.
@@ -186,11 +187,9 @@ class SpamChecker:
         current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
 
         if self.is_new(message.author):
-            # This is a trial-run, it has not banned anyone yet.
             new_bucket = self.new_user.get_bucket(message)
             if new_bucket.update_rate_limit(current):
-                log.info(f'[Raid Mode] User {message.author} (ID: {message.author.id}) in '
-                         f'{message.guild.name} (ID: {message.guild.id}) would have been banned as a new user.')
+                return True
 
         user_bucket = self.by_user.get_bucket(message)
         if user_bucket.update_rate_limit(current):
