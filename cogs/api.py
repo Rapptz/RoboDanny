@@ -361,6 +361,17 @@ class API(commands.Cog):
         e.colour = discord.Colour.blurple()
         await ctx.send(embed=e)
 
+    @rtfm.command(name='stable')
+    async def rtfm_stable(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity (stable branch)."""
+        key = self.transform_rtfm_language_key(ctx, 'stable')
+        await self.do_rtfm(ctx, key, obj)
+
+    @rtfm.command(name='stable-jp', aliases=['jp-stable', 'stable-ja', 'ja-stable'])
+    async def rtfm_stable_jp(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity (stable branch, Japanese)."""
+        await self.do_rtfm(ctx, 'stable-jp', obj)
+
     @rtfm.command()
     async def stats(self, ctx, *, member: discord.Member = None):
         """Tells you stats about the ?rtfm command."""
