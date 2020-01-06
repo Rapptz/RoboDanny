@@ -155,17 +155,20 @@ class RNG(commands.Cog):
         await ctx.send(rng.choice(choices))
 
     @commands.command()
-    async def choosebestof(self, ctx, times: Optional[int] = 5, *choices: commands.clean_content):
+    async def choosebestof(self, ctx, times: Optional[int], *choices: commands.clean_content):
         """Chooses between multiple choices N times.
 
         To denote multiple choices, you should use double quotes.
 
-        You can only choose up to 100 times and only the top 10 results are shown.
+        You can only choose up to 10001 times and only the top 10 results are shown.
         """
         if len(choices) < 2:
             return await ctx.send('Not enough choices to pick from.')
 
-        times = min(100, max(1, times))
+        if times is None:
+            times = (len(choices) ** 2) + 1
+
+        times = min(10001, max(1, times))
         results = Counter(rng.choice(choices) for i in range(times))
         builder = []
         if len(results) > 10:
