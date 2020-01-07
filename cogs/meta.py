@@ -538,6 +538,8 @@ class Meta(commands.Cog):
     async def say_permissions(self, ctx, member, channel):
         permissions = channel.permissions_for(member)
         e = discord.Embed(colour=member.colour)
+        avatar = member.avatar_url_as(static_format='png')
+        e.set_author(name=str(member), url=avatar)
         allowed, denied = [], []
         for name, value in permissions:
             name = name.replace('_', ' ').replace('guild', 'server').title()
