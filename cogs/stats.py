@@ -899,7 +899,7 @@ class Stats(commands.Cog):
                    FROM commands
                    WHERE guild_id=$1
                    ORDER BY used DESC
-                   LIMIT 20;
+                   LIMIT 15;
                 """
         await self.tabulate_query(ctx, query, guild_id)
 
