@@ -893,6 +893,7 @@ class Stats(commands.Cog):
                             WHEN TRUE THEN command || ' [!]'
                             ELSE command
                         END AS "command",
+                        channel_id,
                         author_id,
                         used
                    FROM commands
