@@ -584,6 +584,29 @@ class Meta(commands.Cog):
         member = ctx.guild.me
         await self.say_permissions(ctx, member, channel)
 
+    @commands.command()
+    @commands.is_owner()
+    async def debugpermissions(self, ctx, guild_id: int, channel_id: int, author_id: int = None):
+        """Shows permission resolution for a channel and an optional author."""
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return await ctx.send('Guild not found?')
+
+        channel = guild.get_channel(channel_id)
+        if channel is None:
+            return await ctx.send('Channel not found?')
+
+        if author_id is None:
+            member = guild.me
+        else:
+            member = guild.get_member(author_id)
+
+        if member is None:
+            return await ctx.send('Member not found?')
+
+        await self.say_permissions(ctx, member, channel)
+
     @commands.command(aliases=['invite'])
     async def join(self, ctx):
         """Joins a server."""
