@@ -8,6 +8,7 @@ import re
 DISCORD_PY_GUILD_ID = 336642139381301249
 DISCORD_PY_BOTS_ROLE = 381980817125015563
 DISCORD_PY_REWRITE_ROLE = 381981861041143808
+DISCORD_PY_TESTER_ROLE = 669155135829835787
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 
@@ -141,6 +142,11 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         """日本語チャットに参加したい場合はこの役職を付ける"""
 
         await self.toggle_role(ctx, DISCORD_PY_JP_ROLE)
+
+    @commands.command(hidden=True)
+    async def tester(self, ctx):
+        """Allows you to opt-in to being a tester for discord.py"""
+        await self.toggle_role(ctx, DISCORD_PY_TESTER_ROLE)
 
     async def get_valid_labels(self):
         labels = await self.github_request('GET', 'repos/Rapptz/discord.py/labels')
