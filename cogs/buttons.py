@@ -428,7 +428,7 @@ class Buttons(commands.Cog):
     async def _urban(self, ctx, *, word):
         """Searches urban dictionary."""
 
-        url = 'https://api.urbandictionary.com/v0/define'
+        url = 'http://api.urbandictionary.com/v0/define'
         async with ctx.session.get(url, params={'term': word}) as resp:
             if resp.status != 200:
                 return await ctx.send(f'An error occurred: {resp.status} {resp.reason}')
