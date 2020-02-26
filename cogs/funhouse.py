@@ -33,11 +33,11 @@ class Funhouse(commands.Cog):
     @commands.command(hidden=True)
     async def cat(self, ctx):
         """Gives you a random cat."""
-        async with ctx.session.get('https://aws.random.cat/meow') as resp:
+        async with ctx.session.get('https://api.thecatapi.com/v1/images/search') as resp:
             if resp.status != 200:
                 return await ctx.send('No cat found :(')
             js = await resp.json()
-            await ctx.send(embed=discord.Embed(title='Random Cat').set_image(url=js['file']))
+            await ctx.send(embed=discord.Embed(title='Random Cat').set_image(url=js[0]['url']))
 
     @commands.command(hidden=True)
     async def dog(self, ctx):
