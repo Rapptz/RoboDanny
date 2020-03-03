@@ -91,7 +91,7 @@ class HelpPaginator(Pages):
         entries = (
             ('<argument>', 'This means the argument is __**required**__.'),
             ('[argument]', 'This means the argument is __**optional**__.'),
-            ('[A|B]', 'This means the it can be __**either A or B**__.'),
+            ('[A|B]', 'This means that it can be __**either A or B**__.'),
             ('[argument...]', 'This means you can have multiple arguments.\n' \
                               'Now that you know the basics, it should be noted that...\n' \
                               '__**You do not type in the brackets!**__')
