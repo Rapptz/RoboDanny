@@ -1,4 +1,5 @@
 git+https://github.com/Rapptz/discord.py@master
+git+https://github.com/ssut/py-googletrans@master
 lxml
 psutil
 asyncpg>=0.12.0
