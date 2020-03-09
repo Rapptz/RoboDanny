@@ -692,7 +692,8 @@ class API(commands.Cog):
         if payload.guild_id not in BOT_LIST_INFO.keys():
             return
 
-        if str(payload.emoji) not in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
+        emoji = str(payload.emoji)
+        if emoji not in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}', '\N{NO ENTRY SIGN}'):
             return
 
         channel_id = BOT_LIST_INFO[payload.guild_id]['channel']
@@ -719,9 +720,14 @@ class API(commands.Cog):
 
         author_id = int(embed.footer.text)
         bot_id = embed.author.name
-        if str(payload.emoji) == '\N{WHITE HEAVY CHECK MARK}':
+        if emoji == '\N{WHITE HEAVY CHECK MARK}':
             to_send = f"Your bot, <@{bot_id}>, has been added to {channel.guild.name}."
             colour = discord.Colour.dark_green()
+        elif emoji == '\N{NO ENTRY SIGN}':
+            to_send = f"Your bot, <@{bot_id}>, could not be added to {channel.guild.name}.\n" \
+                       "This could be because it was private or required code grant. " \
+                       "Please make your bot public and resubmit your application."
+            colour = discord.Colour.orange()
         else:
             to_send = f"Your bot, <@{bot_id}>, has been rejected from {channel.guild.name}."
             colour = discord.Colour.dark_magenta()
@@ -792,6 +798,7 @@ class API(commands.Cog):
             msg = await channel.send(embed=embed)
             await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
             await msg.add_reaction('\N{CROSS MARK}')
+            await msg.add_reaction('\N{NO ENTRY SIGN}')
         except discord.HTTPException as e:
             return await ctx.send(f'Failed to request your bot somehow. Tell Danny, {str(e)!r}')
 
