@@ -54,7 +54,8 @@ def _prefix_callable(bot, msg):
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
         super().__init__(command_prefix=_prefix_callable, description=description,
-                         pm_help=None, help_attrs=dict(hidden=True), fetch_offline_members=False)
+                         pm_help=None, help_attrs=dict(hidden=True),
+                         fetch_offline_members=False, heartbeat_timeout=150.0)
 
         self.client_id = config.client_id
         self.carbon_key = config.carbon_key
