@@ -70,7 +70,7 @@ class UrbanDictionaryPages(Pages):
             e.timestamp = date
 
 class RedditMediaURL:
-    VALID_PATH = re.compile(r'/r/[A-Za-z0-9]+/comments/[A-Za-z0-9]+(?:/.+)?')
+    VALID_PATH = re.compile(r'/r/[A-Za-z0-9_]+/comments/[A-Za-z0-9]+(?:/.+)?')
 
     def __init__(self, url):
         self.url = url
