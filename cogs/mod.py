@@ -847,7 +847,7 @@ class Mod(commands.Cog):
 
         # member filters
         predicates = [
-            lambda m: can_execute_action(ctx, author, m), # Only if applicable
+            lambda m: isinstance(m, discord.Member) and can_execute_action(ctx, author, m), # Only if applicable
             lambda m: not m.bot, # No bots
             lambda m: m.discriminator != '0000', # No deleted users
         ]
@@ -881,6 +881,9 @@ class Mod(commands.Cog):
             predicates.append(created)
         if args.joined:
             def joined(member, *, offset=now - datetime.timedelta(minutes=args.joined)):
+                if isinstance(member, discord.User):
+                    # If the member is a user then they left already
+                    return True
                 return member.joined_at and member.joined_at > offset
             predicates.append(joined)
         if args.joined_after:
