@@ -263,11 +263,18 @@ class Mod(commands.Cog):
         self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
         self.batch_updates.start()
 
+        # (guild_id, channel_id): List[str]
+        # A batch list of message content for message
+        self.message_batches = defaultdict(list)
+        self._batch_message_lock = asyncio.Lock(loop=bot.loop)
+        self.bulk_send_messages.start()
+
     def __repr__(self):
         return '<cogs.Mod>'
 
     def cog_unload(self):
         self.batch_updates.stop()
+        self.bulk_send_messages.stop()
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -317,6 +324,27 @@ class Mod(commands.Cog):
     async def batch_updates(self):
         async with self._batch_lock:
             await self.bulk_insert()
+
+    @tasks.loop(seconds=10.0)
+    async def bulk_send_messages(self):
+        async with self._batch_message_lock:
+            for ((guild_id, channel_id), messages) in self.message_batches.items():
+                guild = self.bot.get_guild(guild_id)
+                channel = guild and guild.get_channel(channel_id)
+                if channel is None:
+                    continue
+
+                paginator = commands.Paginator(suffix='', prefix='')
+                for message in messages:
+                    paginator.add_line(message)
+
+                for page in paginator.pages:
+                    try:
+                        await channel.send(page)
+                    except discord.HTTPException:
+                        pass
+
+            self.message_batches.clear()
 
     @cache.cache()
     async def get_guild_config(self, guild_id):
@@ -389,7 +417,10 @@ class Mod(commands.Cog):
         except Exception as e:
             log.info(f'Failed to autoban member {author} (ID: {author.id}) in guild ID {guild_id}')
         else:
-            await message.channel.send(f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.')
+            to_send = f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.'
+            async with self._batch_message_lock:
+                self.message_batches[(guild_id, message.channel.id)].append(to_send)
+
             log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
 
     @commands.Cog.listener()
