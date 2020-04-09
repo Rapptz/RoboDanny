@@ -31,6 +31,10 @@ class ExpiringCache(dict):
         for k in to_remove:
             del self[k]
 
+    def __contains__(self, key):
+        self.__verify_cache_integrity()
+        return super().__contains__(key)
+
     def __getitem__(self, key):
         self.__verify_cache_integrity()
         return super().__getitem__(key)

@@ -160,19 +160,22 @@ class SpamChecker:
     1) It checks if a user has spammed more than 10 times in 12 seconds
     2) It checks if the content has been spammed 15 times in 17 seconds.
     3) It checks if new users have spammed 30 times in 35 seconds.
+    4) It checks if "fast joiners" have spammed 10 times in 12 seconds.
 
     The second case is meant to catch alternating spam bots while the first one
     just catches regular singular spam bots.
 
     From experience these values aren't reached unless someone is actively spamming.
-
-    The third case is used for logging purposes only.
     """
     def __init__(self):
         self.by_content = CooldownByContent.from_cooldown(15, 17.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join = None
         self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
+
+        # user_id flag mapping (for about 30 minutes)
+        self.fast_joiners = cache.ExpiringCache(seconds=1800.0)
+        self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
 
     def is_new(self, member):
         now = datetime.datetime.utcnow()
@@ -185,6 +188,11 @@ class SpamChecker:
             return False
 
         current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+
+        if message.author.id in self.fast_joiners:
+            bucket = self.hit_and_run.get_bucket(message)
+            if bucket.update_rate_limit(current):
+                return True
 
         if self.is_new(message.author):
             new_bucket = self.new_user.get_bucket(message)
@@ -208,6 +216,8 @@ class SpamChecker:
             return False
         is_fast = (joined - self.last_join).total_seconds() <= 2.0
         self.last_join = joined
+        if is_fast:
+            self.fast_joiners[member.id] = True
         return is_fast
 
 ## Checks
