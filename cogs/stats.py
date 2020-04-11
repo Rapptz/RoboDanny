@@ -845,7 +845,7 @@ class Stats(commands.Cog):
             if badge is None:
                 badge = '<:online:316856575413321728>'
 
-            if identify != 0:
+            if identify == 0:
                 builder.append(f'Shard ID {shard_id}: {badge}')
             else:
                 builder.append(f'Shard ID {shard_id}: {badge} ({identify} IDENTIFYs)')
