@@ -75,22 +75,6 @@ class Stats(commands.Cog):
         self._gateway_queue = asyncio.Queue(loop=bot.loop)
         self.gateway_worker.start()
 
-        # This is a datetime list
-        self._resumes = []
-        # shard_id: List[datetime]
-        self._identifies = defaultdict(list)
-
-    def _clear_gateway_data(self):
-        one_week_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
-        to_remove = [index for index, dt in enumerate(self._resumes) if dt < one_week_ago]
-        for index in reversed(to_remove):
-            del self._resumes[index]
-
-        for shard_id, dates in self._identifies.items():
-            to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
-            for index in reversed(to_remove):
-                del dates[index]
-
     async def bulk_insert(self):
         query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command, failed)
                    SELECT x.guild, x.channel, x.author, x.used, x.prefix, x.command, x.failed
@@ -646,24 +630,6 @@ class Stats(commands.Cog):
         e.timestamp = datetime.datetime.utcnow()
         await self.webhook.send(embed=e)
 
-    @commands.Cog.listener()
-    async def on_socket_raw_send(self, data):
-        # kind of weird way to check if we're sending
-        # IDENTIFY or RESUME
-        if '"op":2' not in data and '"op":6' not in data:
-            return
-
-        back_to_json = json.loads(data)
-        if back_to_json['op'] == 2:
-            payload = back_to_json['d']
-            inner_shard = payload.get('shard', [0])
-            self._identifies[inner_shard[0]].append(datetime.datetime.utcnow())
-        else:
-            self._resumes.append(datetime.datetime.utcnow())
-
-        # don't want to permanently grow memory
-        self._clear_gateway_data()
-
     def add_record(self, record):
         # if self.bot.config.debug:
         #     return
@@ -807,15 +773,19 @@ class Stats(commands.Cog):
         """Gateway related stats."""
 
         yesterday = datetime.datetime.utcnow() - datetime.timedelta(days=1)
-        total_resumes = sum(1 for dt in self._resumes if dt > yesterday)
         identifies = {
             shard_id: sum(1 for dt in dates if dt > yesterday)
-            for shard_id, dates in self._identifies.items()
+            for shard_id, dates in self.bot.identifies.items()
         }
+        resumes = {
+            shard_id: sum(1 for dt in dates if dt > yesterday)
+            for shard_id, dates in self.bot.resumes.items()
+        }
+
         total_identifies = sum(identifies.values())
 
         builder = [
-            f'Total RESUMEs: {total_resumes}',
+            f'Total RESUMEs: {sum(resumes.values())}',
             f'Total IDENTIFYs: {total_identifies}'
         ]
 
@@ -826,7 +796,6 @@ class Stats(commands.Cog):
             issues = 0
 
         for shard_id, shard in self.bot.shards.items():
-            identify = identifies.get(shard_id, 0)
             badge = None
             # Shard WS closed
             # Shard Task failure
@@ -845,10 +814,18 @@ class Stats(commands.Cog):
             if badge is None:
                 badge = '<:online:316856575413321728>'
 
-            if identify == 0:
-                builder.append(f'Shard ID {shard_id}: {badge}')
+            stats = []
+            identify = identifies.get(shard_id, 0)
+            resumes = resumes.get(shard_id, 0)
+            if resumes != 0:
+                stats.append(f'R: {resumes}')
+            if identify != 0:
+                stats.append(f'ID: {identify}')
+
+            if stats:
+                builder.append(f'Shard ID {shard_id}: {badge} ({", ".join(stats)})')
             else:
-                builder.append(f'Shard ID {shard_id}: {badge} ({identify} IDENTIFYs)')
+                builder.append(f'Shard ID {shard_id}: {badge}')
 
         if issues == 0:
             colour = 0x43B581

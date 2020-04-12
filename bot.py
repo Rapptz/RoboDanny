@@ -9,7 +9,7 @@ import logging
 import traceback
 import aiohttp
 import sys
-from collections import Counter, deque
+from collections import Counter, deque, defaultdict
 
 import config
 import asyncpg
@@ -65,6 +65,11 @@ class RoboDanny(commands.AutoShardedBot):
 
         self._prev_events = deque(maxlen=10)
 
+        # shard_id: List[datetime.datetime]
+        # shows the last attempted IDENTIFYs and RESUMEs
+        self.resumes = defaultdict(list)
+        self.identifies = defaultdict(list)
+
         # guild_id: list
         self.prefixes = Config('prefixes.json')
 
@@ -88,8 +93,25 @@ class RoboDanny(commands.AutoShardedBot):
                 print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
 
+    def _clear_gateway_data(self):
+        one_week_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        for shard_id, dates in self.identifies.items():
+            to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
+            for index in reversed(to_remove):
+                del dates[index]
+
+        for shard_id, dates in self.resumes.items():
+            to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
+            for index in reversed(to_remove):
+                del dates[index]
+
     async def on_socket_response(self, msg):
         self._prev_events.append(msg)
+
+    async def before_identify_hook(self, shard_id, *, initial):
+        self._clear_gateway_data()
+        self.identifies[shard_id].append(datetime.datetime.utcnow())
+        await super().before_identify_hook(shard_id, initial=initial)
 
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.NoPrivateMessage):
@@ -137,8 +159,9 @@ class RoboDanny(commands.AutoShardedBot):
 
         print(f'Ready: {self.user} (ID: {self.user.id})')
 
-    async def on_resumed(self):
-        print('resumed...')
+    async def on_shard_resumed(self, shard_id):
+        print(f'Shard ID {shard_id} has resumed...')
+        self.resumes[shard_id].append(datetime.datetime.utcnow())
 
     @property
     def stats_webhook(self):
