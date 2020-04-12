@@ -114,6 +114,47 @@ class TagName(commands.clean_content):
 
         return converted if not self.lower else lower
 
+class FakeUser(discord.Object):
+    @property
+    def avatar_url(self):
+        return 'https://cdn.discordapp.com/embed/avatars/0.png'
+
+    @property
+    def display_name(self):
+        return str(self.id)
+
+    def __str__(self):
+        return str(self.id)
+
+class TagMember(commands.Converter):
+    async def resolve_id(self, ctx, member_id):
+        member = ctx.guild.get_member(member_id)
+        if member is not None:
+            return member
+
+        try:
+            return await ctx.guild.fetch_member(member_id)
+        except discord.HTTPException:
+            return FakeUser(id=member_id)
+
+    async def convert(self, ctx, argument):
+        if argument.isdigit():
+            return await self.resolve_id(ctx, int(argument))
+
+        match = re.match(r'<@!?([0-9]+)>$', argument)
+        if match is not None:
+            return await self.resolve_id(ctx, int(match.group(1)))
+
+        name, _, discrim = argument.partition('#')
+        if discrim:
+            result = discord.utils.get(ctx.guild.members, name=name, discrim=discrim)
+        else:
+            result = discord.utils.get(ctx.guild.members, name=name)
+
+        if result is None:
+            raise commands.BadArgument(f'User "{argument}" not found.')
+        return result
+
 class Tags(commands.Cog):
     """The tag related commands."""
 
@@ -558,7 +599,7 @@ class Tags(commands.Cog):
 
     @tag.command()
     @suggest_box()
-    async def stats(self, ctx, *, member: discord.Member = None):
+    async def stats(self, ctx, *, member: TagMember = None):
         """Gives tag statistics for a member or the server."""
 
         if member is None:
@@ -719,7 +760,7 @@ class Tags(commands.Cog):
 
     @tag.command(name='list')
     @suggest_box()
-    async def _list(self, ctx, *, member: discord.Member = None):
+    async def _list(self, ctx, *, member: TagMember = None):
         """Lists all the tags that belong to you or someone else."""
 
         member = member or ctx.author
@@ -745,7 +786,7 @@ class Tags(commands.Cog):
 
     @commands.command()
     @suggest_box()
-    async def tags(self, ctx, *, member: discord.Member = None):
+    async def tags(self, ctx, *, member: TagMember = None):
         """An alias for tag list command."""
         await ctx.invoke(self._list, member=member)
 
@@ -776,7 +817,7 @@ class Tags(commands.Cog):
     @tag.command()
     @suggest_box()
     @checks.has_guild_permissions(manage_messages=True)
-    async def purge(self, ctx, member: discord.Member):
+    async def purge(self, ctx, member: TagMember):
         """Removes all server-specific tags by a user.
 
         You must have server-wide Manage Messages permissions to use this.
