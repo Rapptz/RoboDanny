@@ -728,27 +728,6 @@ class Stats(commands.Cog):
         is_locked = self._batch_lock.locked()
         description.append(f'Commands Waiting: {command_waiters}, Batch Locked: {is_locked}')
 
-        # RESUME/IDENTIFY data
-        yesterday = datetime.datetime.utcnow() - datetime.timedelta(days=1)
-        total_resumes = sum(1 for dt in self._resumes if dt > yesterday)
-        identifies = {
-            shard_id: sum(1 for dt in dates if dt > yesterday)
-            for shard_id, dates in self._identifies.items()
-        }
-        absolute_total_identifies = sum(identifies.values())
-        resume_info_builder = [
-            f'Total RESUMEs: {total_resumes}',
-            f'Total IDENTIFYs: {absolute_total_identifies}'
-        ]
-        for shard_id, total in identifies.items():
-            resume_info_builder.append(f'Shard ID {shard_id} IDENTIFYs: {total}')
-
-        if absolute_total_identifies >= (len(self.bot.shards) * 5):
-            total_warnings += 1
-            embed.colour = WARNING
-
-        embed.add_field(name='Gateway (last 24 hours)', value='\n'.join(resume_info_builder), inline=False)
-
         memory_usage = self.process.memory_full_info().uss / 1024**2
         cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
         embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU', inline=False)
