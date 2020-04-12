@@ -816,9 +816,9 @@ class Stats(commands.Cog):
 
             stats = []
             identify = identifies.get(shard_id, 0)
-            resumes = resumes.get(shard_id, 0)
-            if resumes != 0:
-                stats.append(f'R: {resumes}')
+            resume = resumes.get(shard_id, 0)
+            if resume != 0:
+                stats.append(f'R: {resume}')
             if identify != 0:
                 stats.append(f'ID: {identify}')
 
