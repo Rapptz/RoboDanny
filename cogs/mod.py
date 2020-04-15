@@ -1259,7 +1259,7 @@ class Mod(commands.Cog):
         else:
             await self.do_removal(ctx, 100, lambda e: substr in e.content)
 
-    @remove.command(name='bot')
+    @remove.command(name='bot', aliases=['bots'])
     async def _bot(self, ctx, prefix=None, search=100):
         """Removes a bot user's messages and messages with their optional prefix."""
 
