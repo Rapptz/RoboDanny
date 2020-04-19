@@ -69,6 +69,8 @@ class Reminder(commands.Cog):
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
+        if isinstance(error, commands.TooManyArguments):
+            await ctx.send(f'You called the {ctx.command.name} command with too many arguments.')
 
     async def get_active_timer(self, *, connection=None, days=7):
         query = "SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval) ORDER BY expires LIMIT 1;"
@@ -215,7 +217,7 @@ class Reminder(commands.Cog):
         delta = time.human_timedelta(when.dt, source=timer.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, in {delta}: {when.arg}")
 
-    @reminder.command(name='list')
+    @reminder.command(name='list', ignore_extra=False)
     async def reminder_list(self, ctx):
         """Shows the 10 latest currently running reminders."""
         query = """SELECT id, expires, extra #>> '{args,2}'
@@ -244,7 +246,7 @@ class Reminder(commands.Cog):
 
         await ctx.send(embed=e)
 
-    @reminder.command(name='delete', aliases=['remove', 'cancel'])
+    @reminder.command(name='delete', aliases=['remove', 'cancel'], ignore_extra=False)
     async def reminder_delete(self, ctx, *, id: int):
         """Deletes a reminder by its ID.
 
@@ -271,7 +273,7 @@ class Reminder(commands.Cog):
 
         await ctx.send('Successfully deleted reminder.')
 
-    @reminder.command(name='clear')
+    @reminder.command(name='clear', ignore_extra=False)
     async def reminder_clear(self, ctx):
         """Clears all reminders you have set."""
 
