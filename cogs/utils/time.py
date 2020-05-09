@@ -5,6 +5,11 @@ from .formats import plural, human_join
 from discord.ext import commands
 import re
 
+# Monkey patch mins and secs into the units
+units = pdt.pdtLocales['en_US'].units
+units['minutes'].append('mins')
+units['seconds'].append('secs')
+
 class ShortTime:
     compiled = re.compile("""(?:(?P<years>[0-9])(?:years?|y))?             # e.g. 2y
                              (?:(?P<months>[0-9]{1,2})(?:months?|mo))?     # e.g. 2months
