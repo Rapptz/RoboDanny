@@ -1,7 +1,9 @@
 from discord.ext import commands
 from cogs.utils.formats import human_join
+from cogs.utils.paginator import FieldPages
 import discord
 import asyncio
+import typing
 import yarl
 import re
 
@@ -12,6 +14,10 @@ DISCORD_PY_TESTER_ROLE = 669155135829835787
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 
+GITHUB_TODO_COLUMN = 9341868
+GITHUB_PROGRESS_COLUMN = 9341869
+GITHUB_DONE_COLUMN = 9341870
+
 class GithubError(commands.CommandError):
     pass
 
@@ -19,6 +25,25 @@ def is_proficient():
     def predicate(ctx):
         return ctx.author._roles.has(DISCORD_PY_PROF_ROLE)
     return commands.check(predicate)
+
+def is_doc_helper():
+    def predicate(ctx):
+        return ctx.author._roles.has(714516281293799438)
+    return commands.check(predicate)
+
+def make_field_from_note(data, column_id):
+    id = data['id']
+    value = data['note']
+    issue = data.get('content_url')
+    if issue:
+        issue = issue.replace('api.github.com/repos', 'github.com')
+        _, _, number = issue.rpartition('/')
+        value = f'[#{number}]({issue})'
+
+    if column_id == GITHUB_TODO_COLUMN:
+        return (f'TODO: {id}', value)
+    else:
+        return (f'In Progress: {id}', value)
 
 class DPYExclusive(commands.Cog, name='discord.py'):
     def __init__(self, bot):
@@ -46,7 +71,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
     async def github_request(self, method, url, *, params=None, data=None, headers=None):
         hdrs = {
-            'Accept': 'application/vnd.github.v3+json',
+            'Accept': 'application/vnd.github.inertia-preview+json',
             'User-Agent': 'RoboDanny DPYExclusive Cog',
             'Authorization': f'token {self.bot.config.github_token}'
         }
@@ -178,30 +203,91 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         return await self.github_request('PATCH', url_path, data=data)
 
     @commands.group(aliases=['gh'])
-    @is_proficient()
     async def github(self, ctx):
         """Github administration commands."""
         pass
 
     @github.command(name='close')
+    @is_proficient()
     async def github_close(self, ctx, number: int, *labels):
         """Closes and optionally labels an issue."""
         js = await self.edit_issue(number, labels=labels, state='closed')
         await ctx.send(f'Successfully closed <{js["html_url"]}>')
 
     @github.command(name='open')
+    @is_proficient()
     async def github_open(self, ctx, number: int):
         """Re-open an issue"""
         js = await self.edit_issue(number, state='open')
         await ctx.send(f'Successfully closed <{js["html_url"]}>')
 
     @github.command(name='label')
+    @is_proficient()
     async def github_label(self, ctx, number: int, *labels):
         """Adds labels to an issue."""
         if not labels:
             await ctx.send('Missing labels to assign.')
         js = await self.edit_issue(number, labels=labels)
         await ctx.send(f'Successfully labelled <{js["html_url"]}>')
+
+    @github.group(name='todo')
+    @is_doc_helper()
+    async def github_todo(self, ctx):
+        """Handles the board for the Documentation project."""
+        pass
+
+    async def get_cards_from_column(self, column_id):
+        path = f'projects/columns/{column_id}/cards'
+        js = await self.github_request('GET', path)
+        return [make_field_from_note(card, column_id) for card in js]
+
+    @github_todo.command(name='list')
+    async def gh_todo_list(self, ctx):
+        """Lists the current todos and in progress stuff."""
+        todos = await self.get_cards_from_column(GITHUB_TODO_COLUMN)
+        progress = await self.get_cards_from_column(GITHUB_PROGRESS_COLUMN)
+        if progress:
+            todos.extend(progress)
+
+        try:
+            p = FieldPages(ctx, entries=todos, per_page=8)
+            p.embed.colour = 0x28A745
+            await p.paginate()
+        except Exception as e:
+            await ctx.send(e)
+
+    @github_todo.command(name='create')
+    async def gh_todo_create(self, ctx, *, content: typing.Union[int, str]):
+        """Creates a todo based on PR number or string content."""
+        path = f'projects/columns/{GITHUB_TODO_COLUMN}/cards'
+        if isinstance(content, str):
+            payload = { 'note': content }
+        else:
+            payload = { 'content_id': str(content), 'content_type': 'PullRequest' }
+
+        js = await self.github_request('POST', path, data=payload)
+        await ctx.send(f'Created note with ID {js["id"]}')
+
+    async def move_card_to_column(self, note_id, column_id):
+        path = f'projects/columns/cards/{note_id}/moves'
+        payload = {
+            'position': 'top',
+            'column_id': column_id,
+        }
+
+        await self.github_request('PATCH', path, data=payload)
+
+    @github_todo.command(name='complete')
+    async def gh_todo_complete(self, ctx, note_id: int):
+        """Moves a note to the complete column"""
+        await self.move_card_to_column(note_id, GITHUB_DONE_COLUMN)
+        await ctx.send(ctx.tick(True))
+
+    @github_todo.command(name='progress')
+    async def gh_todo_progress(self, ctx, note_id: int):
+        """Moves a note to the progress column"""
+        await self.move_card_to_column(note_id, GITHUB_PROGRESS_COLUMN)
+        await ctx.send(ctx.tick(True))
 
     @commands.command(hidden=True)
     @commands.is_owner()
