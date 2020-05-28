@@ -348,6 +348,96 @@ async def migrate_stars(pool, client):
         status = await con.copy_records_to_table('starrers', columns=Starrer.__slots__, records=records)
         print('Starboard Starrers', status)
 
+async def migrate_poops(pool, client):
+    # config format: (yeah, it's not ideal or really any good but whatever)
+    # <guild_id> : <data> where <data> is
+    # channel: <poopboard channel id>
+    # locked: <boolean indicating locked status>
+    # message_id: [bot_message, [poopred_user_ids]]
+    poops = {int(k): v for k, v in _load_json('poops.json').items()}
+
+    class Entry:
+        __slots__ = ('bot_message_id', 'message_id', 'guild_id')
+        def __init__(self, guild_id, message_id, bot_message_id):
+            self.bot_message_id = int(bot_message_id)
+            self.guild_id = guild_id
+            self.message_id = int(message_id)
+
+        def to_record(self):
+            return tuple(getattr(self, attr) for attr in self.__slots__)
+
+        # def __hash__(self):
+        #     return hash(self.message_id)
+
+        # def __eq__(self, o):
+        #     return isinstance(o, Entry) and o.message_id == self.message_id
+
+    class Pooper:
+        __slots__ = ('author_id', 'entry_id')
+        def __init__(self, author_id, entry_id):
+            self.author_id = int(author_id)
+            self.entry_id = entry_id
+
+        def to_record(self):
+            return tuple(getattr(self, attr) for attr in self.__slots__)
+
+    new_data = {}
+
+    async with pool.acquire() as con:
+        # the incredibly basic case, creating the poopboard table
+        await con.execute("TRUNCATE poopboard, poopboard_entries, poopers RESTART IDENTITY;")
+
+        records = []
+        for guild_id in poops:
+            # we do not care about 'locked' status when porting
+            poops[guild_id].pop('locked', None)
+            guild = client.get_guild(guild_id)
+            if not guild:
+                continue
+
+            channel_id = poops[guild_id].pop('channel', None)
+            if channel_id is None:
+                continue
+
+            channel_id = int(channel_id)
+            channel = guild.get_channel(channel_id)
+            if channel is None:
+                continue
+
+            records.append((guild_id, channel_id, None))
+            new_data[guild_id] = poops[guild_id]
+
+        status = await con.copy_records_to_table('poopboard', columns=('id', 'channel_id', 'locked'), records=records)
+        print('Poopboard', status)
+
+        entries = []
+        poopers = []
+        for guild_id, value in new_data.items():
+            for message_id, data in value.items():
+                if not isinstance(data, list):
+                    continue
+
+                bot_message_id, rest = data
+                if bot_message_id is None:
+                    continue
+
+                if not isinstance(rest, list):
+                    continue
+
+                entries.append(Entry(guild_id, message_id, bot_message_id))
+                entry_id = len(entries)
+                for author_id in rest:
+                    poopers.append(Pooper(author_id, entry_id))
+
+        # actually port now
+        records = [entry.to_record() for entry in entries]
+        status = await con.copy_records_to_table('poopboard_entries', columns=Entry.__slots__, records=records)
+        print('Poopboard Entries', status)
+
+        records = [r.to_record() for r in poopers]
+        status = await con.copy_records_to_table('poopers', columns=Pooper.__slots__, records=records)
+        print('Poopboard Poopers', status)
+
 async def migrate_profile(pool, client):
     # note: also porting over pokemon.json
     friend_codes = _load_json('pokemon.json').get('friend_codes', {})
