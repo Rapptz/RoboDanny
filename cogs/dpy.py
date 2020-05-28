@@ -259,11 +259,12 @@ class DPYExclusive(commands.Cog, name='discord.py'):
     @github_todo.command(name='create')
     async def gh_todo_create(self, ctx, *, content: typing.Union[int, str]):
         """Creates a todo based on PR number or string content."""
-        path = f'projects/columns/{GITHUB_TODO_COLUMN}/cards'
         if isinstance(content, str):
+            path = f'projects/columns/{GITHUB_TODO_COLUMN}/cards'
             payload = { 'note': content }
         else:
-            payload = { 'content_id': str(content), 'content_type': 'PullRequest' }
+            path = f'projects/columns/{GITHUB_PROGRESS_COLUMN}/cards'
+            payload = { 'content_id': content, 'content_type': 'PullRequest' }
 
         js = await self.github_request('POST', path, data=payload)
         await ctx.send(f'Created note with ID {js["id"]}')
@@ -275,7 +276,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             'column_id': column_id,
         }
 
-        await self.github_request('PATCH', path, data=payload)
+        await self.github_request('POST', path, data=payload)
 
     @github_todo.command(name='complete')
     async def gh_todo_complete(self, ctx, note_id: int):
