@@ -4,11 +4,18 @@ from .utils.paginator import Pages
 from discord.ext import commands
 import json
 import re
+import io
 import datetime
 import discord
 import asyncio
 import traceback
 import asyncpg
+import argparse
+import shlex
+
+class Arguments(argparse.ArgumentParser):
+    def error(self, message):
+        raise RuntimeError(message)
 
 class UnavailableTagCommand(commands.CheckFailure):
     def __str__(self):
@@ -856,10 +863,56 @@ class Tags(commands.Cog):
         """An alias for tag list command."""
         await ctx.invoke(self._list, member=member)
 
+    @staticmethod
+    def _get_tag_all_arguments(args):
+        parser = Arguments(add_help=False, allow_abbrev=False)
+        parser.add_argument('--text', action='store_true')
+        if args is not None:
+            return parser.parse_args(shlex.split(args))
+        else:
+            return parser.parse_args([])
+
+    async def _tag_all_text_mode(self, ctx):
+        query = """SELECT tag_lookup.id,
+                          tag_lookup.name,
+                          tag_lookup.owner_id,
+                          tags.uses,
+                          $2 OR $3 = tag_lookup.owner_id AS "can_delete",
+                          LOWER(tag_lookup.name) <> LOWER(tags.name) AS "is_alias"
+                   FROM tag_lookup
+                   INNER JOIN tags ON tags.id = tag_lookup.tag_id
+                   WHERE tag_lookup.location_id=$1
+                   ORDER BY tags.uses DESC;
+                """
+
+        bypass_owner_check = ctx.author.id == self.bot.owner_id or ctx.author.guild_permissions.manage_messages
+        rows = await ctx.db.fetch(query, ctx.guild.id, bypass_owner_check, ctx.author.id)
+        if not rows:
+            return await ctx.send('This server has no server-specific tags.')
+
+        table = formats.TabularData()
+        table.set_columns(list(rows[0].keys()))
+        table.add_rows(list(r.values()) for r in rows)
+        fp = io.BytesIO(table.render().encode('utf-8'))
+        await ctx.send(file=discord.File(fp, 'tags.txt'))
+
     @tag.command(name='all')
     @suggest_box()
-    async def _all(self, ctx):
-        """Lists all server-specific tags for this server."""
+    async def _all(self, ctx, *, args: str = None):
+        """Lists all server-specific tags for this server.
+
+        You can pass specific flags to this command to control the output:
+
+        `--text`: Dumps into a text file
+        """
+
+        try:
+            args = self._get_tag_all_arguments(args)
+        except RuntimeError as e:
+            return await ctx.send(e)
+
+        if args.text:
+            return await self._tag_all_text_mode(ctx)
 
         query = """SELECT name, id
                    FROM tag_lookup
