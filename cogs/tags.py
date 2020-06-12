@@ -688,6 +688,52 @@ class Tags(commands.Cog):
         else:
             await ctx.send('Tag and corresponding aliases successfully deleted.')
 
+    @tag.command(aliases=['delete_id'])
+    @suggest_box()
+    async def remove_id(self, ctx, tag_id: int):
+        """Removes a tag by ID.
+
+        The tag owner can always delete their own tags. If someone requests
+        deletion and has Manage Server permissions then they can also
+        delete it.
+
+        Deleting a tag will delete all of its aliases as well.
+        """
+
+        bypass_owner_check = ctx.author.id == self.bot.owner_id or ctx.author.guild_permissions.manage_messages
+        clause = 'id=$1 AND location_id=$2'
+
+        if bypass_owner_check:
+            args = [tag_id, ctx.guild.id]
+        else:
+            args = [tag_id, ctx.guild.id, ctx.author.id]
+            clause = f'{clause} AND owner_id=$3'
+
+        query = f'DELETE FROM tag_lookup WHERE {clause} RETURNING tag_id;'
+        deleted = await ctx.db.fetchrow(query, *args)
+
+        if deleted is None:
+            await ctx.send('Could not delete tag. Either it does not exist or you do not have permissions to do so.')
+            return
+
+
+        if bypass_owner_check:
+            clause = 'id=$1 AND location_id=$2'
+            args = [deleted[0], ctx.guild.id]
+        else:
+            clause = 'id=$1 AND location_id=$2 AND owner_id=$3'
+            args = [deleted[0], ctx.guild.id, ctx.author.id]
+
+        query = f'DELETE FROM tags WHERE {clause};'
+        status = await ctx.db.execute(query, *args)
+
+        # the status returns DELETE <count>, similar to UPDATE above
+        if status[-1] == '0':
+            # this is based on the previous delete above
+            await ctx.send('Tag alias successfully deleted.')
+        else:
+            await ctx.send('Tag and corresponding aliases successfully deleted.')
+
     async def _send_alias_info(self, ctx, record):
         embed = discord.Embed(colour=discord.Colour.blurple())
 
