@@ -982,7 +982,7 @@ class Tags(commands.Cog):
 
         if results:
             try:
-                p = TagPages(ctx, entries=result, per_page=20)
+                p = TagPages(ctx, entries=results, per_page=20)
             except Exception as e:
                 await ctx.send(e)
             else:
