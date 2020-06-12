@@ -27,6 +27,26 @@ def suggest_box():
         return True
     return commands.check(pred)
 
+class TagPages(Pages):
+    def prepare_embed(self, entries, page, *, first=False):
+        p = []
+        for index, entry in enumerate(entries, 1 + ((page - 1) * self.per_page)):
+            p.append(f'{index}. {entry["name"]} (ID: {entry["id"]})')
+
+        if self.maximum_pages > 1:
+            if self.show_entry_count:
+                text = f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)'
+            else:
+                text = f'Page {page}/{self.maximum_pages}'
+
+            self.embed.set_footer(text=text)
+
+        if self.paginating and first:
+            p.append('')
+            p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
+
+        self.embed.description = '\n'.join(p)
+
 def can_use_box():
     def pred(ctx):
         if ctx.guild is None:
@@ -765,7 +785,7 @@ class Tags(commands.Cog):
 
         member = member or ctx.author
 
-        query = """SELECT name
+        query = """SELECT name, id
                    FROM tag_lookup
                    WHERE location_id=$1 AND owner_id=$2
                    ORDER BY name
@@ -776,7 +796,7 @@ class Tags(commands.Cog):
 
         if rows:
             try:
-                p = Pages(ctx, entries=tuple(r[0] for r in rows))
+                p = TagPages(ctx, entries=rows)
                 p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
                 await p.paginate()
             except Exception as e:
@@ -795,9 +815,10 @@ class Tags(commands.Cog):
     async def _all(self, ctx):
         """Lists all server-specific tags for this server."""
 
-        query = """SELECT name
+        query = """SELECT name, id
                    FROM tag_lookup
                    WHERE location_id=$1
+                   ORDER BY name
                 """
 
         rows = await ctx.db.fetch(query, ctx.guild.id)
@@ -805,9 +826,8 @@ class Tags(commands.Cog):
 
         if rows:
             # PSQL orders this oddly for some reason
-            entries = sorted(tuple(r[0] for r in rows))
             try:
-                p = Pages(ctx, entries=entries, per_page=20)
+                p = TagPages(ctx, entries=rows, per_page=20)
                 await p.paginate()
             except Exception as e:
                 await ctx.send(e)
@@ -852,7 +872,7 @@ class Tags(commands.Cog):
         if len(query) < 3:
             return await ctx.send('The query length must be at least three characters.')
 
-        sql = """SELECT name
+        sql = """SELECT name, id
                  FROM tag_lookup
                  WHERE location_id=$1 AND name % $2
                  ORDER BY similarity(name, $2) DESC
@@ -863,7 +883,7 @@ class Tags(commands.Cog):
 
         if results:
             try:
-                p = Pages(ctx, entries=tuple(r[0] for r in results), per_page=20)
+                p = TagPages(ctx, entries=result, per_page=20)
             except Exception as e:
                 await ctx.send(e)
             else:
