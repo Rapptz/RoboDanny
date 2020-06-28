@@ -128,7 +128,7 @@ class RoboDanny(commands.AutoShardedBot):
             await ctx.send(error)
 
     def get_guild_prefixes(self, guild, *, local_inject=_prefix_callable):
-        proxy_msg = discord.Object(id=None)
+        proxy_msg = discord.Object(id=0)
         proxy_msg.guild = guild
         return local_inject(self, proxy_msg)
 
