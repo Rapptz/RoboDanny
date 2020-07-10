@@ -114,10 +114,11 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
 
             if older_channels != current_channels:
                 category = guild.get_channel(category_id)
-                before = '\n'.join(str(x) for x in older_channels)
-                after = '\n'.join(str(x) for x in current_channels)
-                embed.add_field(name='Before', value=f'**{category}**\n{before}', inline=True)
-                embed.add_field(name='After', value=f'**{category}**\n{after}', inline=True)
+                before_str = '\n'.join(str(x) for x in older_channels)
+                after_str = '\n'.join(str(x) for x in current_channels)
+                embed.add_field(name='Before', value=f'**{category}**\n{before_str}', inline=True)
+                embed.add_field(name='After', value=f'**{category}**\n{after_str}', inline=True)
+                embed.add_field(name='\u200b', value='\u200b', inline=True)
 
         channel = guild.get_channel(META_CHANNEL_ID)
         if channel is None:
@@ -135,7 +136,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
 
         async with self._lock:
             self._channel_snapshot = self.make_snapshot(before)
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
             await self.display_snapshot()
 
     @commands.command()
