@@ -1,9 +1,13 @@
 from discord.ext import commands
 from .utils import checks
 import aiohttp
+import asyncio
 import json
 import discord
 from lxml import etree
+
+LOUNGE_GUILD_ID = 145079846832308224
+META_CHANNEL_ID = 335119551702499328
 
 class CodeBlock:
     missing_error = 'Missing code block. Please use the following markdown\n\\`\\`\\`language\ncode here\n\\`\\`\\`'
@@ -41,6 +45,24 @@ class CodeBlock:
                 fmt = 'Could not find a language to compile with.'
             raise commands.BadArgument(fmt) from e
 
+class ChannelSnapshot:
+    __slots__ = ('name', 'bucket', 'position', 'id')
+
+    def __init__(self, channel):
+        self.name = channel.name
+        self.bucket = channel._sorting_bucket
+        self.position = channel.position
+        self.id = channel.id
+
+    def __lt__(self, other):
+        return isinstance(other, ChannelSnapshot) and (self.bucket, self.position, self.id) < (other.bucket, other.position, other.id)
+
+    def __eq__(self, other):
+        return isinstance(other, ChannelSnapshot) and self.id == other.id
+
+    def __str__(self):
+        return f'<#{self.id}>'
+
 class Lounge(commands.Cog, name='Lounge<C++>'):
     """Commands made for Lounge<C++>.
 
@@ -49,18 +71,72 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
 
     def __init__(self, bot):
         self.bot = bot
+        self._lock = asyncio.Lock()
+        # (position, category_id): [(name, bucket, position, id)]
+        self._channel_snapshot = {}
 
-    @commands.Cog.listener()
-    async def on_guild_channel_update(self, before, after):
-        if after.guild.id != 145079846832308224 or after.position == before.position:
-            return
+    def make_snapshot(self, before=None):
+        before = before or discord.Object(id=0)
+        ret = {}
+        guild = self.bot.get_guild(LOUNGE_GUILD_ID)
+        for category, channels in guild.by_category():
+            key = (-1, -1) if category is None else (category.position, category.id)
+            snap = ret[key] = []
+            for channel in channels:
+                if channel.id == before.id:
+                    channel = before
 
-        channel = after.guild.get_channel(335119551702499328)
+                snap.append(ChannelSnapshot(channel))
+
+        return ret
+
+    @staticmethod
+    def logically_sorted_snapshot(snapshot):
+        as_list = sorted(snapshot.items(), key=lambda t: t[0])
+        return {
+            category: sorted(channels)
+            for ((_, category), channels) in as_list
+        }
+
+
+    async def display_snapshot(self):
+        guild = self.bot.get_guild(LOUNGE_GUILD_ID)
+        current = self.logically_sorted_snapshot(self.make_snapshot())
+        before = self.logically_sorted_snapshot(self._channel_snapshot)
+
+        embed = discord.Embed(title='Channel Position Change')
+
+        for category_id, current_channels in current.items():
+            older_channels = before.get(category_id)
+            if older_channels is None:
+                embed.description = 'Uh... weird position change happened here. No idea.'
+                continue
+
+            if older_channels != current_channels:
+                category = guild.get_channel(category_id)
+                before = '\n'.join(str(x) for x in older_channels)
+                after = '\n'.join(str(x) for x in current_channels)
+                embed.add_field(name='Before', value=f'**{category}**\n{before}', inline=True)
+                embed.add_field(name='After', value=f'**{category}**\n{after}', inline=True)
+
+        channel = guild.get_channel(META_CHANNEL_ID)
         if channel is None:
             return
 
-        fmt = "{1.mention} was moved:\nCategory: {0.category} -> {1.category}\nPosition: {0.position} -> {1.position}"
-        await channel.send(fmt.format(before, after))
+        await channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before, after):
+        if self._lock.locked():
+            return
+
+        if after.guild.id != LOUNGE_GUILD_ID or after.position == before.position:
+            return
+
+        async with self._lock:
+            self._channel_snapshot = self.make_snapshot(before)
+            await asyncio.sleep(5)
+            await self.display_snapshot()
 
     @commands.command()
     @checks.is_lounge_cpp()
