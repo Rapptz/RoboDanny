@@ -50,6 +50,18 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before, after):
+        if after.guild.id != 145079846832308224 or after.position == before.position:
+            return
+
+        channel = after.guild.get_channel(335119551702499328)
+        if channel is None:
+            return
+
+        fmt = "{1.mention} was moved:\nCategory: {0.category} -> {1.category}\nPosition: {0.position} -> {1.position}"
+        await channel.send(fmt.format(before, after))
+
     @commands.command()
     @checks.is_lounge_cpp()
     async def coliru(self, ctx, *, code: CodeBlock):
