@@ -115,6 +115,7 @@ class Stars(commands.Cog):
         self._about_to_be_deleted = set()
 
         self._locks = weakref.WeakValueDictionary()
+        self.spoilers = re.compile(r'\|\|(.+?)\|\|')
 
     def cog_unload(self):
         self.clean_message_cache.cancel()
@@ -161,6 +162,13 @@ class Stars(commands.Cog):
         blue = int((12 * p) + (247 * (1 - p)))
         return (red << 16) + (green << 8) + blue
 
+    def is_url_spoiler(self, text, url):
+        spoilers = self.spoilers.findall(text)
+        for spoiler in spoilers:
+            if url in spoiler:
+                return True
+        return False
+
     def get_emoji_message(self, message, stars):
         emoji = self.star_emoji(stars)
 
@@ -173,12 +181,12 @@ class Stars(commands.Cog):
         embed = discord.Embed(description=message.content)
         if message.embeds:
             data = message.embeds[0]
-            if data.type == 'image':
+            if data.type == 'image' and not self.is_url_spoiler(message.content, data.url):
                 embed.set_image(url=data.url)
 
         if message.attachments:
             file = message.attachments[0]
-            if file.url.lower().endswith(('png', 'jpeg', 'jpg', 'gif', 'webp')):
+            if not file.is_spoiler() and file.url.lower().endswith(('png', 'jpeg', 'jpg', 'gif', 'webp')):
                 embed.set_image(url=file.url)
             else:
                 embed.add_field(name='Attachment', value=f'[{file.filename}]({file.url})', inline=False)
