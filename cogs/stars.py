@@ -186,8 +186,11 @@ class Stars(commands.Cog):
 
         if message.attachments:
             file = message.attachments[0]
-            if not file.is_spoiler() and file.url.lower().endswith(('png', 'jpeg', 'jpg', 'gif', 'webp')):
+            spoiler = file.is_spoiler()
+            if not spoiler and file.url.lower().endswith(('png', 'jpeg', 'jpg', 'gif', 'webp')):
                 embed.set_image(url=file.url)
+            elif spoiler:
+                embed.add_field(name='Attachment', value=f'||[{file.filename}]({file.url})||', inline=False)
             else:
                 embed.add_field(name='Attachment', value=f'[{file.filename}]({file.url})', inline=False)
 
