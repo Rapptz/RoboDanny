@@ -134,6 +134,9 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
             return
 
+        if message.author.bot:
+            return
+
         # The "General" category
         if DISCORD_BOT_BLOG in message.content and message.channel.category_id == 381963245382139916:
             try:
