@@ -16,6 +16,7 @@ CONTRIBUTORS_ROLE = 111173097888993280
 DISCORD_PY_ID     = 84319995256905728
 DISCORD_PY_GUILD  = 336642139381301249
 DISCORD_PY_PROF_ROLE = 381978395270971407
+DISCORD_PY_HELPER_ROLE = 558559632637952010
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636)
 BOT_LIST_INFO = {
     DISCORD_API_ID: {
@@ -57,7 +58,8 @@ def can_use_block():
             guild_level = ctx.author.guild_permissions
             return guild_level.manage_roles or (
                 ctx.channel.id in DISCORD_PY_HELP_CHANNELS and
-                any(r.id == DISCORD_PY_PROF_ROLE for r in ctx.author.roles)
+                (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or
+                 ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
             )
         return False
     return commands.check(predicate)
