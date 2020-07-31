@@ -464,8 +464,7 @@ class Meta(commands.Cog):
 
         e = discord.Embed()
         e.title = guild.name
-        e.add_field(name='ID', value=guild.id)
-        e.add_field(name='Owner', value=guild.owner)
+        e.description = f'**ID**: {guild.id}\n**Owner**: {guild.owner}'
         if guild.icon:
             e.set_thumbnail(url=guild.icon_url)
 
@@ -492,11 +491,11 @@ class Meta(commands.Cog):
             'PARTNERED': 'Partnered',
             'VERIFIED': 'Verified',
             'DISCOVERABLE': 'Server Discovery',
-            'PUBLIC': 'Server Discovery/Public',
+            'COMMUNITY': 'Community Server',
+            'WELCOME_SCREEN_ENABLED': 'Welcome Screen',
             'INVITE_SPLASH': 'Invite Splash',
             'VIP_REGIONS': 'VIP Voice Servers',
             'VANITY_URL': 'Vanity Invite',
-            'MORE_EMOJI': 'More Emoji',
             'COMMERCE': 'Commerce',
             'LURKABLE': 'Lurkable',
             'NEWS': 'News Channels',
@@ -520,18 +519,33 @@ class Meta(commands.Cog):
                 boosts = f'{boosts}\nLast Boost: {last_boost} ({time.human_timedelta(last_boost.premium_since, accuracy=2)})'
             e.add_field(name='Boosts', value=boosts, inline=False)
 
+        bots = sum(m.bot for m in guild.members)
         fmt = f'<:online:316856575413321728> {member_by_status["online"]} ' \
               f'<:idle:316856575098880002> {member_by_status["idle"]} ' \
               f'<:dnd:316856574868193281> {member_by_status["dnd"]} ' \
               f'<:offline:316856575501402112> {member_by_status["offline"]}\n' \
-              f'Total: {guild.member_count}'
+              f'Total: {guild.member_count} ({formats.plural(bots):bot})'
 
         e.add_field(name='Members', value=fmt, inline=False)
-
-        # TODO: maybe chunk and stuff for top role members
-        # requires max-concurrency d.py check to work though.
-
         e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
+
+        emoji_stats = Counter()
+        for emoji in guild.emojis:
+            if emoji.animated:
+                emoji_stats['animated'] += 1
+                emoji_stats['animated_disabled'] += not emoji.available
+            else:
+                emoji_stats['regular'] += 1
+                emoji_stats['disabled'] += not emoji.available
+
+        fmt = f'Regular: {emoji_stats["regular"]}/{guild.emoji_limit}\n' \
+              f'Animated: {emoji_stats["animated"]}/{guild.emoji_limit}\n' \
+
+        if emoji_stats['disabled'] or emoji_stats['animated_disabled']:
+            fmt = f'{fmt}Disabled: {emoji_stats["disabled"]} regular, {emoji_stats["animated_disabled"]} animated\n'
+
+        fmt = f'{fmt}Total Emoji: {len(guild.emojis)}/{guild.emoji_limit*2}'
+        e.add_field(name='Emoji', value=fmt, inline=False)
         e.set_footer(text='Created').timestamp = guild.created_at
         await ctx.send(embed=e)
 
