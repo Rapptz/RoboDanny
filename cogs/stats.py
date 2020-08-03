@@ -229,12 +229,8 @@ class Stats(commands.Cog):
 
         # statistics
         total_members = 0
-        total_online = 0
-        offline = discord.Status.offline
         for member in self.bot.get_all_members():
             total_members += 1
-            if member.status is not offline:
-                total_online += 1
 
         total_unique = len(self.bot.users)
 
@@ -249,7 +245,7 @@ class Stats(commands.Cog):
                 elif isinstance(channel, discord.VoiceChannel):
                     voice += 1
 
-        embed.add_field(name='Members', value=f'{total_members} total\n{total_unique} unique\n{total_online} unique online')
+        embed.add_field(name='Members', value=f'{total_members} total\n{total_unique} unique')
         embed.add_field(name='Channels', value=f'{text + voice} total\n{text} text\n{voice} voice')
 
         memory_usage = self.process.memory_full_info().uss / 1024**2
