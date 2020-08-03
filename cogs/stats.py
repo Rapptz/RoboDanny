@@ -91,7 +91,7 @@ class Stats(commands.Cog):
 
     def cog_unload(self):
         self.bulk_insert_loop.stop()
-        self._gateway_worker.cancel()
+        self.gateway_worker.cancel()
 
     @tasks.loop(seconds=10.0)
     async def bulk_insert_loop(self):
