@@ -229,9 +229,6 @@ class Stats(commands.Cog):
 
         # statistics
         total_members = 0
-        for member in self.bot.get_all_members():
-            total_members += 1
-
         total_unique = len(self.bot.users)
 
         text = 0
@@ -239,6 +236,7 @@ class Stats(commands.Cog):
         guilds = 0
         for guild in self.bot.guilds:
             guilds += 1
+            total_members += guild.member_count
             for channel in guild.channels:
                 if isinstance(channel, discord.TextChannel):
                     text += 1
