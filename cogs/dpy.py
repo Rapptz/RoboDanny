@@ -179,7 +179,9 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         tokens = TOKEN_REGEX.findall(message.content)
         if tokens and message.author.id != self.bot.user.id:
-            return await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
+            url =  await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
+            msg = f'{message.author.mention}, I have found tokens and sent them to <{url}> to be invalidated for you.'
+            return await message.channel.send(msg)
 
         if message.author.bot:
             return
