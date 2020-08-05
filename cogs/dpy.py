@@ -31,6 +31,8 @@ GITHUB_TODO_COLUMN = 9341868
 GITHUB_PROGRESS_COLUMN = 9341869
 GITHUB_DONE_COLUMN = 9341870
 
+TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27}')
+
 class GithubError(commands.CommandError):
     pass
 
@@ -113,6 +115,27 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             if self._req_lock.locked():
                 self._req_lock.release()
 
+    async def create_gist(self, content, *, description=None, filename=None, public=True):
+        headers = {
+            'Accept': 'application/vnd.github.v3+json',
+        }
+
+        filename = filename or 'output.txt'
+        data = {
+            'public': public,
+            'files': {
+                filename: {
+                    'content': content
+                }
+            }
+        }
+
+        if description:
+            data['description'] = description
+
+        js = await self.github_request('POST', 'gists', data=data, headers=headers)
+        return js['html_url']
+
     @commands.Cog.listener()
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_PY_GUILD_ID:
@@ -133,6 +156,10 @@ class DPYExclusive(commands.Cog, name='discord.py'):
     async def on_message(self, message):
         if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
             return
+
+        tokens = TOKEN_REGEX.findall(message.content)
+        if tokens and message.author.id != self.bot.user.id:
+            return await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
 
         if message.author.bot:
             return
