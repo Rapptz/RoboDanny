@@ -13,6 +13,7 @@ DISCORD_PY_REWRITE_ROLE = 381981861041143808
 DISCORD_PY_TESTER_ROLE = 669155135829835787
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
+DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 490289254757564426, 738572311107469354)
 
 DISCORD_BOT_BLOG = 'https://blog.discord.com/the-future-of-bots-on-discord-4e6e050ab52e'
 DISCORD_BOT_BLOG_RESPONSE = f"""Hello! It seems you've sent a message involving <{DISCORD_BOT_BLOG}>.
@@ -152,6 +153,25 @@ class DPYExclusive(commands.Cog, name='discord.py'):
                 await member.add_roles(discord.Object(id=DISCORD_PY_JP_ROLE))
             self._invite_cache[invite.code] = invite.uses
 
+    async def redirect_attachments(self, message):
+        attachment = message.attachments[0]
+        if not attachment.filename.endswith(('.txt', '.py', '.json')):
+            return
+
+        # If this file is more than 2MiB then it's definitely too big
+        if attachment.filesize > (2 * 1024 * 1024):
+            return
+
+        try:
+            contents = await attachment.read()
+            contents = contents.decode('utf-8')
+        except (UnicodeDecodeError, discord.HTTPException):
+            return
+
+        description = f'A file by {message.author} in the discord.py guild'
+        gist = await self.create_gist(contents, description=description, filename=attachment.filename)
+        await message.channel.send(f'File automatically uploaded to gist: <{gist}>')
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
@@ -173,6 +193,9 @@ class DPYExclusive(commands.Cog, name='discord.py'):
                 pass
             finally:
                 return
+
+        if message.channel.id in DISCORD_PY_HELP_CHANNELS and len(message.attachments) == 1:
+            return await self.redirect_attachments(message)
 
         # Handle some #emoji-suggestions auto moderator and things
         # Process is mainly informal anyway
