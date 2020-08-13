@@ -446,7 +446,7 @@ class Meta(commands.Cog):
 
         secret_member = Secret()
         secret_member.id = 0
-        secret_member.roles = [guild.default_role]
+        secret_member._roles = discord.utils.SnowflakeList(tuple())
 
         # figure out what channels are 'secret'
         secret = Counter()
