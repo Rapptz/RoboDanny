@@ -410,6 +410,9 @@ class API(commands.Cog):
     async def block(self, ctx, *, member: discord.Member):
         """Blocks a user from your channel."""
 
+        if member.top_role > ctx.author.top_role:
+            return
+
         reason = f'Block by {ctx.author} (ID: {ctx.author.id})'
 
         channels = self.get_block_channels(ctx.guild, ctx.channel)
@@ -433,6 +436,9 @@ class API(commands.Cog):
 
         Note that times are in UTC.
         """
+
+        if member.top_role > ctx.author.top_role:
+            return
 
         reminder = self.bot.get_cog('Reminder')
         if reminder is None:
