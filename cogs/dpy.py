@@ -372,7 +372,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
     @commands.is_owner()
     async def emojipost(self, ctx):
         """Fancy post the emoji lists"""
-        emojis = sorted([e for e in ctx.guild.emojis if len(e.roles) == 0 and e.available], key=lambda e: e.name)
+        emojis = sorted([e for e in ctx.guild.emojis if len(e.roles) == 0 and e.available], key=lambda e: e.name.lower())
         paginator = commands.Paginator(suffix='', prefix='')
         channel = ctx.guild.get_channel(596549678393327616)
 
