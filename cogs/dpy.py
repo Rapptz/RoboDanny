@@ -159,7 +159,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             return
 
         # If this file is more than 2MiB then it's definitely too big
-        if attachment.filesize > (2 * 1024 * 1024):
+        if attachment.size > (2 * 1024 * 1024):
             return
 
         try:
