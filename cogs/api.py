@@ -660,7 +660,8 @@ class API(commands.Cog):
         await role.edit(mentionable=True)
 
         # then send the message..
-        await ctx.send(f'{role.mention}: {content}'[:2000])
+        mentions = discord.AllowedMentions(roles=[role])
+        await ctx.send(f'{role.mention}: {content}'[:2000], allowed_mentions=mentions)
 
         # then make the role unmentionable
         await role.edit(mentionable=False)
