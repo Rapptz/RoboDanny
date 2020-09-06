@@ -1,9 +1,11 @@
 from discord.ext import commands
 from cogs.utils.formats import human_join
 from cogs.utils.paginator import FieldPages
+import binascii
 import discord
 import asyncio
 import typing
+import base64
 import yarl
 import re
 
@@ -33,6 +35,16 @@ GITHUB_PROGRESS_COLUMN = 9341869
 GITHUB_DONE_COLUMN = 9341870
 
 TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27}')
+
+def validate_token(token):
+    try:
+        # Just check if the first part validates as a user ID
+        (user_id, _, _) = token.split('.')
+        user_id = int(base64.b64decode(user_id, validate=True))
+    except (ValueError, binascii.Error):
+        return False
+    else:
+        return True
 
 class GithubError(commands.CommandError):
     pass
@@ -177,7 +189,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
             return
 
-        tokens = TOKEN_REGEX.findall(message.content)
+        tokens = [token for token in TOKEN_REGEX.findall(message.content) if validate_token(token)]
         if tokens and message.author.id != self.bot.user.id:
             url =  await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
             msg = f'{message.author.mention}, I have found tokens and sent them to <{url}> to be invalidated for you.'
