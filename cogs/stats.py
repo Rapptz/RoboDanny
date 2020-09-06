@@ -637,7 +637,7 @@ class Stats(commands.Cog):
 
         emoji = attributes.get(record.levelname, '\N{CROSS MARK}')
         dt = datetime.datetime.utcfromtimestamp(record.created)
-        msg = f'{emoji} `[{dt:%Y-%m-%d %H:%M:%S}] {record.message}`'
+        msg = textwrap.shorten(f'{emoji} `[{dt:%Y-%m-%d %H:%M:%S}] {record.message}`', width=1990)
         await self.webhook.send(msg, username='Gateway', avatar_url='https://i.imgur.com/4PnCKB3.png')
 
     @commands.command(hidden=True)
