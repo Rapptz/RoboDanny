@@ -165,7 +165,7 @@ class RoboDanny(commands.AutoShardedBot):
         print(f'Shard ID {shard_id} has resumed...')
         self.resumes[shard_id].append(datetime.datetime.utcnow())
 
-    @property
+    @discord.utils.cached_property
     def stats_webhook(self):
         wh_id, wh_token = self.config.stat_webhook
         hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.session))

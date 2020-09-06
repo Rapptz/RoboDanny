@@ -138,7 +138,7 @@ class Stats(commands.Cog):
     async def on_socket_response(self, msg):
         self.bot.socket_stats[msg.get('t')] += 1
 
-    @property
+    @discord.utils.cached_property
     def webhook(self):
         wh_id, wh_token = self.bot.config.stat_webhook
         hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.bot.session))
