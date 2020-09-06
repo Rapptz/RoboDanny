@@ -176,7 +176,7 @@ class Context(commands.Context):
             self._db = await self.pool.acquire(timeout=timeout)
         return self._db
 
-    def acquire(self, *, timeout=None):
+    def acquire(self, *, timeout=300.0):
         """Acquires a database connection from the pool. e.g. ::
 
             async with ctx.acquire():

@@ -352,7 +352,7 @@ class Mod(commands.Cog):
     @cache.cache()
     async def get_guild_config(self, guild_id):
         query = """SELECT * FROM guild_mod_config WHERE id=$1;"""
-        async with self.bot.pool.acquire() as con:
+        async with self.bot.pool.acquire(timeout=300.0) as con:
             record = await con.fetchrow(query, guild_id)
             if record is not None:
                 return await ModConfig.from_record(record, self.bot)
