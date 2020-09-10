@@ -11,6 +11,7 @@ from bot import RoboDanny, initial_extensions
 from cogs.utils.db import Table
 
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 import config
 import traceback
@@ -35,13 +36,14 @@ class RemoveNoise(logging.Filter):
 def setup_logging():
     try:
         # __enter__
+        max_bytes = 32 * 1024 * 1024 # 32 MiB
         logging.getLogger('discord').setLevel(logging.INFO)
         logging.getLogger('discord.http').setLevel(logging.WARNING)
         logging.getLogger('discord.state').addFilter(RemoveNoise())
 
         log = logging.getLogger()
         log.setLevel(logging.INFO)
-        handler = logging.FileHandler(filename='rdanny.log', encoding='utf-8', mode='w')
+        handler = RotatingFileHandler(filename='rdanny.log', encoding='utf-8', mode='w', maxBytes=max_bytes, backupCount=5)
         dt_fmt = '%Y-%m-%d %H:%M:%S'
         fmt = logging.Formatter('[{asctime}] [{levelname:<7}] {name}: {message}', dt_fmt, style='{')
         handler.setFormatter(fmt)
