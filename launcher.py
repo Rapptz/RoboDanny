@@ -60,9 +60,13 @@ def setup_logging():
 def run_bot():
     loop = asyncio.get_event_loop()
     log = logging.getLogger()
-
+    kwargs = {
+        'command_timeout': 60,
+        'max_size': 20,
+        'min_size': 20,
+    }
     try:
-        pool = loop.run_until_complete(Table.create_pool(config.postgresql, command_timeout=60))
+        pool = loop.run_until_complete(Table.create_pool(config.postgresql, **kwargs))
     except Exception as e:
         click.echo('Could not set up PostgreSQL. Exiting.', file=sys.stderr)
         log.exception('Could not set up PostgreSQL. Exiting.')
