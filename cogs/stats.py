@@ -773,16 +773,16 @@ class Stats(commands.Cog):
             # Shard WS closed
             # Shard Task failure
             # Shard Task complete (no failure)
-            if shard._task.done():
-                exc = shard._task.exception()
+            if shard.is_closed():
+                badge = '<:offline:316856575501402112>'
+                issues += 1
+            elif shard._parent._task.done():
+                exc = shard._parent._task.exception()
                 if exc is not None:
                     badge = '\N{FIRE}'
                     issues += 1
                 else:
                     badge = '\U0001f504'
-            elif not shard.ws.open:
-                badge = '<:offline:316856575501402112>'
-                issues += 1
 
             if badge is None:
                 badge = '<:online:316856575413321728>'
