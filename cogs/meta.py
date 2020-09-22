@@ -31,23 +31,30 @@ class FetchedUser(commands.Converter):
 
 class BotHelpPageSource(menus.ListPageSource):
     def __init__(self, help_command, commands):
+        # entries = [(cog, len(sub)) for cog, sub in commands.items()]
+        # entries.sort(key=lambda t: (t[0].qualified_name, t[1]), reverse=True)
         super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=6)
         self.commands = commands
         self.help_command = help_command
         self.prefix = help_command.clean_prefix
 
-    def format_commands(self, commands):
+    def format_commands(self, cog, commands):
         # A field can only have 1024 characters so we need to paginate a bit
         # just in case it doesn't fit perfectly
         # However, we have 6 per page so I'll try cutting it off at around 800 instead
         # Since there's a 6000 character limit overall in the embed
-        current_count = 0
+        if cog.description:
+            short_doc = cog.description.split('\n', 1)[0] + '\n'
+        else:
+            short_doc = 'No help found...\n'
+
+        current_count = len(short_doc)
         ending_note = '+%d not shown'
         ending_length = len(ending_note)
 
         page = []
-        for c in commands:
-            value = f'[`{c.name}`](https://dis.gd "{c.short_doc}")' if c.short_doc else f'`{c.name}`'
+        for command in commands:
+            value = f'`{command.name}`'
             count = len(value) + 1 # The space
             if count + current_count < 800:
                 current_count += count
@@ -63,10 +70,10 @@ class BotHelpPageSource(menus.ListPageSource):
 
         if len(page) == len(commands):
             # We're not hiding anything so just return it as-is
-            return ' '.join(page)
+            return short_doc + ' '.join(page)
 
         hidden = len(commands) - len(page)
-        return ' '.join(page) + '\n' + (ending_note % hidden)
+        return short_doc + ' '.join(page) + '\n' + (ending_note % hidden)
 
 
     async def format_page(self, menu, cogs):
@@ -77,19 +84,14 @@ class BotHelpPageSource(menus.ListPageSource):
 
         embed = discord.Embed(title='Categories', description=description, colour=discord.Colour.blurple())
 
-        total_fields = 0
         for cog in cogs:
             commands = self.commands.get(cog)
             if commands:
-                value = self.format_commands(commands)
+                value = self.format_commands(cog, commands)
                 embed.add_field(name=cog.qualified_name, value=value, inline=True)
-                total_fields += 1
-                if total_fields % 2 == 0:
-                    # Two-column inline view rather than 3-column inline
-                    embed.add_field(name='\u200b', value='\u200b', inline=True)
 
         maximum = self.get_max_pages()
-        embed.set_footer(text=f'Hover over a command for more info\u2002\u2022\u2002Page {menu.current_page + 1}/{maximum}')
+        embed.set_footer(text=f'Page {menu.current_page + 1}/{maximum}')
         return embed
 
 class GroupHelpPageSource(menus.ListPageSource):
