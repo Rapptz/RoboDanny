@@ -1,7 +1,7 @@
-from discord.ext import commands, tasks
+from discord.ext import commands, tasks, menus
 from .utils import checks, db, cache
 from .utils.formats import plural, human_join
-from .utils.paginator import Pages
+from .utils.paginator import SimplePages
 from collections import Counter, defaultdict
 
 import discord
@@ -802,15 +802,16 @@ class Stars(commands.Cog):
                    for r in records
                    if ctx.guild.get_member(r[0])]
 
+        p = SimplePages(entries=members, per_page=20)
+        base = format(plural(len(records)), 'star')
+        if len(records) > len(members):
+            p.embed.title = f'{base} ({len(records) - len(members)} left server)'
+        else:
+            p.embed.title = base
+
         try:
-            p = Pages(ctx, entries=members, per_page=20, show_entry_count=False)
-            base = format(plural(len(records)), 'star')
-            if len(records) > len(members):
-                p.embed.title = f'{base} ({len(records) - len(members)} left server)'
-            else:
-                p.embed.title = base
-            await p.paginate()
-        except Exception as e:
+            await p.start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @star.command(name='migrate')

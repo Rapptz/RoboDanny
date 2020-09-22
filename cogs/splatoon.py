@@ -1,7 +1,7 @@
-from discord.ext import commands
+from discord.ext import commands, menus
 from .utils import config, checks, maps, fuzzy, time, formats
 from .utils.formats import plural
-from .utils.paginator import FieldPages, Pages
+from .utils.paginator import RoboPages, SimplePages, FieldPageSource
 
 from urllib.parse import quote as urlquote
 from email.utils import parsedate_to_datetime
@@ -175,22 +175,12 @@ class SalmonRun:
     def image(self):
         return self._image and f'https://app.splatoon2.nintendo.net{self._image}'
 
-class SalmonRunPages(Pages):
-    def __init__(self, ctx, entries):
-        super().__init__(ctx, entries=entries, per_page=1)
-        self.reaction_emojis = [
-            ('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.first_page),
-            ('\N{BLACK LEFT-POINTING TRIANGLE}', self.previous_page),
-            ('\N{BLACK RIGHT-POINTING TRIANGLE}', self.next_page),
-            ('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.last_page),
-            ('\N{BLACK SQUARE FOR STOP}', self.stop_pages),
-        ]
+class SalmonRunPageSource(menus.ListPageSource):
+    def __init__(self, entries):
+        super().__init__(entries=entries, per_page=1)
 
-    def get_page(self, page):
-        return self.entries[page - 1]
-
-    def prepare_embed(self, salmon, page, *, first=False):
-        self.embed = e = discord.Embed(colour=0xFF7500, title='Salmon Run')
+    async def format_page(self, menu, salmon):
+        e = discord.Embed(colour=0xFF7500, title='Salmon Run')
 
         if salmon.image:
             e.set_image(url=salmon.image)
@@ -206,8 +196,11 @@ class SalmonRunPages(Pages):
         e.add_field(name='Weapons', value='\n'.join(salmon.weapons) or 'Unknown')
         e.add_field(name='Map', value=salmon.stage or 'Unknown')
 
-        if self.maximum_pages > 1:
-            e.title = f'Salmon Run {page} out of {self.maximum_pages}'
+        maximum = self.get_max_pages()
+        if maximum > 1:
+            e.title = f'Salmon Run {menu.current_page + 1} out of {maximum}'
+
+        return e
 
 class Splatfest:
     def __init__(self, data):
@@ -267,23 +260,18 @@ class Merchandise:
         self.price = data['price']
         self.end_time = datetime.datetime.utcfromtimestamp(data['end_time'])
 
-class GearPages(Pages):
-    def __init__(self, ctx, entries):
-        super().__init__(ctx, entries=entries, per_page=1)
-        # remove help reaction
-        self.reaction_emojis.pop()
-        self.splat2_data = ctx.cog.splat2_data
+class GearPageSource(menus.ListPageSource):
+    def __init__(self, entries):
+        super().__init__(entries=entries, per_page=1)
 
-    def get_page(self, page):
-        return self.entries[page - 1]
-
-    def prepare_embed(self, merch, page, *, first=False):
+    def prepare_embed(self, menu, merch):
         original_gear = None
+        data = menu.ctx.cog.splat2_data
 
         if isinstance(merch, Merchandise):
             price, gear, skill = merch.price, merch.gear, merch.skill
             description = f'{time.human_timedelta(merch.end_time)} left to buy'
-            data = self.splat2_data.get(gear.kind, [])
+            data = data.get(gear.kind, [])
             for elem in data:
                 if elem.name == gear.name:
                     original_gear = elem
@@ -292,7 +280,7 @@ class GearPages(Pages):
             price, gear, skill = merch.price, merch, merch.main
             description = discord.Embed.Empty
 
-        self.embed = e = discord.Embed(colour=0x19D719, title=gear.name, description=description)
+        e = discord.Embed(colour=0x19D719, title=gear.name, description=description)
 
         if gear.image:
             e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{gear.image}')
@@ -324,7 +312,7 @@ class GearPages(Pages):
         if gear.frequent_skill is not None:
             common = gear.frequent_skill
         else:
-            brands = self.splat2_data.get('brands', [])
+            brands = data.get('brands', [])
             for brand in brands:
                 if brand['name'] == gear.brand:
                     common = brand['buffed']
@@ -333,8 +321,11 @@ class GearPages(Pages):
                 common = 'Not found...'
         e.add_field(name='Common Gear Ability', value=common)
 
-        if self.maximum_pages > 1:
-            e.set_footer(text=f'Gear {page}/{self.maximum_pages}')
+        maximum = self.get_max_pages()
+        if maximum > 1:
+            e.set_footer(text=f'Gear {menu.current_page + 1}/{maximum}')
+
+        return e
 
 # JSON stuff
 
@@ -1059,7 +1050,7 @@ class Splatoon(commands.Cog):
             p = FieldPages(ctx, entries=entries, per_page=4)
             p.embed.colour = 0xF02D7D
             await p.paginate()
-        except Exception as e:
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @commands.command(aliases=['maps'])
@@ -1102,9 +1093,8 @@ class Splatoon(commands.Cog):
             return await ctx.send('No Salmon Run schedule reported.')
 
         try:
-            pages = SalmonRunPages(ctx, salmon)
-            await pages.paginate()
-        except Exception as e:
+            await menus.MenuPages(SalmonRunPageSource(salmon), delete_message_after=True).start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @commands.command(aliases=['splatnetshop'])
@@ -1113,10 +1103,10 @@ class Splatoon(commands.Cog):
         if not self.sp2_shop:
             return await ctx.send('Nothing currently being sold...')
 
+        pages = menus.MenuPages(GearPageSource(self.sp2_shop), delete_message_after=True)
         try:
-            p = GearPages(ctx, self.sp2_shop)
-            await p.paginate()
-        except Exception as e:
+            await pages.start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @commands.command()
@@ -1177,10 +1167,10 @@ class Splatoon(commands.Cog):
         **Note**: you must pass a query before passing a filter.
         """
 
+        pages = menus.MenuPages(GearPageSource(query), delete_message_after=True)
         try:
-            p = GearPages(ctx, query)
-            await p.paginate()
-        except Exception as e:
+            await pages.start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @commands.command()

@@ -1,6 +1,6 @@
-from discord.ext import commands
+from discord.ext import commands, menus
 from .utils import db, checks, cache
-from .utils.paginator import Pages
+from .utils.paginator import SimplePages
 
 from collections import defaultdict
 from typing import Optional
@@ -312,9 +312,8 @@ class Config(commands.Cog):
         await ctx.release()
 
         try:
-            p = Pages(ctx, entries=entries, per_page=20)
-            await p.paginate()
-        except Exception as e:
+            await SimplePages(entries=entries, per_page=20).start(ctx)
+        except menus.MenuError as e:
             await ctx.send(str(e))
 
     @ignore.command(name='all')

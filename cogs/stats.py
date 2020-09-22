@@ -1,8 +1,7 @@
-from discord.ext import commands, tasks
+from discord.ext import commands, tasks, menus
 from collections import Counter, defaultdict
 
 from .utils import checks, db, time, formats
-from .utils.paginator import CannotPaginate
 
 import pkg_resources
 import logging
@@ -605,7 +604,7 @@ class Stats(commands.Cog):
             return
 
         error = error.original
-        if isinstance(error, (discord.Forbidden, discord.NotFound, CannotPaginate)):
+        if isinstance(error, (discord.Forbidden, discord.NotFound, menus.MenuError)):
             return
 
         e = discord.Embed(title='Command Error', colour=0xcc3366)

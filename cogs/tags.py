@@ -1,7 +1,7 @@
 from .utils import db, checks, formats, cache
-from .utils.paginator import Pages
+from .utils.paginator import SimplePages
 
-from discord.ext import commands
+from discord.ext import commands, menus
 import json
 import re
 import io
@@ -34,25 +34,19 @@ def suggest_box():
         return True
     return commands.check(pred)
 
-class TagPages(Pages):
-    def prepare_embed(self, entries, page, *, first=False):
-        p = []
-        for index, entry in enumerate(entries, 1 + ((page - 1) * self.per_page)):
-            p.append(f'{index}. {entry["name"]} (ID: {entry["id"]})')
+class TagPageEntry:
+    __slots__ = ('id', 'name')
+    def __init__(self, entry):
+        self.id = entry['id']
+        self.name = entry['name']
 
-        if self.maximum_pages > 1:
-            if self.show_entry_count:
-                text = f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)'
-            else:
-                text = f'Page {page}/{self.maximum_pages}'
+    def __str__(self):
+        return f'{self.name} (ID: {self.id})'
 
-            self.embed.set_footer(text=text)
-
-        if self.paginating and first:
-            p.append('')
-            p.append('Confused? React with \N{INFORMATION SOURCE} for more info.')
-
-        self.embed.description = '\n'.join(p)
+class TagPages(SimplePages):
+    def __init__(self, entries, *, per_page=12):
+        converted = [TagPageEntry(entry) for entry in entries]
+        super().__init__(converted, per_page=per_page)
 
 def can_use_box():
     def pred(ctx):
@@ -849,10 +843,10 @@ class Tags(commands.Cog):
 
         if rows:
             try:
-                p = TagPages(ctx, entries=rows)
+                p = TagPages(entries=rows)
                 p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
-                await p.paginate()
-            except Exception as e:
+                await p.start(ctx)
+            except menus.MenuError as e:
                 await ctx.send(e)
         else:
             await ctx.send(f'{member} has no tags.')
@@ -926,9 +920,9 @@ class Tags(commands.Cog):
         if rows:
             # PSQL orders this oddly for some reason
             try:
-                p = TagPages(ctx, entries=rows, per_page=20)
-                await p.paginate()
-            except Exception as e:
+                p = TagPages(entries=rows, per_page=20)
+                await p.start(ctx)
+            except menus.MenuError as e:
                 await ctx.send(e)
         else:
             await ctx.send('This server has no server-specific tags.')
@@ -982,12 +976,12 @@ class Tags(commands.Cog):
 
         if results:
             try:
-                p = TagPages(ctx, entries=results, per_page=20)
-            except Exception as e:
+                p = TagPages(entries=results, per_page=20)
+            except menus.MenuError as e:
                 await ctx.send(e)
             else:
                 await ctx.release()
-                await p.paginate()
+                await p.start(ctx)
         else:
             await ctx.send('No tags found.')
 
@@ -1211,9 +1205,9 @@ class Tags(commands.Cog):
         data.sort()
 
         try:
-            p = Pages(ctx, entries=data, per_page=20)
-            await p.paginate()
-        except Exception as e:
+            p = SimplePages(entries=data, per_page=20)
+            await p.start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @box.command(name='stats')
@@ -1291,11 +1285,11 @@ class Tags(commands.Cog):
         if rows:
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
             try:
-                p = Pages(ctx, entries=entries)
+                p = SimplePages(entries=entries)
                 p.embed.set_author(name=user.display_name, icon_url=user.avatar_url)
                 p.embed.title = f'{sum(u for _, u in rows)} total uses'
-                await p.paginate()
-            except Exception as e:
+                await p.start(ctx)
+            except menus.MenuError as e:
                 await ctx.send(e)
         else:
             await ctx.send(f'{user} has no tags.')

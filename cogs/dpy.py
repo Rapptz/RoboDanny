@@ -1,6 +1,6 @@
-from discord.ext import commands
+from discord.ext import commands, menus
 from cogs.utils.formats import human_join
-from cogs.utils.paginator import FieldPages
+from cogs.utils.paginator import FieldPageSource, RoboPages
 import binascii
 import discord
 import asyncio
@@ -339,11 +339,11 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         if progress:
             todos.extend(progress)
 
+        source = FieldPageSource(todos, per_page=8)
+        source.embed.colour = 0x28A745
         try:
-            p = FieldPages(ctx, entries=todos, per_page=8)
-            p.embed.colour = 0x28A745
-            await p.paginate()
-        except Exception as e:
+            await RoboPages(source).start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @github_todo.command(name='create')
