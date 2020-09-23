@@ -152,51 +152,6 @@ class API(commands.Cog):
             role = discord.Object(id=USER_BOTS_ROLE)
             await member.add_roles(role)
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        channel = message.channel
-        author = message.author
-
-        if channel.id != DISCORD_PY_ID:
-            return
-
-        if author.status is discord.Status.offline:
-            fmt = f'{author.mention} has been blocked for being invisible until they change their status or for 5 minutes.'
-
-            try:
-                await channel.set_permissions(author, read_messages=False, reason='invisible block')
-                self._recently_blocked.add(author.id)
-                await channel.send(fmt)
-                msg = f'Heya. You have been automatically blocked from <#{DISCORD_PY_ID}> for 5 minutes for being ' \
-                       'invisible.\nTry chatting again in 5 minutes or when you change your status. If you\'re curious ' \
-                       'why invisible users are blocked, it is because they tend to break the client and cause them to ' \
-                       'be hard to mention. Since we want to help you usually, we expect mentions to work without ' \
-                       'headaches.\n\nSorry for the trouble.'
-                await author.send(msg)
-            except discord.HTTPException:
-                pass
-
-            await asyncio.sleep(300)
-            self._recently_blocked.discard(author.id)
-            await channel.set_permissions(author, overwrite=None, reason='invisible unblock')
-            return
-
-        m = self.issue.search(message.content)
-        if m is not None:
-            url = 'https://github.com/Rapptz/discord.py/issues/'
-            await channel.send(url + m.group('number'))
-
-    @commands.Cog.listener()
-    async def on_member_update(self, before, after):
-        if after.guild.id != DISCORD_API_ID:
-            return
-
-        if before.status is discord.Status.offline and after.status is not discord.Status.offline:
-            if after.id in self._recently_blocked:
-                self._recently_blocked.discard(after.id)
-                channel = after.guild.get_channel(DISCORD_PY_ID)
-                await channel.set_permissions(after, overwrite=None, reason='invisible unblock')
-
     def parse_object_inv(self, stream, url):
         # key: URL
         # n.b.: key doesn't have `discord` or `discord.ext.commands` namespaces
