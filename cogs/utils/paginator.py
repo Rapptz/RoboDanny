@@ -38,12 +38,12 @@ class RoboPages(menus.MenuPages):
     async def numbered_page(self, payload):
         """lets you type a page number to go to"""
         channel = self.message.channel
-        author = self.message.author
+        author_id = payload.user_id
         to_delete = []
         to_delete.append(await channel.send('What page do you want to go to?'))
 
         def message_check(m):
-            return m.author == author and \
+            return m.author.id == author_id and \
                    channel == m.channel and \
                    m.content.isdigit()
 
