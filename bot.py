@@ -91,7 +91,7 @@ class RoboDanny(commands.AutoShardedBot):
         for extension in initial_extensions:
             try:
                 self.load_extension(extension)
-            except Exception as e:
+            except Exception:
                 print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
 
