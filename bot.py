@@ -53,9 +53,11 @@ def _prefix_callable(bot, msg):
 
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
+        allowed_mentions = discord.AllowedMentions(roles=False, everyone=False, users=True)
         super().__init__(command_prefix=_prefix_callable, description=description,
                          pm_help=None, help_attrs=dict(hidden=True),
-                         fetch_offline_members=False, heartbeat_timeout=150.0)
+                         fetch_offline_members=False, heartbeat_timeout=150.0,
+                         allowed_mentions=allowed_mentions)
 
         self.client_id = config.client_id
         self.carbon_key = config.carbon_key
@@ -163,7 +165,7 @@ class RoboDanny(commands.AutoShardedBot):
         print(f'Shard ID {shard_id} has resumed...')
         self.resumes[shard_id].append(datetime.datetime.utcnow())
 
-    @property
+    @discord.utils.cached_property
     def stats_webhook(self):
         wh_id, wh_token = self.config.stat_webhook
         hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.session))

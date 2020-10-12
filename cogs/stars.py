@@ -1,7 +1,7 @@
-from discord.ext import commands, tasks
+from discord.ext import commands, tasks, menus
 from .utils import checks, db, cache
 from .utils.formats import plural, human_join
-from .utils.paginator import Pages
+from .utils.paginator import SimplePages
 from collections import Counter, defaultdict
 
 import discord
@@ -247,7 +247,7 @@ class Stars(commands.Cog):
             return
 
         # the starboard channel got deleted, so let's clear it from the database.
-        async with self.bot.pool.acquire() as con:
+        async with self.bot.pool.acquire(timeout=300.0) as con:
             query = "DELETE FROM starboard WHERE id=$1;"
             await con.execute(query, channel.guild.id)
 
@@ -273,7 +273,7 @@ class Stars(commands.Cog):
 
         # at this point a message got deleted in the starboard
         # so just delete it from the database
-        async with self.bot.pool.acquire() as con:
+        async with self.bot.pool.acquire(timeout=300.0) as con:
             query = "DELETE FROM starboard_entries WHERE bot_message_id=$1;"
             await con.execute(query, payload.message_id)
 
@@ -288,7 +288,7 @@ class Stars(commands.Cog):
         if starboard.channel is None or starboard.channel.id != payload.channel_id:
             return
 
-        async with self.bot.pool.acquire() as con:
+        async with self.bot.pool.acquire(timeout=300.0) as con:
             query = "DELETE FROM starboard_entries WHERE bot_message_id=ANY($1::bigint[]);"
             await con.execute(query, list(payload.message_ids))
 
@@ -298,7 +298,7 @@ class Stars(commands.Cog):
         if channel is None or not isinstance(channel, discord.TextChannel):
             return
 
-        async with self.bot.pool.acquire() as con:
+        async with self.bot.pool.acquire(timeout=300.0) as con:
             starboard = await self.get_starboard(channel.guild.id, connection=con)
             if starboard.channel is None:
                 return
@@ -322,7 +322,7 @@ class Stars(commands.Cog):
             self._locks[guild_id] = lock = asyncio.Lock(loop=self.bot.loop)
 
         async with lock:
-            async with self.bot.pool.acquire() as con:
+            async with self.bot.pool.acquire(timeout=300.0) as con:
                 if verify:
                     config = self.bot.get_cog('Config')
                     if config:
@@ -460,7 +460,7 @@ class Stars(commands.Cog):
             self._locks[guild_id] = lock = asyncio.Lock(loop=self.bot.loop)
 
         async with lock:
-            async with self.bot.pool.acquire() as con:
+            async with self.bot.pool.acquire(timeout=300.0) as con:
                 if verify:
                     config = self.bot.get_cog('Config')
                     if config:
@@ -802,15 +802,16 @@ class Stars(commands.Cog):
                    for r in records
                    if ctx.guild.get_member(r[0])]
 
+        p = SimplePages(entries=members, per_page=20)
+        base = format(plural(len(records)), 'star')
+        if len(records) > len(members):
+            p.embed.title = f'{base} ({len(records) - len(members)} left server)'
+        else:
+            p.embed.title = base
+
         try:
-            p = Pages(ctx, entries=members, per_page=20, show_entry_count=False)
-            base = format(plural(len(records)), 'star')
-            if len(records) > len(members):
-                p.embed.title = f'{base} ({len(records) - len(members)} left server)'
-            else:
-                p.embed.title = base
-            await p.paginate()
-        except Exception as e:
+            await p.start(ctx)
+        except menus.MenuError as e:
             await ctx.send(e)
 
     @star.command(name='migrate')
