@@ -88,7 +88,7 @@ class TextPageSource(menus.ListPageSource):
         for line in text.split('\n'):
             pages.add_line(line)
 
-        super().__init__(entries=pages, per_page=1)
+        super().__init__(entries=pages.pages, per_page=1)
 
     async def format_page(self, menu, content):
         maximum = self.get_max_pages()
