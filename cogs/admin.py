@@ -445,7 +445,7 @@ class Admin(commands.Cog):
     @commands.command(hidden=True)
     async def sh(self, ctx, *, command):
         """Runs a shell command."""
-        from cogs.utils.paginator import TextPages, RoboPages
+        from cogs.utils.paginator import TextPageSource, RoboPages
         from discord.ext.menus import MenuError
 
         async with ctx.typing():
