@@ -168,7 +168,7 @@ class TagMember(commands.Converter):
 
         name, _, discrim = argument.partition('#')
         if discrim:
-            result = discord.utils.get(ctx.guild.members, name=name, discrim=discrim)
+            result = discord.utils.get(ctx.guild.members, name=name, discriminator=discrim)
         else:
             result = discord.utils.get(ctx.guild.members, name=name)
 
