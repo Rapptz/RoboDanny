@@ -270,8 +270,8 @@ class API(commands.Cog):
             #                             日本語 category
             if ctx.channel.category_id == 490287576670928914:
                 return prefix + '-jp'
-            #                    d.py unofficial JP
-            elif ctx.guild.id == 463986890190749698:
+            #                    d.py unofficial JP   Discord Bot Portal JP
+            elif ctx.guild.id in (463986890190749698, 494911447420108820):
                 return prefix + '-jp'
         return prefix
 
