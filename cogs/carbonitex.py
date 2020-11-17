@@ -23,10 +23,10 @@ class Carbonitex(commands.Cog):
         async with self.bot.session.post(CARBONITEX_API_BOTDATA, data=carbon_payload) as resp:
             log.info(f'Carbon statistics returned {resp.status} for {carbon_payload}')
 
-        payload = json.dumps({
+        payload = {
             'guildCount': guild_count,
             'shardCount': len(self.bot.shards)
-        })
+        }
 
         headers = {
             'authorization': self.bot.bots_key,
@@ -34,7 +34,7 @@ class Carbonitex(commands.Cog):
         }
 
         url = f'{DISCORD_BOTS_API}/bots/{self.bot.user.id}/stats'
-        async with self.bot.session.post(url, data=payload, headers=headers) as resp:
+        async with self.bot.session.post(url, json=payload, headers=headers) as resp:
             log.info(f'DBots statistics returned {resp.status} for {payload}')
 
     @commands.Cog.listener()
