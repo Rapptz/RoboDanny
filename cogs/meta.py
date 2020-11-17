@@ -486,7 +486,7 @@ class Meta(commands.Cog):
 
         e = discord.Embed()
         e.title = guild.name
-        shards = f"{ctx.guild.shard_id + 1}/{self.bot.shard_count}",
+        shards = f"{ctx.guild.shard_id + 1}/{self.bot.shard_count}"
         e.description = f'**ID**: {guild.id}\n**Owner**: {guild.owner}\nShards: {shards}'
         if guild.icon:
             e.set_thumbnail(url=guild.icon_url)
