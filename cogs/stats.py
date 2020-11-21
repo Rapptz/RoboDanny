@@ -569,10 +569,8 @@ class Stats(commands.Cog):
 
         bots = sum(m.bot for m in guild.members)
         total = guild.member_count
-        online = sum(m.status is discord.Status.online for m in guild.members)
         e.add_field(name='Members', value=str(total))
         e.add_field(name='Bots', value=f'{bots} ({bots/total:.2%})')
-        e.add_field(name='Online', value=f'{online} ({online/total:.2%})')
 
         if guild.icon:
             e.set_thumbnail(url=guild.icon_url)
