@@ -365,7 +365,7 @@ class API(commands.Cog):
     async def block(self, ctx, *, member: discord.Member):
         """Blocks a user from your channel."""
 
-        if member.top_role > ctx.author.top_role:
+        if member.top_role >= ctx.author.top_role:
             return
 
         reason = f'Block by {ctx.author} (ID: {ctx.author.id})'
@@ -385,7 +385,7 @@ class API(commands.Cog):
     async def unblock(self, ctx, *, member: discord.Member):
         """Unblocks a user from your channel."""
 
-        if member.top_role > ctx.author.top_role:
+        if member.top_role >= ctx.author.top_role:
             return
 
         reason = f'Unblock by {ctx.author} (ID: {ctx.author.id})'
@@ -413,7 +413,7 @@ class API(commands.Cog):
         Note that times are in UTC.
         """
 
-        if member.top_role > ctx.author.top_role:
+        if member.top_role >= ctx.author.top_role:
             return
 
         reminder = self.bot.get_cog('Reminder')
