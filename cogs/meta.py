@@ -470,8 +470,6 @@ class Meta(commands.Cog):
             elif isinstance(channel, discord.VoiceChannel) and (not perms.connect or not perms.speak):
                 secret[channel_type] += 1
 
-        member_by_status = Counter(str(m.status) for m in guild.members)
-
         e = discord.Embed()
         e.title = guild.name
         e.description = f'**ID**: {guild.id}\n**Owner**: {guild.owner}'
@@ -531,11 +529,7 @@ class Meta(commands.Cog):
             e.add_field(name='Boosts', value=boosts, inline=False)
 
         bots = sum(m.bot for m in guild.members)
-        fmt = f'<:online:316856575413321728> {member_by_status["online"]} ' \
-              f'<:idle:316856575098880002> {member_by_status["idle"]} ' \
-              f'<:dnd:316856574868193281> {member_by_status["dnd"]} ' \
-              f'<:offline:316856575501402112> {member_by_status["offline"]}\n' \
-              f'Total: {guild.member_count} ({formats.plural(bots):bot})'
+        fmt = f'Total: {guild.member_count} ({formats.plural(bots):bot})'
 
         e.add_field(name='Members', value=fmt, inline=False)
         e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles')
