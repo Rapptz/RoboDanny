@@ -18,17 +18,6 @@ class Prefix(commands.Converter):
             raise commands.BadArgument('That is a reserved prefix already in use.')
         return argument
 
-class FetchedUser(commands.Converter):
-    async def convert(self, ctx, argument):
-        if not argument.isdigit():
-            raise commands.BadArgument('Not a valid user ID.')
-        try:
-            return await ctx.bot.fetch_user(argument)
-        except discord.NotFound:
-            raise commands.BadArgument('User not found.') from None
-        except discord.HTTPException:
-            raise commands.BadArgument('An error occurred while fetching the user.') from None
-
 class BotHelpPageSource(menus.ListPageSource):
     def __init__(self, help_command, commands):
         # entries = [(cog, len(sub)) for cog, sub in commands.items()]
@@ -399,7 +388,7 @@ class Meta(commands.Cog):
         await self.bot.logout()
 
     @commands.command()
-    async def avatar(self, ctx, *, user: Union[discord.Member, FetchedUser] = None):
+    async def avatar(self, ctx, *, user: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
         user = user or ctx.author
@@ -409,16 +398,12 @@ class Meta(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def info(self, ctx, *, user: Union[discord.Member, FetchedUser] = None):
+    async def info(self, ctx, *, user: Union[discord.Member, discord.User] = None):
         """Shows info about a user."""
 
         user = user or ctx.author
-        if ctx.guild and isinstance(user, discord.User):
-            user = ctx.guild.get_member(user.id) or user
-
         e = discord.Embed()
         roles = [role.name.replace('@', '@\u200b') for role in getattr(user, 'roles', [])]
-        shared = sum(g.get_member(user.id) is not None for g in self.bot.guilds)
         e.set_author(name=str(user))
 
         def format_date(dt):
@@ -427,7 +412,6 @@ class Meta(commands.Cog):
             return f'{dt:%Y-%m-%d %H:%M} ({time.human_timedelta(dt, accuracy=3)})'
 
         e.add_field(name='ID', value=user.id, inline=False)
-        e.add_field(name='Servers', value=f'{shared} shared', inline=False)
         e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)
         e.add_field(name='Created', value=format_date(user.created_at), inline=False)
 
@@ -466,6 +450,10 @@ class Meta(commands.Cog):
             guild = ctx.guild
 
         roles = [role.name.replace('@', '@\u200b') for role in guild.roles]
+
+        if not guild.chunked:
+            async with ctx.typing():
+                await guild.chunk(cache=True)
 
         # figure out what channels are 'secret'
         everyone = guild.default_role
@@ -639,7 +627,7 @@ class Meta(commands.Cog):
         if author_id is None:
             member = guild.me
         else:
-            member = guild.get_member(author_id)
+            member = self.bot.get_or_fetch_member(guild, author_id)
 
         if member is None:
             return await ctx.send('Member not found?')

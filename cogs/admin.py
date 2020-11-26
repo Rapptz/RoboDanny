@@ -419,12 +419,12 @@ class Admin(commands.Cog):
             await ctx.send(fmt)
 
     @commands.command(hidden=True)
-    async def sudo(self, ctx, channel: Optional[GlobalChannel], who: discord.User, *, command: str):
+    async def sudo(self, ctx, channel: Optional[GlobalChannel], who: Union[discord.Member, discord.User], *, command: str):
         """Run a command as another user optionally in another channel."""
         msg = copy.copy(ctx.message)
         channel = channel or ctx.channel
         msg.channel = channel
-        msg.author = channel.guild.get_member(who.id) or who
+        msg.author = who
         msg.content = ctx.prefix + command
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
         new_ctx._db = ctx._db

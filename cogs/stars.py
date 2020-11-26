@@ -798,9 +798,8 @@ class Stars(commands.Cog):
         if records is None or len(records) == 0:
             return await ctx.send('No one starred this message or this is an invalid message ID.')
 
-        members = [str(ctx.guild.get_member(r[0]))
-                   for r in records
-                   if ctx.guild.get_member(r[0])]
+        records = [r[0] for r in records]
+        members = [str(member) async for member in self.bot.resolve_member_ids(ctx.guild, records)]
 
         p = SimplePages(entries=members, per_page=20)
         base = format(plural(len(records)), 'star')

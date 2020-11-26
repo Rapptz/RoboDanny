@@ -87,20 +87,6 @@ def can_execute_action(ctx, user, target):
            user == ctx.guild.owner or \
            user.top_role > target.top_role
 
-class MemberNotFound(Exception):
-    pass
-
-async def resolve_member(guild, member_id):
-    member = guild.get_member(member_id)
-    if member is None:
-        if guild.chunked:
-            raise MemberNotFound()
-        try:
-            member = await guild.fetch_member(member_id)
-        except discord.NotFound:
-            raise MemberNotFound() from None
-    return member
-
 class MemberID(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -108,12 +94,13 @@ class MemberID(commands.Converter):
         except commands.BadArgument:
             try:
                 member_id = int(argument, base=10)
-                m = await resolve_member(ctx.guild, member_id)
             except ValueError:
                 raise commands.BadArgument(f"{argument} is not a valid member or member ID.") from None
-            except MemberNotFound:
-                # hackban case
-                return type('_Hackban', (), {'id': member_id, '__str__': lambda s: f'Member ID {s.id}'})()
+            else:
+                m = await ctx.bot.get_or_fetch_member(ctx.guild, member_id)
+                if m is None:
+                    # hackban case
+                    return type('_Hackban', (), {'id': member_id, '__str__': lambda s: f'Member ID {s.id}'})()
 
         if not can_execute_action(ctx, ctx.author, m):
             raise commands.BadArgument('You cannot do this action on this user due to role hierarchy.')
@@ -877,7 +864,12 @@ class Mod(commands.Cog):
                 if all(p(message) for p in predicates):
                     members.append(message.author)
         else:
-            members = ctx.guild.members
+            if ctx.guild.chunked:
+                members = ctx.guild.members
+            else:
+                async with ctx.typing():
+                    await ctx.guild.chunk(cache=True)
+                members = ctx.guild.members
 
         # member filters
         predicates = [
@@ -886,14 +878,7 @@ class Mod(commands.Cog):
             lambda m: m.discriminator != '0000', # No deleted users
         ]
 
-        async def _resolve_member(member_id):
-            r = ctx.guild.get_member(member_id)
-            if r is None:
-                try:
-                    return await ctx.guild.fetch_member(member_id)
-                except discord.HTTPException as e:
-                    raise commands.BadArgument(f'Could not fetch member by ID {member_id}: {e}') from None
-            return r
+        converter = commands.MemberConverter()
 
         if args.regex:
             try:
@@ -921,12 +906,12 @@ class Mod(commands.Cog):
                 return member.joined_at and member.joined_at > offset
             predicates.append(joined)
         if args.joined_after:
-            _joined_after_member = await _resolve_member(args.joined_after)
+            _joined_after_member = await converter.convert(ctx, args.joined_after)
             def joined_after(member, *, _other=_joined_after_member):
                 return member.joined_at and _other.joined_at and member.joined_at > _other.joined_at
             predicates.append(joined_after)
         if args.joined_before:
-            _joined_before_member = await _resolve_member(args.joined_before)
+            _joined_before_member = await converter.convert(ctx, args.joined_before)
             def joined_before(member, *, _other=_joined_before_member):
                 return member.joined_at and _other.joined_at and member.joined_at < _other.joined_at
             predicates.append(joined_before)
@@ -1062,7 +1047,7 @@ class Mod(commands.Cog):
             # RIP
             return
 
-        moderator = guild.get_member(mod_id)
+        moderator = await self.bot.get_or_fetch_member(guild, mod_id)
         if moderator is None:
             try:
                 moderator = await self.bot.fetch_user(mod_id)
@@ -1412,9 +1397,8 @@ class Mod(commands.Cog):
             members = config.muted_members
             # If the roles are being merged then the old members should get the new role
             reason = f'Action done by {ctx.author} (ID: {ctx.author.id}): Merging mute roles'
-            for member_id in members:
-                member = guild.get_member(member_id)
-                if member is not None and not member._roles.has(role.id):
+            async for member in self.bot.resolve_member_ids(guild, members):
+                if not member._roles.has(role.id):
                     try:
                         await member.add_roles(role, reason=reason)
                     except discord.HTTPException:
@@ -1562,11 +1546,7 @@ class Mod(commands.Cog):
             # RIP
             return
 
-        try:
-            member = await resolve_member(guild, member_id)
-        except MemberNotFound:
-            member = None
-
+        member = await self.get_or_fetch_member(guild, member_id)
         if member is None or not member._roles.has(role_id):
             # They left or don't have the role any more so it has to be manually changed in the SQL
             # if applicable, of course
@@ -1575,7 +1555,7 @@ class Mod(commands.Cog):
             return
 
         if mod_id != member_id:
-            moderator = guild.get_member(mod_id)
+            moderator = await self.bot.get_or_fetch_member(guild, mod_id)
             if moderator is None:
                 try:
                     moderator = await self.bot.fetch_user(mod_id)

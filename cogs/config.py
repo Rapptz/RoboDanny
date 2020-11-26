@@ -1,36 +1,31 @@
 from discord.ext import commands, menus
 from .utils import db, checks, cache
-from .utils.paginator import SimplePages
+from .utils.paginator import RoboPages
 
 from collections import defaultdict
 from typing import Optional
 import discord
 
-class LazyEntity:
-    """This is meant for use with the Paginator.
-
-    It lazily computes __str__ when requested and
-    caches it so it doesn't do the lookup again.
-    """
-    __slots__ = ('entity_id', 'guild', '_cache')
-
-    def __init__(self, guild, entity_id):
-        self.entity_id = entity_id
-        self.guild = guild
-        self._cache = None
-
-    def __str__(self):
-        if self._cache:
-            return self._cache
-
-        e = self.entity_id
-        g = self.guild
-        resolved = g.get_channel(e) or g.get_member(e)
+async def plonk_iterator(bot, guild, records):
+    for record in records:
+        entity_id = record[0]
+        resolved = guild.get_channel(entity_id) or await bot.get_or_fetch_member(guild, entity_id)
         if resolved is None:
-            self._cache = f'<Not Found: {e}>'
-        else:
-            self._cache = resolved.mention
-        return self._cache
+            yield f'<Not Found: {entity_id}>'
+        yield str(resolved)
+
+class PlonkedPageSource(menus.AsyncIteratorPageSource):
+    def __init__(self, bot, guild, records):
+        super().__init__(plonk_iterator(bot, guild, records), per_page=20)
+
+    async def format_page(self, menu, entries):
+        embed = discord.Embed(colour=discord.Colour.blurple())
+        pages = []
+        for index, entry in enumerate(entries, start=menu.current_page * self.per_page):
+            pages.append(f'{index + 1}. {entry}')
+
+        embed.description = '\n'.join(pages)
+        return embed
 
 class ChannelOrMember(commands.Converter):
     async def convert(self, ctx, argument):
@@ -185,7 +180,7 @@ class Config(commands.Cog):
         if check_bypass:
             guild = self.bot.get_guild(guild_id)
             if guild is not None:
-                member = guild.get_member(member_id)
+                member = await self.bot.get_or_fetch_member(guild, member_id)
                 if member is not None and member.guild_permissions.manage_guild:
                     return False
 
@@ -308,11 +303,11 @@ class Config(commands.Cog):
         if len(records) == 0:
             return await ctx.send('I am not ignoring anything here.')
 
-        entries = [LazyEntity(guild, r[0]) for r in records]
         await ctx.release()
 
+        source = PlonkedPageSource(self.bot, guild, records)
         try:
-            await SimplePages(entries=entries, per_page=20).start(ctx)
+            await RoboPages(source).start(ctx)
         except menus.MenuError as e:
             await ctx.send(str(e))
 

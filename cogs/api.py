@@ -450,12 +450,12 @@ class API(commands.Cog):
             # RIP x2
             return
 
-        to_unblock = guild.get_member(member_id)
+        to_unblock = await self.get_or_fetch_member(guild, member_id)
         if to_unblock is None:
             # RIP x3
             return
 
-        moderator = guild.get_member(mod_id)
+        moderator = await self.get_or_fetch_member(guild, mod_id)
         if moderator is None:
             try:
                 moderator = await self.bot.fetch_user(mod_id)
