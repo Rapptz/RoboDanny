@@ -54,10 +54,19 @@ def _prefix_callable(bot, msg):
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
         allowed_mentions = discord.AllowedMentions(roles=False, everyone=False, users=True)
+        intents = discord.Intents(
+            guilds=True,
+            members=True,
+            bans=True,
+            emojis=True,
+            voice_states=True,
+            messages=True,
+            reactions=True,
+        )
         super().__init__(command_prefix=_prefix_callable, description=description,
                          pm_help=None, help_attrs=dict(hidden=True),
                          fetch_offline_members=False, heartbeat_timeout=150.0,
-                         allowed_mentions=allowed_mentions)
+                         allowed_mentions=allowed_mentions, intents=intents)
 
         self.client_id = config.client_id
         self.carbon_key = config.carbon_key
