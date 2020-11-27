@@ -319,7 +319,12 @@ class Tags(commands.Cog):
         except RuntimeError as e:
             return await ctx.send(e)
 
-        await ctx.send(tag['content'])
+        ref = ctx.message.reference
+        reference = None
+        if ref and isinstance(ref.resolved, discord.Message):
+            reference = ref.resolved.to_reference()
+
+        await ctx.send(tag['content'], reference=reference)
 
         # update the usage
         query = "UPDATE tags SET uses = uses + 1 WHERE name = $1 AND (location_id=$2 OR location_id IS NULL);"
