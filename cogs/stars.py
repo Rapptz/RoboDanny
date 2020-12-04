@@ -232,7 +232,7 @@ class Stars(commands.Cog):
 
         method = getattr(self, f'{fmt}_message')
 
-        user = await self.bot.get_or_fetch_member(guild, payload.user_id)
+        user = payload.member or (await self.bot.get_or_fetch_member(guild, payload.user_id))
         if user is None or user.bot:
             return
 
