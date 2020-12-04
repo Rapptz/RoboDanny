@@ -1546,7 +1546,7 @@ class Mod(commands.Cog):
             # RIP
             return
 
-        member = await self.get_or_fetch_member(guild, member_id)
+        member = await self.bot.get_or_fetch_member(guild, member_id)
         if member is None or not member._roles.has(role_id):
             # They left or don't have the role any more so it has to be manually changed in the SQL
             # if applicable, of course
