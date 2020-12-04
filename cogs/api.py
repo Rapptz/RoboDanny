@@ -339,7 +339,7 @@ class API(commands.Cog):
             output.append(f'**Top {len(records)} users**:')
 
             for rank, (user_id, count) in enumerate(records, 1):
-                user = self.bot.get_user(user_id)
+                user = self.bot.get_user(user_id) or (await self.bot.fetch_user(user_id))
                 if rank != 10:
                     output.append(f'{rank}\u20e3 {user}: {count}')
                 else:
@@ -685,7 +685,8 @@ class API(commands.Cog):
         if payload.channel_id != channel_id:
             return
 
-        channel = self.bot.get_guild(payload.guild_id).get_channel(payload.channel_id)
+        guild = self.bot.get_guild(payload.guild_id)
+        channel = guild.get_channel(payload.channel_id)
         try:
             message = await channel.fetch_message(payload.message_id)
         except (AttributeError, discord.HTTPException):
@@ -695,12 +696,12 @@ class API(commands.Cog):
             return
 
         embed = message.embeds[0]
-        user = self.bot.get_user(payload.user_id)
-        if user is None or user.bot:
-            return
-
         # Already been handled.
         if embed.colour != discord.Colour.blurple():
+            return
+
+        user = await self.bot.get_or_fetch_member(guild, payload.user_id)
+        if user is None or user.bot:
             return
 
         author_id = int(embed.footer.text)
@@ -717,8 +718,9 @@ class API(commands.Cog):
             to_send = f"Your bot, <@{bot_id}>, has been rejected from {channel.guild.name}."
             colour = discord.Colour.dark_magenta()
 
+        member = await self.bot.get_or_fetch_member(guild, author_id)
         try:
-            await self.bot.get_user(author_id).send(to_send)
+            await member.send(to_send)
         except (AttributeError, discord.HTTPException):
             colour = discord.Colour.gold()
 

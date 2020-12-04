@@ -249,7 +249,7 @@ class Buttons(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def pm(self, ctx, user_id: int, *, content: str):
-        user = self.bot.get_user(user_id)
+        user = self.bot.get_user(user_id) or (await self.bot.fetch_user(user_id))
 
         fmt = content + '\n\n*This is a DM sent because you had previously requested feedback or I found a bug' \
                         ' in a command you used, I do not monitor this DM.*'
@@ -355,11 +355,11 @@ class Buttons(commands.Cog):
         if payload.emoji.id != SPOILER_EMOJI_ID:
             return
 
-        user = self.bot.get_user(payload.user_id)
-        if not user or user.bot:
+        if self._spoiler_cooldown.is_rate_limited(payload.message_id, payload.user_id):
             return
 
-        if self._spoiler_cooldown.is_rate_limited(payload.message_id, payload.user_id):
+        user = self.bot.get_user(payload.user_id) or (await self.bot.fetch_user(payload.user_id))
+        if not user or user.bot:
             return
 
         cache = await self.get_spoiler_cache(payload.channel_id, payload.message_id)

@@ -223,7 +223,9 @@ class Stats(commands.Cog):
         embed.url = 'https://discord.gg/DWEaqMy'
         embed.colour = discord.Colour.blurple()
 
-        owner = self.bot.get_user(self.bot.owner_id)
+        # To properly cache myself, I need to use the bot support server.
+        support_guild = self.bot.get_guild(182325885867786241)
+        owner = await self.bot.get_or_fetch_member(support_guild, self.bot.owner_id)
         embed.set_author(name=str(owner), icon_url=owner.avatar_url)
 
         # statistics

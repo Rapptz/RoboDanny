@@ -30,7 +30,10 @@ class DisambiguateMember(commands.IDConverter):
             user_id = int(match.group(1))
             result = ctx.bot.get_user(user_id)
             if result is None:
-                raise commands.BadArgument("Could not find this member.")
+                try:
+                    result = await ctx.bot.fetch_user(user_id)
+                except discord.HTTPException:
+                    raise commands.BadArgument("Could not find this member.") from None
             return result
 
         # check if we have a discriminator:

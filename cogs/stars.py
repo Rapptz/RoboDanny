@@ -222,13 +222,17 @@ class Stars(commands.Cog):
         if str(payload.emoji) != '\N{WHITE MEDIUM STAR}':
             return
 
-        channel = self.bot.get_channel(payload.channel_id)
+        guild = self.bot.get_guild(payload.guild_id)
+        if guild is None:
+            return
+
+        channel = guild.get_channel(payload.channel_id)
         if not isinstance(channel, discord.TextChannel):
             return
 
         method = getattr(self, f'{fmt}_message')
 
-        user = self.bot.get_user(payload.user_id)
+        user = await self.bot.get_or_fetch_member(guild, payload.user_id)
         if user is None or user.bot:
             return
 
