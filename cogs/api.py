@@ -259,7 +259,7 @@ class API(commands.Cog):
             return await ctx.send('Could not find anything. Sorry.')
 
         e.description = '\n'.join(f'[`{key}`]({url})' for key, url in matches)
-        await ctx.send(embed=e)
+        await ctx.send(embed=e, reference=ctx.replied_reference)
 
         if ctx.guild and ctx.guild.id in (DISCORD_API_ID, DISCORD_PY_GUILD):
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
@@ -670,7 +670,7 @@ class API(commands.Cog):
         for key, _, value in matches:
             paginator.add_line(f'**{key}**\n{value}')
         page = paginator.pages[0]
-        await ctx.send(page)
+        await ctx.send(page, reference=ctx.replied_reference)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
