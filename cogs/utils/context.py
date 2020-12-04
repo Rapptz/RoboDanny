@@ -50,6 +50,13 @@ class Context(commands.Context):
     def session(self):
         return self.bot.session
 
+    @discord.utils.cached_property
+    def replied_reference(self):
+        ref = self.message.reference
+        if ref and isinstance(ref.resolved, discord.Message):
+            return ref.resolved.to_reference()
+        return None
+
     async def disambiguate(self, matches, entry):
         if len(matches) == 0:
             raise ValueError('No results found.')
