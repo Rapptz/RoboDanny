@@ -9,6 +9,8 @@ import base64
 import yarl
 import re
 
+DISCORD_API_GUILD_ID = 81384788765712384
+DISCORD_PY_API_CHANNEL_ID = 381889733053251584
 DISCORD_PY_GUILD_ID = 336642139381301249
 DISCORD_PY_BOTS_ROLE = 381980817125015563
 DISCORD_PY_REWRITE_ROLE = 381981861041143808
@@ -186,7 +188,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if not message.guild or message.guild.id != DISCORD_PY_GUILD_ID:
+        if not message.guild or message.guild.id not in (DISCORD_PY_GUILD_ID, DISCORD_API_GUILD_ID):
             return
 
         tokens = [token for token in TOKEN_REGEX.findall(message.content) if validate_token(token)]
@@ -229,10 +231,11 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             await message.add_reaction('<:greenTick:330090705336664065>')
             await message.add_reaction('<:redTick:330090723011592193>')
 
-        m = self.issue.search(message.content)
-        if m is not None:
-            url = 'https://github.com/Rapptz/discord.py/issues/'
-            await message.channel.send(url + m.group('number'))
+        if message.guild.id == DISCORD_PY_GUILD_ID or message.channel.id == DISCORD_PY_API_CHANNEL_ID:
+            m = self.issue.search(message.content)
+            if m is not None:
+                url = 'https://github.com/Rapptz/discord.py/issues/'
+                await message.channel.send(url + m.group('number'))
 
     async def toggle_role(self, ctx, role_id):
         if any(r.id == role_id for r in ctx.author.roles):
