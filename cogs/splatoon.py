@@ -538,8 +538,8 @@ class Splatoon(commands.Cog):
                                          object_hook=splatoon2_decoder, encoder=Splatoon2Encoder)
         self.map_data = []
 
-        self._splatnet2 = bot.loop.create_task(self.splatnet2())
-        self._authenticator = bot.loop.create_task(self.splatnet2_authenticator())
+        self._splatnet2 = None
+        self._authenticator = None
         self._is_authenticated = asyncio.Event(loop=bot.loop)
 
         # mode: List[Rotation]
@@ -549,8 +549,11 @@ class Splatoon(commands.Cog):
         self.sp2_salmonrun = []
 
     def cog_unload(self):
-        self._splatnet2.cancel()
-        self._authenticator.cancel()
+        if self._splatnet2:
+            self._splatnet2.cancel()
+
+        if self._authenticator:
+            self._authenticator.cancel()
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
