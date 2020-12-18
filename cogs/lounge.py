@@ -197,17 +197,25 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
     async def cpp(self, ctx, *, query: str):
         """Search something on cppreference"""
 
-        url = 'http://en.cppreference.com/w/cpp/index.php'
+        url = 'https://en.cppreference.com/mwiki/index.php'
         params = {
             'title': 'Special:Search',
             'search': query
         }
 
-        async with ctx.session.get(url, params=params) as resp:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:83.0) Gecko/20100101 Firefox/83.0',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+        }
+
+        async with ctx.session.get(url, headers=headers, params=params) as resp:
             if resp.status != 200:
                 return await ctx.send(f'An error occurred (status code: {resp.status}). Retry later.')
 
-            if resp.url.path != '/w/cpp/index.php':
+            if resp.url.path != '/mwiki/index.php':
                 return await ctx.send(f'<{resp.url}>')
 
             e = discord.Embed()
