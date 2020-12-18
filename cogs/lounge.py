@@ -209,6 +209,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
             'DNT': '1',
+            'Connection': 'keep-alive',
         }
 
         async with ctx.session.get(url, headers=headers, params=params) as resp:
