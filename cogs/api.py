@@ -1,6 +1,7 @@
 from discord.ext import commands
 from .utils import checks, db, fuzzy, cache, time
 import asyncio
+import datetime
 import discord
 import re
 import zlib
@@ -46,7 +47,31 @@ def in_testing(info=BOT_LIST_INFO):
             return False
     return commands.check(predicate)
 
+def is_discord_py_helper(member):
+    guild_id = member.guild.id
+    if guild_id != DISCORD_PY_GUILD:
+        return False
+
+    if member.guild_permissions.manage_roles:
+        return False
+
+    return member._roles.has(DISCORD_PY_HELPER_ROLE)
+
 def can_use_block():
+    def predicate(ctx):
+        if ctx.guild is None:
+            return False
+
+        guild_id = ctx.guild.id
+        if guild_id == DISCORD_API_ID:
+            return ctx.channel.permissions_for(ctx.author).manage_roles
+        elif guild_id == DISCORD_PY_GUILD:
+            guild_level = ctx.author.guild_permissions
+            return guild_level.manage_roles
+        return False
+    return commands.check(predicate)
+
+def can_use_tempblock():
     def predicate(ctx):
         if ctx.guild is None:
             return False
@@ -402,7 +427,7 @@ class API(commands.Cog):
 
 
     @commands.command()
-    @can_use_block()
+    @can_use_tempblock()
     async def tempblock(self, ctx, duration: time.FutureTime, *, member: discord.Member):
         """Temporarily blocks a user from your channel.
 
@@ -416,6 +441,10 @@ class API(commands.Cog):
         if member.top_role >= ctx.author.top_role:
             return
 
+        created_at = ctx.message.created_at
+        if is_discord_py_helper(ctx.author) and duration.dt > (created_at + datetime.timedelta(minutes=60)):
+            return await ctx.send('Helpers can only block for up to an hour.')
+
         reminder = self.bot.get_cog('Reminder')
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
@@ -424,7 +453,7 @@ class API(commands.Cog):
         timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id,
                                                                       ctx.channel.id, member.id,
                                                                       connection=ctx.db,
-                                                                      created=ctx.message.created_at)
+                                                                      created=created_at)
 
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
