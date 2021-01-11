@@ -319,7 +319,7 @@ class Tags(commands.Cog):
         except RuntimeError as e:
             return await ctx.send(e)
 
-        await ctx.send(tag['content'], reference=ctx.replied_reference)
+        await ctx.send(tag['content'].format(invoker=ctx.author.name), reference=ctx.replied_reference)
 
         # update the usage
         query = "UPDATE tags SET uses = uses + 1 WHERE name = $1 AND (location_id=$2 OR location_id IS NULL);"
