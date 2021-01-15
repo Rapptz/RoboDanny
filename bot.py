@@ -215,6 +215,8 @@ class RoboDanny(commands.AutoShardedBot):
                 member = await guild.fetch_member(member_id)
             except discord.HTTPException:
                 return None
+            else:
+                return member
 
         members = await guild.query_members(limit=1, user_ids=[member_id], cache=True)
         if not members:
