@@ -313,7 +313,7 @@ class Reminder(commands.Cog):
         msg = f'<@{author_id}>, {timer.human_delta}: {message}'
 
         if message_id:
-            msg = f'{msg}\n\n<https://discordapp.com/channels/{guild_id}/{channel.id}/{message_id}>'
+            msg = f'{msg}\n\n<https://discord.com/channels/{guild_id}/{channel.id}/{message_id}>'
 
         try:
             await channel.send(msg)
