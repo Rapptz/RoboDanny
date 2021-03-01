@@ -896,7 +896,7 @@ class Tags(commands.Cog):
 
         for r in rows:
             fp = io.BytesIO(r[0].encode())
-        await ctx.send(file=discord.File(fp, 'tags.txt'))
+        await ctx.send(file=discord.File(fp, 'tags.json'))
 
     @tag.command(name='all')
     @suggest_box()
