@@ -906,12 +906,12 @@ class Mod(commands.Cog):
                 return member.joined_at and member.joined_at > offset
             predicates.append(joined)
         if args.joined_after:
-            _joined_after_member = await converter.convert(ctx, args.joined_after)
+            _joined_after_member = await converter.convert(ctx, str(args.joined_after))
             def joined_after(member, *, _other=_joined_after_member):
                 return member.joined_at and _other.joined_at and member.joined_at > _other.joined_at
             predicates.append(joined_after)
         if args.joined_before:
-            _joined_before_member = await converter.convert(ctx, args.joined_before)
+            _joined_before_member = await converter.convert(ctx, str(args.joined_before))
             def joined_before(member, *, _other=_joined_before_member):
                 return member.joined_at and _other.joined_at and member.joined_at < _other.joined_at
             predicates.append(joined_before)
