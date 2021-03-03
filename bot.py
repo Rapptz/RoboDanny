@@ -277,7 +277,7 @@ class RoboDanny(commands.AutoShardedBot):
             for index in range(0, total_need_resolution, 100):
                 to_resolve = needs_resolution[index:index + 100]
                 members = await guild.query_members(limit=100, user_ids=to_resolve, cache=True)
-                for member in resolved:
+                for member in members:
                     yield member
 
     async def on_ready(self):
