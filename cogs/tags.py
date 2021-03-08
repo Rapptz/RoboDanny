@@ -840,8 +840,9 @@ class Tags(commands.Cog):
     @staticmethod
     def _get_tag_all_arguments(args):
         parser = Arguments(add_help=False, allow_abbrev=False)
-        parser.add_argument('--text', action='store_true')
-        parser.add_argument('--json', action='store_true')
+        group = parser.add_mutually_exclusive_group(required=False)
+        group.add_argument('--text', action='store_true')
+        group.add_argument('--json', action='store_true')
         if args is not None:
             return parser.parse_args(shlex.split(args))
         else:
