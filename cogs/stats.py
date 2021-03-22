@@ -693,7 +693,7 @@ class Stats(commands.Cog):
             total_warnings += 1
 
         try:
-            task_retriever = asyncio.Task.all_tasks
+            task_retriever = asyncio.all_tasks
         except AttributeError:
             # future proofing for 3.9 I guess
             task_retriever = asyncio.all_tasks
