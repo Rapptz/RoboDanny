@@ -300,7 +300,7 @@ class API(commands.Cog):
                 return prefix + '-jp'
         return prefix
 
-    @commands.group(aliases=['rtfd'], invoke_without_command=True)
+    @commands.group(aliases=['rtfd', 'rtm'], invoke_without_command=True)
     async def rtfm(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity.
 
