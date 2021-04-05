@@ -32,9 +32,15 @@ This blog post is mainly marketing, therefore:
 Thank you for understanding!
 """
 
-GITHUB_TODO_COLUMN = 9341868
-GITHUB_PROGRESS_COLUMN = 9341869
-GITHUB_DONE_COLUMN = 9341870
+GITHUB_DOCS_TODO_COLUMN = 9341868
+GITHUB_DOCS_PROGRESS_COLUMN = 9341869
+GITHUB_DOCS_DONE_COLUMN = 9341870
+
+GITHUB_V2_TODO_COLUMN = 13699557
+GITHUB_V2_MAYBE_COLUMN = 13699765
+GITHUB_V2_PROGRESS_COLUMN = 13699558
+GITHUB_V2_DONE_COLUMN = 13699559
+GITHUB_V2_DONE_BREAKING_COLUMN = 13699573
 
 TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27}')
 
@@ -59,6 +65,11 @@ def is_proficient():
 def is_doc_helper():
     def predicate(ctx):
         return ctx.author._roles.has(714516281293799438)
+    return commands.check(predicate)
+
+def is_v2_helper():
+    def predicate(ctx):
+        return ctx.author._roles.has(736472955248181279)
     return commands.check(predicate)
 
 def make_field_from_note(data, column_id):
@@ -324,43 +335,38 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         await ctx.send(f'Successfully labelled <{js["html_url"]}>')
 
     @github.group(name='todo')
-    @is_doc_helper()
     async def github_todo(self, ctx):
-        """Handles the board for the Documentation project."""
+        """Handles github project boards."""
         pass
 
-    async def get_cards_from_column(self, column_id):
-        path = f'projects/columns/{column_id}/cards'
-        js = await self.github_request('GET', path)
-        return [make_field_from_note(card, column_id) for card in js]
-
-    @github_todo.command(name='list')
-    async def gh_todo_list(self, ctx):
-        """Lists the current todos and in progress stuff."""
-        todos = await self.get_cards_from_column(GITHUB_TODO_COLUMN)
-        progress = await self.get_cards_from_column(GITHUB_PROGRESS_COLUMN)
-        if progress:
-            todos.extend(progress)
-
-        source = FieldPageSource(todos, per_page=8)
+    async def send_card_list(self, ctx, cards):
+        source = FieldPageSource(cards, per_page=8)
         source.embed.colour = 0x28A745
         try:
             await RoboPages(source).start(ctx)
         except menus.MenuError as e:
             await ctx.send(e)
 
-    @github_todo.command(name='create')
-    async def gh_todo_create(self, ctx, *, content: typing.Union[int, str]):
-        """Creates a todo based on PR number or string content."""
+    async def create_card(self, content, todo_column, progress_column):
         if isinstance(content, str):
-            path = f'projects/columns/{GITHUB_TODO_COLUMN}/cards'
+            path = f'projects/columns/{todo_column}/cards'
             payload = { 'note': content }
         else:
-            path = f'projects/columns/{GITHUB_PROGRESS_COLUMN}/cards'
+            path = f'projects/columns/{progress_column}/cards'
             payload = { 'content_id': content, 'content_type': 'PullRequest' }
 
-        js = await self.github_request('POST', path, data=payload)
-        await ctx.send(f'Created note with ID {js["id"]}')
+        return await self.github_request('POST', path, data=payload)
+
+    async def get_cards_from_column(self, column_id):
+        path = f'projects/columns/{column_id}/cards'
+        js = await self.github_request('GET', path)
+        return [make_field_from_note(card, column_id) for card in js]
+
+    async def get_cards_from_columns(self, *column_ids):
+        cards = []
+        for column_id in column_ids:
+            cards.extend(self.get_cards_from_column(column_id))
+        return cards
 
     async def move_card_to_column(self, note_id, column_id):
         path = f'projects/columns/cards/{note_id}/moves'
@@ -371,16 +377,62 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         await self.github_request('POST', path, data=payload)
 
-    @github_todo.command(name='complete')
+    @github_todo.group(name='docs')
+    @is_doc_helper()
+    async def github_todo_docs(self, ctx):
+        """Handles the board for the Documentation project."""
+
+    @github_todo_docs.command(name='list')
+    async def gh_todo_docs_list(self, ctx):
+        """Lists the current todos and in progress stuff."""
+        cards = await self.get_cards_from_columns(GITHUB_DOCS_TODO_COLUMN, GITHUB_DOCS_PROGRESS_COLUMN)
+        await self.send_card_list(cards)
+
+    @github_todo_docs.command(name='create')
+    async def gh_todo_docs_create(self, ctx, *, content: typing.Union[int, str]):
+        """Creates a todo based on PR number or string content."""
+        js = await self.create_card(ctx, content, GITHUB_DOCS_TODO_COLUMN, GITHUB_DOCS_PROGRESS_COLUMN)
+        await ctx.send(f'Created note with ID {js["id"]}')
+
+    @github_todo_docs.command(name='complete')
     async def gh_todo_complete(self, ctx, note_id: int):
         """Moves a note to the complete column"""
-        await self.move_card_to_column(note_id, GITHUB_DONE_COLUMN)
+        await self.move_card_to_column(note_id, GITHUB_DOCS_DONE_COLUMN)
         await ctx.send(ctx.tick(True))
 
-    @github_todo.command(name='progress')
+    @github_todo_docs.command(name='progress')
     async def gh_todo_progress(self, ctx, note_id: int):
         """Moves a note to the progress column"""
-        await self.move_card_to_column(note_id, GITHUB_PROGRESS_COLUMN)
+        await self.move_card_to_column(note_id, GITHUB_DOCS_PROGRESS_COLUMN)
+        await ctx.send(ctx.tick(True))
+
+    @github_todo.group(name='v2')
+    @is_v2_helper()
+    async def github_todo_v2(self, ctx):
+        """Handles the board for the v2.0 project."""
+
+    @github_todo_v2.command(name='list')
+    async def gh_todo_v2_list(self, ctx):
+        """Lists the current todos and in progress stuff."""
+        cards = await self.get_cards_from_columns(GITHUB_V2_TODO_COLUMN, GITHUB_V2_MAYBE_COLUMN, GITHUB_V2_PROGRESS_COLUMN)
+        await self.send_card_list(cards)
+
+    @github_todo_v2.command(name='create')
+    async def gh_todo_v2_create(self, ctx, *, content: typing.Union[int, str]):
+        """Creates a todo based on PR number or string content."""
+        js = await self.create_card(ctx, content, GITHUB_V2_TODO_COLUMN, GITHUB_V2_PROGRESS_COLUMN)
+        await ctx.send(f'Created note with ID {js["id"]}')
+
+    @github_todo_v2.command(name='complete')
+    async def gh_todo_complete(self, ctx, note_id: int, breaking: bool = False):
+        """Moves a note to the complete column"""
+        await self.move_card_to_column(note_id, GITHUB_V2_DONE_COLUMN if not breaking else GITHUB_V2_DONE_BREAKING_COLUMN)
+        await ctx.send(ctx.tick(True))
+
+    @github_todo_v2.command(name='progress')
+    async def gh_todo_progress(self, ctx, note_id: int):
+        """Moves a note to the progress column"""
+        await self.move_card_to_column(note_id, GITHUB_V2_PROGRESS_COLUMN)
         await ctx.send(ctx.tick(True))
 
     @commands.command(hidden=True)
