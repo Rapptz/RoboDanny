@@ -385,7 +385,7 @@ class Meta(commands.Cog):
     @commands.is_owner()
     async def _quit(self, ctx):
         """Quits the bot."""
-        await self.bot.logout()
+        await self.bot.close()
 
     @commands.command()
     async def avatar(self, ctx, *, user: Union[discord.Member, discord.User] = None):
