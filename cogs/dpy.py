@@ -37,6 +37,7 @@ GITHUB_PROGRESS_COLUMN = 9341869
 GITHUB_DONE_COLUMN = 9341870
 
 TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27}')
+TEXT_FILE_REGEX = re.compile(r'^.*; charset=.*$')
 
 def validate_token(token):
     try:
@@ -186,17 +187,38 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         gist = await self.create_gist(contents, description=description, filename=attachment.filename)
         await message.channel.send(f'File automatically uploaded to gist: <{gist}>')
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if not message.guild or message.guild.id not in (DISCORD_PY_GUILD_ID, DISCORD_API_GUILD_ID):
-            return
+    async def check_tokens(self, message):
+        matches = TOKEN_REGEX.findall(message.content)
 
-        tokens = [token for token in TOKEN_REGEX.findall(message.content) if validate_token(token)]
+        for attachment in message.attachments:
+            if attachment.content_type and TEXT_FILE_REGEX.match(attachment.content_type):
+
+                # determine charset from content type header.
+                if 'charset' in attachment.content_type:
+                    _, charset = attachment.content_type.rsplit('='. 1)
+                else:
+                    charset = 'utf-8'
+
+                try:
+                    contents = await attachment.read()
+                    contents = contents.decode(charset)
+                    matches.extend(TOKEN_REGEX.findall(contents)
+                except (LookupError, UnicodeDecodeError, discord.HTTPException):
+                    pass
+
+        tokens = [token for token in found_tokens if validate_token(token)]
         if tokens and message.author.id != self.bot.user.id:
             url =  await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
             msg = f'{message.author.mention}, I have found tokens and sent them to <{url}> to be invalidated for you.'
             return await message.channel.send(msg)
 
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if not message.guild or message.guild.id not in (DISCORD_PY_GUILD_ID, DISCORD_API_GUILD_ID):
+            return
+
+        await self.check_tokens(message)
+        
         if message.author.bot:
             return
 
