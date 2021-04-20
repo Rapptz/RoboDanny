@@ -974,6 +974,7 @@ class Tags(commands.Cog):
         has no owner because they have left the server.
         """
 
+        alias = False
         # requires 2 queries for UX
         query = "SELECT id, owner_id FROM tags WHERE location_id=$1 AND LOWER(name)=$2;"
         row = await ctx.db.fetchrow(query, ctx.guild.id, tag.lower())
@@ -982,6 +983,7 @@ class Tags(commands.Cog):
             row = await ctx.db.fetchrow(alias_query, ctx.guild.id, tag.lower())
             if row is None:
                 return await ctx.send(f'A tag with the name of "{tag}" does not exist.')
+            alias = True
 
         member = await self.bot.get_or_fetch_member(ctx.guild, row[1])
         if member is not None:
@@ -989,8 +991,9 @@ class Tags(commands.Cog):
 
         async with ctx.acquire():
             async with ctx.db.transaction():
-                query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
-                await ctx.db.execute(query, ctx.author.id, row[0])
+                if not alias:
+                    query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
+                    await ctx.db.execute(query, ctx.author.id, row[0])
                 query = "UPDATE tag_lookup SET owner_id=$1 WHERE tag_id=$2;"
                 await ctx.db.execute(query, ctx.author.id, row[0])
 
