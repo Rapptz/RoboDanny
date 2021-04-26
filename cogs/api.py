@@ -252,7 +252,7 @@ class API(commands.Cog):
             'python': 'https://docs.python.org/3',
             'python-jp': 'https://docs.python.org/ja/3',
             'master': 'https://discordpy.readthedocs.io/en/master',
-            'master-jp': 'https://discordpy.readthedocs.io/jp/master'
+            'master-jp': 'https://discordpy.readthedocs.io/ja/master'
         }
 
         if obj is None:
