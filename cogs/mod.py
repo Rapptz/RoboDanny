@@ -646,7 +646,7 @@ class Mod(commands.Cog):
     async def _basic_cleanup_strategy(self, ctx, search):
         count = 0
         async for msg in ctx.history(limit=search, before=ctx.message):
-            if msg.author == ctx.me:
+            if msg.author == ctx.me and not (msg.mentions or msg.role_mentions):
                 await msg.delete()
                 count += 1
         return { 'Bot': count }
@@ -660,8 +660,16 @@ class Mod(commands.Cog):
         deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
         return Counter(m.author.display_name for m in deleted)
 
+    async def _regular_user_cleanup_strategy(self, ctx, search):
+        prefixes = tuple(self.bot.get_guild_prefixes(ctx.guild))
+
+        def check(m):
+            return (m.author == ctx.me or m.content.startswith(prefixes)) and not (m.mentions or m.role_mentions)
+
+        deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
+        return Counter(m.author.display_name for m in deleted)
+
     @commands.command()
-    @checks.has_permissions(manage_messages=True)
     async def cleanup(self, ctx, search=100):
         """Cleans up the bot's messages from the channel.
 
@@ -673,12 +681,22 @@ class Mod(commands.Cog):
         which people got their messages deleted and their count. This is useful
         to see which users are spammers.
 
-        You must have Manage Messages permission to use this.
+        Members with Manage Messages can search up to 1000 messages.
+        Members without can search up to 25 messages.
         """
 
         strategy = self._basic_cleanup_strategy
-        if ctx.me.permissions_in(ctx.channel).manage_messages:
-            strategy = self._complex_cleanup_strategy
+        is_mod = ctx.channel.permissions_for(ctx.author).manage_messages
+        if ctx.channel.permissions_for(ctx.me).manage_messages:
+            if is_mod:
+                strategy = self._complex_cleanup_strategy
+            else:
+                strategy = self._regular_user_cleanup_strategy
+
+        if is_mod:
+            search = min(max(2, search), 1000)
+        else:
+            search = min(max(2, search), 25)
 
         spammers = await strategy(ctx, search)
         deleted = sum(spammers.values())
