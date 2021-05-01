@@ -869,7 +869,7 @@ class Stars(commands.Cog):
 
                 groups = match.groupdict()
                 groups['guild_id'] = guild_id
-                fmt = 'https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}'.format(**groups)
+                fmt = 'https://discord.com/channels/{guild_id}/{channel_id}/{message_id}'.format(**groups)
                 if len(message.embeds) == 0:
                     continue
 

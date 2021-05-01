@@ -798,7 +798,7 @@ class API(commands.Cog):
         if not confirm:
             return await ctx.send('Aborting.')
 
-        url = f'https://discordapp.com/oauth2/authorize?client_id={user.id}&scope=bot&guild_id={ctx.guild.id}'
+        url = f'https://discord.com/oauth2/authorize?client_id={user.id}&scope=bot&guild_id={ctx.guild.id}'
         description = f'{reason}\n\n[Invite URL]({url})'
         embed = discord.Embed(title='Bot Request', colour=discord.Colour.blurple(), description=description)
         embed.add_field(name='Author', value=f'{ctx.author} (ID: {ctx.author.id})', inline=False)
