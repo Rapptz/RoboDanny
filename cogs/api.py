@@ -251,6 +251,8 @@ class API(commands.Cog):
             'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
             'python': 'https://docs.python.org/3',
             'python-jp': 'https://docs.python.org/ja/3',
+            'master': 'https://discordpy.readthedocs.io/en/master',
+            'master-jp': 'https://discordpy.readthedocs.io/ja/master'
         }
 
         if obj is None:
@@ -325,6 +327,16 @@ class API(commands.Cog):
     async def rtfm_python_jp(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a Python entity (Japanese)."""
         await self.do_rtfm(ctx, 'python-jp', obj)
+
+    @rtfm.command(name='master', aliases=['2.0'])
+    async def rtfm_master(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity (master branch)"""
+        await self.do_rtfm(ctx, 'master', obj)
+
+    @rtfm.command(name='master-jp', aliases=['2.0-jp'])
+    async def rtfm_master_jp(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity (master branch)"""
+        await self.do_rtfm(ctx, 'master-jp', obj)
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
