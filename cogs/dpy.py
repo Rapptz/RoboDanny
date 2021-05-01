@@ -19,19 +19,6 @@ DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 490289254757564426, 738572311107469354)
 
-DISCORD_BOT_BLOG = 'https://blog.discord.com/the-future-of-bots-on-discord-4e6e050ab52e'
-DISCORD_BOT_BLOG_RESPONSE = f"""Hello! It seems you've sent a message involving <{DISCORD_BOT_BLOG}>.
-
-This blog post is mainly marketing, therefore:
-
-1. No, discord.py does not work with it because there is nothing to work *with*.
-2. Nothing in that blog post actually exists.
-3. When the time comes and there's something concrete then we will care about the features in the blog post.
-4. You do not have to verify your bot if you're under 100 guilds.
-
-Thank you for understanding!
-"""
-
 GITHUB_TODO_COLUMN = 9341868
 GITHUB_PROGRESS_COLUMN = 9341869
 GITHUB_DONE_COLUMN = 9341870
@@ -199,16 +186,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         if message.author.bot:
             return
-
-        # The "General" category
-        if DISCORD_BOT_BLOG in message.content and message.channel.category_id == 381963245382139916:
-            try:
-                await message.delete()
-                await message.author.send(DISCORD_BOT_BLOG_RESPONSE)
-            except discord.HTTPException:
-                pass
-            finally:
-                return
 
         if message.channel.id in DISCORD_PY_HELP_CHANNELS and len(message.attachments) == 1:
             return await self.redirect_attachments(message)
