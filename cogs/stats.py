@@ -237,6 +237,9 @@ class Stats(commands.Cog):
         guilds = 0
         for guild in self.bot.guilds:
             guilds += 1
+            if guild.unavailable:
+                continue
+
             total_members += guild.member_count
             for channel in guild.channels:
                 if isinstance(channel, discord.TextChannel):
