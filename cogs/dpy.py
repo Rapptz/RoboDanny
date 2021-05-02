@@ -154,25 +154,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
                 await member.add_roles(discord.Object(id=DISCORD_PY_JP_ROLE))
             self._invite_cache[invite.code] = invite.uses
 
-    async def redirect_attachments(self, message):
-        attachment = message.attachments[0]
-        if not attachment.filename.endswith(('.txt', '.py', '.json')):
-            return
-
-        # If this file is more than 2MiB then it's definitely too big
-        if attachment.size > (2 * 1024 * 1024):
-            return
-
-        try:
-            contents = await attachment.read()
-            contents = contents.decode('utf-8')
-        except (UnicodeDecodeError, discord.HTTPException):
-            return
-
-        description = f'A file by {message.author} in the discord.py guild'
-        gist = await self.create_gist(contents, description=description, filename=attachment.filename)
-        await message.channel.send(f'File automatically uploaded to gist: <{gist}>')
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id not in (DISCORD_PY_GUILD_ID, DISCORD_API_GUILD_ID):
@@ -186,9 +167,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         if message.author.bot:
             return
-
-        if message.channel.id in DISCORD_PY_HELP_CHANNELS and len(message.attachments) == 1:
-            return await self.redirect_attachments(message)
 
         # Handle some #emoji-suggestions auto moderator and things
         # Process is mainly informal anyway
