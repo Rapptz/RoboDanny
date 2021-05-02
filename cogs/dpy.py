@@ -202,7 +202,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
                 try:
                     contents = await attachment.read()
                     contents = contents.decode(charset)
-                    matches.extend(TOKEN_REGEX.findall(contents)
+                    matches.extend(TOKEN_REGEX.findall(contents))
                 except (LookupError, UnicodeDecodeError, discord.HTTPException):
                     pass
 
