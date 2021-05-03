@@ -216,10 +216,10 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         await self.toggle_role(ctx, DISCORD_PY_JP_ROLE)
 
-    @commands.command(hidden=True)
-    async def tester(self, ctx):
-        """Allows you to opt-in to being a tester for discord.py"""
-        await self.toggle_role(ctx, DISCORD_PY_TESTER_ROLE)
+    # @commands.command(hidden=True)
+    # async def tester(self, ctx):
+    #     """Allows you to opt-in to being a tester for discord.py"""
+    #     await self.toggle_role(ctx, DISCORD_PY_TESTER_ROLE)
 
     async def get_valid_labels(self):
         labels = await self.github_request('GET', 'repos/Rapptz/discord.py/labels')
