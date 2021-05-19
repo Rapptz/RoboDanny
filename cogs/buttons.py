@@ -2,10 +2,8 @@ import asyncio
 from discord.ext import commands, menus
 import discord
 from .utils.paginator import RoboPages
-from lxml import etree
 import random
 import logging
-from urllib.parse import quote as uriquote
 from lru import LRU
 import yarl
 import io

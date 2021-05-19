@@ -2,13 +2,11 @@ from discord.ext import commands, menus
 from .utils import checks, formats, time
 from .utils.paginator import RoboPages
 import discord
-from collections import OrderedDict, deque, Counter
-import os, datetime
+from collections import Counter
+import os
 import asyncio
-import copy
 import unicodedata
 import inspect
-import itertools
 from typing import Union
 
 class Prefix(commands.Converter):

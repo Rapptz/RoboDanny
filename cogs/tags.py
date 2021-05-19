@@ -1,14 +1,10 @@
-from .utils import db, checks, formats, cache
+from .utils import db, checks, formats
 from .utils.paginator import SimplePages
 
 from discord.ext import commands, menus
-import json
-import re
 import io
-import datetime
 import discord
 import asyncio
-import traceback
 import asyncpg
 import argparse
 import shlex

@@ -1,7 +1,6 @@
 from discord.ext import commands, menus
-from .utils import config, checks, maps, fuzzy, time, formats
+from .utils import config, fuzzy, time
 from .utils.formats import plural
-from .utils.paginator import RoboPages, SimplePages, FieldPageSource
 
 from urllib.parse import quote as urlquote
 from email.utils import parsedate_to_datetime

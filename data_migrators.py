@@ -4,8 +4,6 @@
 
 import json
 import datetime
-import csv
-import io
 
 def _load_json(fp):
     with open(fp, 'r', encoding='utf-8') as f:

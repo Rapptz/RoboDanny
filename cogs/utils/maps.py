@@ -4,7 +4,6 @@
 
 from lxml import etree
 import datetime, re
-import asyncio
 
 NINTENDO_LOGIN_PAGE = "https://id.nintendo.net/oauth/authorize"
 SPLATNET_CALLBACK_URL = "https://splatoon.nintendo.net/users/auth/nintendo/callback"

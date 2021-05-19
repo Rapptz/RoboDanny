@@ -2,13 +2,10 @@ from discord.ext import commands, tasks, menus
 from .utils import checks, db, cache
 from .utils.formats import plural, human_join
 from .utils.paginator import SimplePages
-from collections import Counter, defaultdict
 
 import discord
 import datetime
 import time
-import json
-import random
 import asyncio
 import asyncpg
 import logging

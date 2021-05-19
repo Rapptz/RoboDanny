@@ -1,7 +1,7 @@
 from discord.ext import commands, tasks, menus
 from collections import Counter, defaultdict
 
-from .utils import checks, db, time, formats
+from .utils import db, time, formats
 
 import pkg_resources
 import logging
@@ -15,7 +15,6 @@ import asyncpg
 import asyncio
 import pygit2
 import psutil
-import json
 import os
 import re
 import io

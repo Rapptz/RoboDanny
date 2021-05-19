@@ -1,5 +1,5 @@
 from discord.ext import commands
-from .utils import checks, db, fuzzy, cache, time
+from .utils import db, fuzzy, cache, time
 import asyncio
 import datetime
 import discord
@@ -8,7 +8,6 @@ import zlib
 import io
 import os
 import lxml.etree as etree
-from collections import Counter
 
 DISCORD_API_ID    = 81384788765712384
 DISCORD_BOTS_ID   = 110373943822540800

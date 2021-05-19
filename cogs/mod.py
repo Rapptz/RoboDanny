@@ -2,10 +2,8 @@ from discord.ext import commands, tasks
 from .utils import checks, db, time, cache
 from .utils.formats import plural
 from collections import Counter, defaultdict
-from inspect import cleandoc
 
 import re
-import json
 import discord
 import enum
 import datetime

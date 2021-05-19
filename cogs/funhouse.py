@@ -1,5 +1,4 @@
 from discord.ext import commands
-from .utils import checks
 import discord
 import googletrans
 import io

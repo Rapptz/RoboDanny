@@ -1,6 +1,5 @@
 from discord.ext import commands
 from .utils import checks
-import aiohttp
 import asyncio
 import json
 import discord

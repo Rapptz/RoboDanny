@@ -1,10 +1,9 @@
 from discord.ext import commands
 import discord
-from cogs.utils import checks, context, db
+from cogs.utils import context
 from cogs.utils.config import Config
-import datetime, re
-import json, asyncio
-import copy
+import datetime
+import json
 import logging
 import traceback
 import aiohttp
