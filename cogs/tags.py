@@ -452,6 +452,9 @@ class Tags(commands.Cog):
         if msg.attachments:
             clean_content = f'{clean_content}\n{msg.attachments[0].url}'
 
+        if len(content) > 2000:
+            return await ctx.send('Tag content is a maximum of 2000 characters.')
+
         try:
             await self.create_tag(ctx, name, clean_content)
         finally:
