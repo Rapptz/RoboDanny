@@ -339,6 +339,9 @@ class Tags(commands.Cog):
         if self.is_tag_being_made(ctx.guild.id, name):
             return await ctx.send('This tag is currently being made by someone.')
 
+        if len(content) > 2000:
+            return await ctx.send('Tag content is a maximum of 2000 characters.')
+
         await self.create_tag(ctx, name, content)
 
     @tag.command()
