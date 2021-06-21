@@ -4,7 +4,7 @@ A personal bot that runs on Discord.
 
 ## Running
 
-I would prefer if you don't run an instance of my bot. Just call the join command with an invite URL to have it on your server. The source here is provided for educational purposes for discord.py.
+I would prefer if you don't run an instance of my bot. The source here is provided for educational purposes for discord.py.
 
 Nevertheless, the installation steps are as follows:
 
