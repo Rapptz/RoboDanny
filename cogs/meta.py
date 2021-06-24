@@ -410,7 +410,7 @@ class Meta(commands.Cog):
             if dt is None:
                 return 'N/A'
             return f'{dt:%Y-%m-%d %H:%M} ({time.human_timedelta(dt, accuracy=3)})'
-
+        e.add_field(name='Nickname', value=user.nick or "This user does not have a nickname", inline=False)
         e.add_field(name='ID', value=user.id, inline=False)
         e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)
         e.add_field(name='Created', value=format_date(user.created_at), inline=False)
