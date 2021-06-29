@@ -48,6 +48,21 @@ def is_doc_helper():
         return ctx.author._roles.has(714516281293799438)
     return commands.check(predicate)
 
+class GistContent:
+    def __init__(self, argument: str):
+        try:
+            block, code = argument.split('\n', 1)
+        except ValueError:
+            self.source = argument
+            self.language = None
+        else:
+            if not block.startswith('```') and not code.endswith('```'):
+                self.source = argument
+                self.language = None
+            else:
+                self.language = block[3:]
+                self.source = code.rstrip('`').replace('```', '')
+
 def make_field_from_note(data, column_id):
     id = data['id']
     value = data['note']
@@ -354,6 +369,17 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             await channel.send(page)
 
         await ctx.send(ctx.tick(True))
+
+    @commands.command(name='gist', hidden=True)
+    @commands.is_owner()
+    async def gist(self, ctx, *, content: GistContent):
+        """Posts a gist"""
+        if content.language is None:
+            url = await self.create_gist(content.source, filename='input.md', public=False)
+        else:
+            url = await self.create_gist(content.source, filename=f'input.{content.language}', public=False)
+
+        await ctx.send(f'<{url}>')
 
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
