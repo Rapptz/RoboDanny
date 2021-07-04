@@ -518,7 +518,7 @@ class Mod(commands.Cog):
         e = discord.Embed(title='New Members', colour=discord.Colour.green())
 
         for member in members:
-            body = f'Joined {time.format_dt(member.joined_at)}\nCreated {time.format_dt(member.created_at)}'
+            body = f'Joined {time.format_relative(member.joined_at)}\nCreated {time.format_relative(member.created_at)}'
             e.add_field(name=f'{member} (ID: {member.id})', value=body, inline=False)
 
         await ctx.send(embed=e)
