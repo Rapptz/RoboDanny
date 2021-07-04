@@ -448,8 +448,8 @@ class Mod(commands.Cog):
         e.timestamp = now
         e.set_author(name=str(member), icon_url=member.avatar_url)
         e.add_field(name='ID', value=member.id)
-        e.add_field(name='Joined', value=member.joined_at)
-        e.add_field(name='Created', value=time.human_timedelta(member.created_at), inline=False)
+        e.add_field(name='Joined', value=time.format_dt(member.joined_at, "F"))
+        e.add_field(name='Created', value=time.format_relative(member.created_at), inline=False)
 
         if config.broadcast_channel:
             try:
@@ -518,7 +518,7 @@ class Mod(commands.Cog):
         e = discord.Embed(title='New Members', colour=discord.Colour.green())
 
         for member in members:
-            body = f'Joined {time.human_timedelta(member.joined_at)}\nCreated {time.human_timedelta(member.created_at)}'
+            body = f'Joined {time.format_dt(member.joined_at)}\nCreated {time.format_dt(member.created_at)}'
             e.add_field(name=f'{member} (ID: {member.id})', value=body, inline=False)
 
         await ctx.send(embed=e)
@@ -1037,7 +1037,7 @@ class Mod(commands.Cog):
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
-        until = f'until {duration.dt:%Y-%m-%dT%H:%M UTC}'
+        until = f'until {time.format_dt(duration.dt, "F")}'
         heads_up_message = f'You have been banned from {ctx.guild.name} {until}. Reason: {reason}'
 
         try:
@@ -1053,7 +1053,7 @@ class Mod(commands.Cog):
                                                                     member.id,
                                                                     connection=ctx.db,
                                                                     created=ctx.message.created_at)
-        await ctx.send(f'Banned {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
+        await ctx.send(f'Banned {member} for {time.format_relative(duration.dt)}.')
 
     @commands.Cog.listener()
     async def on_tempban_timer_complete(self, timer):
@@ -1551,8 +1551,7 @@ class Mod(commands.Cog):
                                                                      member.id,
                                                                      role_id,
                                                                      created=ctx.message.created_at)
-        delta = time.human_timedelta(duration.dt, source=timer.created_at)
-        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {delta}.')
+        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {time.format_relative(duration.dt)}.')
 
     @commands.Cog.listener()
     async def on_tempmute_timer_complete(self, timer):
@@ -1815,7 +1814,7 @@ class Mod(commands.Cog):
         if duration.dt < (created_at + datetime.timedelta(minutes=5)):
             return await ctx.send('Duration is too short. Must be at least 5 minutes.')
 
-        delta = time.human_timedelta(duration.dt, source=created_at)
+        delta = time.format_relative(duration.dt)
         warning = f'Are you sure you want to be muted for {delta}?\n**Do not ask the moderators to undo this!**'
         confirm = await ctx.prompt(warning, reacquire=False)
         if not confirm:

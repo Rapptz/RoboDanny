@@ -49,7 +49,7 @@ class Timer:
 
     @property
     def human_delta(self):
-        return time.human_timedelta(self.created_at)
+        return time.format_relative(self.created_at)
 
     def __repr__(self):
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
@@ -242,7 +242,7 @@ class Reminder(commands.Cog):
 
         for _id, expires, message in records:
             shorten = textwrap.shorten(message, width=512)
-            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=shorten, inline=False)
+            e.add_field(name=f'{_id}: {time.format_relative(expires)}', value=shorten, inline=False)
 
         await ctx.send(embed=e)
 

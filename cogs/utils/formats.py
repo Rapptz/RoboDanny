@@ -74,3 +74,8 @@ class TabularData:
 
         to_draw.append(sep)
         return '\n'.join(to_draw)
+
+def format_dt(dt, style=None):
+    if style is None:
+        return f'<t:{int(dt.timestamp())}>'
+    return f'<t:{int(dt.timestamp())}:{style}>'
