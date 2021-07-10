@@ -1814,7 +1814,7 @@ class Mod(commands.Cog):
         if duration.dt < (created_at + datetime.timedelta(minutes=5)):
             return await ctx.send('Duration is too short. Must be at least 5 minutes.')
 
-        delta = time.format_relative(duration.dt)
+        delta = time.human_timedelta(duration.dt, source=created_at)
         warning = f'Are you sure you want to be muted for {delta}?\n**Do not ask the moderators to undo this!**'
         confirm = await ctx.prompt(warning, reacquire=False)
         if not confirm:
