@@ -375,8 +375,8 @@ class Mod(commands.Cog):
         if author.bot:
             return
 
-        # we're going to ignore members with roles
-        if len(author.roles) > 1:
+        # we're going to ignore members with manage messages
+        if author.guild_permissions.manage_messages:
             return
 
         guild_id = message.guild.id
