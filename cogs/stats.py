@@ -147,7 +147,7 @@ class Stats(commands.Cog):
         e = discord.Embed(title='Error', colour=0xdd5f53)
         e.description = f'```py\n{traceback.format_exc()}\n```'
         e.add_field(name='Extra', value=extra, inline=False)
-        e.timestamp = datetime.datetime.utcnow()
+        e.timestamp = discord.utils.utcnow()
 
         if ctx is not None:
             fmt = '{0} (ID: {0.id})'
@@ -184,7 +184,7 @@ class Stats(commands.Cog):
 
     @commands.command(hidden=True)
     async def socketstats(self, ctx):
-        delta = datetime.datetime.utcnow() - self.bot.uptime
+        delta = discord.utils.utcnow() - self.bot.uptime
         minutes = delta.total_seconds() / 60
         total = sum(self.bot.socket_stats.values())
         cpm = total / minutes
@@ -259,7 +259,7 @@ class Stats(commands.Cog):
         embed.add_field(name='Commands Run', value=sum(self.bot.command_stats.values()))
         embed.add_field(name='Uptime', value=self.get_bot_uptime(brief=True))
         embed.set_footer(text=f'Made with discord.py v{version}', icon_url='http://i.imgur.com/5BFecvA.png')
-        embed.timestamp = datetime.datetime.utcnow()
+        embed.timestamp = discord.utils.utcnow()
         await ctx.send(embed=embed)
 
     def censor_object(self, obj):
@@ -283,7 +283,12 @@ class Stats(commands.Cog):
         count = await ctx.db.fetchrow(query, ctx.guild.id)
 
         embed.description = f'{count[0]} commands used.'
-        embed.set_footer(text='Tracking command usage since').timestamp = count[1] or datetime.datetime.utcnow()
+        if count[1]:
+            timestamp = count[1].replace(tzinfo=datetime.timezone.utc)
+        else:
+            timestamp = discord.utils.utcnow()
+
+        embed.set_footer(text='Tracking command usage since').timestamp = timestamp
 
         query = """SELECT command,
                           COUNT(*) as "uses"
@@ -371,7 +376,12 @@ class Stats(commands.Cog):
         count = await ctx.db.fetchrow(query, ctx.guild.id, member.id)
 
         embed.description = f'{count[0]} commands used.'
-        embed.set_footer(text='First command used').timestamp = count[1] or datetime.datetime.utcnow()
+        if count[1]:
+            timestamp = count[1].replace(tzinfo=datetime.timezone.utc)
+        else:
+            timestamp = discord.utils.utcnow()
+
+        embed.set_footer(text='First command used').timestamp = timestamp
 
         query = """SELECT command,
                           COUNT(*) as "uses"
@@ -623,7 +633,7 @@ class Stats(commands.Cog):
 
         exc = ''.join(traceback.format_exception(type(error), error, error.__traceback__, chain=False))
         e.description = f'```py\n{exc}\n```'
-        e.timestamp = datetime.datetime.utcnow()
+        e.timestamp = discord.utils.utcnow()
         await self.webhook.send(embed=e)
 
     def add_record(self, record):
@@ -747,7 +757,7 @@ class Stats(commands.Cog):
     async def gateway(self, ctx):
         """Gateway related stats."""
 
-        yesterday = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        yesterday = discord.utils.utcnow() - datetime.timedelta(days=1)
         identifies = {
             shard_id: sum(1 for dt in dates if dt > yesterday)
             for shard_id, dates in self.bot.identifies.items()
@@ -964,7 +974,7 @@ class Stats(commands.Cog):
         render = table.render()
 
         embed = discord.Embed(title='Summary', colour=discord.Colour.green())
-        embed.set_footer(text='Since').timestamp = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+        embed.set_footer(text='Since').timestamp = discord.utils.utcnow() - datetime.timedelta(days=days)
 
         top_ten = '\n'.join(f'{command}: {uses}' for command, uses in records[:10])
         bottom_ten = '\n'.join(f'{command}: {uses}' for command, uses in records[-10:])
@@ -1055,7 +1065,7 @@ async def on_error(self, event, *args, **kwargs):
     e = discord.Embed(title='Event Error', colour=0xa32952)
     e.add_field(name='Event', value=event)
     e.description = f'```py\n{traceback.format_exc()}\n```'
-    e.timestamp = datetime.datetime.utcnow()
+    e.timestamp = discord.utils.utcnow()
 
     args_str = ['```py']
     for index, arg in enumerate(args):

@@ -164,7 +164,11 @@ class Reminder(commands.Cog):
         try:
             now = kwargs.pop('created')
         except KeyError:
-            now = datetime.datetime.utcnow()
+            now = discord.utils.utcnow()
+
+        # Remove timezone information since the database does not deal with it
+        when = when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
         timer = Timer.temporary(event=event, args=args, kwargs=kwargs, expires=when, created=now)
         delta = (when - now).total_seconds()

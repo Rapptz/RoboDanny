@@ -726,7 +726,7 @@ class Tags(commands.Cog):
 
         owner_id = record['lookup_owner_id']
         embed.title = record['lookup_name']
-        embed.timestamp = record['lookup_created_at']
+        embed.timestamp = record['lookup_created_at'].replace(tzinfo=datetime.timezone.utc)
         embed.set_footer(text='Alias created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
@@ -741,7 +741,7 @@ class Tags(commands.Cog):
 
         owner_id = record['owner_id']
         embed.title = record['name']
-        embed.timestamp = record['created_at']
+        embed.timestamp = record['created_at'].replace(tzinfo=datetime.timezone.utc)
         embed.set_footer(text='Tag created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
@@ -1159,7 +1159,7 @@ class Tags(commands.Cog):
 
         owner_id = data['owner_id']
         embed.title = data['name']
-        embed.timestamp = data['created_at']
+        embed.timestamp = data['created_at'].replace(tzinfo=datetime.timezone.utc)
         embed.set_footer(text='Tag added to box')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))

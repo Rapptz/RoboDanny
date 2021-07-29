@@ -168,7 +168,7 @@ class SpamChecker:
         self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
 
     def is_new(self, member):
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
         seven_days_ago = now - datetime.timedelta(days=7)
         ninety_days_ago = now - datetime.timedelta(days=90)
         return member.created_at > ninety_days_ago and member.joined_at > seven_days_ago
@@ -177,7 +177,7 @@ class SpamChecker:
         if message.guild is None:
             return False
 
-        current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+        current = message.created_at.timestamp()
 
         if message.author.id in self.fast_joiners:
             bucket = self.hit_and_run.get_bucket(message)
@@ -200,7 +200,7 @@ class SpamChecker:
         return False
 
     def is_fast_join(self, member):
-        joined = member.joined_at or datetime.datetime.utcnow()
+        joined = member.joined_at or discord.utils.utcnow()
         if self.last_join is None:
             self.last_join = joined
             return False
@@ -426,7 +426,7 @@ class Mod(commands.Cog):
         if not config.raid_mode:
             return
 
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
 
         is_new = member.created_at > (now - datetime.timedelta(days=7))
         checker = self._spam_check[guild_id]
@@ -911,7 +911,7 @@ class Mod(commands.Cog):
         if args.no_roles:
             predicates.append(lambda m: len(getattr(m, 'roles', [])) <= 1)
 
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
         if args.created:
             def created(member, *, offset=now - datetime.timedelta(minutes=args.created)):
                 return member.created_at > offset
@@ -941,7 +941,7 @@ class Mod(commands.Cog):
         if args.show:
             members = sorted(members, key=lambda m: m.joined_at or now)
             fmt = "\n".join(f'{m.id}\tJoined: {m.joined_at}\tCreated: {m.created_at}\t{m}' for m in members)
-            content = f'Current Time: {datetime.datetime.utcnow()}\nTotal members: {len(members)}\n{fmt}'
+            content = f'Current Time: {discord.utils.utcnow()}\nTotal members: {len(members)}\n{fmt}'
             file = discord.File(io.BytesIO(content.encode('utf-8')), filename='members.txt')
             return await ctx.send(file=file)
 
