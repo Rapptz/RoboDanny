@@ -293,7 +293,7 @@ class RoboDanny(commands.AutoShardedBot):
     @discord.utils.cached_property
     def stats_webhook(self):
         wh_id, wh_token = self.config.stat_webhook
-        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.session))
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, session=self.session)
         return hook
 
     def log_spammer(self, ctx, message, retry_after, *, autoblock=False):

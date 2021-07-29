@@ -140,7 +140,7 @@ class Stats(commands.Cog):
     @discord.utils.cached_property
     def webhook(self):
         wh_id, wh_token = self.bot.config.stat_webhook
-        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.bot.session))
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, session=self.bot.session)
         return hook
 
     async def log_error(self, *, ctx=None, extra=None):
