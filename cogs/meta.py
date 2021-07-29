@@ -621,7 +621,7 @@ class Meta(commands.Cog):
         if author_id is None:
             member = guild.me
         else:
-            member = self.bot.get_or_fetch_member(guild, author_id)
+            member = await self.bot.get_or_fetch_member(guild, author_id)
 
         if member is None:
             return await ctx.send('Member not found?')

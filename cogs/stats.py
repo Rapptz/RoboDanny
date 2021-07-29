@@ -226,7 +226,7 @@ class Stats(commands.Cog):
         # To properly cache myself, I need to use the bot support server.
         support_guild = self.bot.get_guild(182325885867786241)
         owner = await self.bot.get_or_fetch_member(support_guild, self.bot.owner_id)
-        embed.set_author(name=str(owner), icon_url=owner.avatar_url)
+        embed.set_author(name=str(owner), icon_url=owner.avatar.url)
 
         # statistics
         total_members = 0
