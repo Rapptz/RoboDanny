@@ -65,7 +65,7 @@ class RoboDanny(commands.AutoShardedBot):
         )
         super().__init__(command_prefix=_prefix_callable, description=description,
                          pm_help=None, help_attrs=dict(hidden=True),
-                         fetch_offline_members=False, heartbeat_timeout=150.0,
+                         chunk_guilds_at_startup=False, heartbeat_timeout=150.0,
                          allowed_mentions=allowed_mentions, intents=intents)
 
         self.client_id = config.client_id
