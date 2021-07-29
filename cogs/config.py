@@ -173,7 +173,7 @@ class Config(commands.Cog):
         self.bot = bot
 
     @cache.cache(strategy=cache.Strategy.lru, maxsize=1024, ignore_kwargs=True)
-    async def is_plonked(self, guild_id, member_id, channel_id=None, *, connection=None, check_bypass=True):
+    async def is_plonked(self, guild_id, member_id, channel=None, *, connection=None, check_bypass=True):
         if member_id in self.bot.blacklist or guild_id in self.bot.blacklist:
             return True
 
@@ -186,12 +186,16 @@ class Config(commands.Cog):
 
         connection = connection or self.bot.pool
 
-        if channel_id is None:
+        if channel is None:
             query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id=$2;"
             row = await connection.fetchrow(query, guild_id, member_id)
         else:
-            query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id IN ($2, $3);"
-            row = await connection.fetchrow(query, guild_id, member_id, channel_id)
+            if isinstance(channel, discord.Thread):
+                query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id IN ($2, $3, $4);"
+                row = await connection.fetchrow(query, guild_id, member_id, channel.id, channel.parent_id)
+            else:
+                query = "SELECT 1 FROM plonks WHERE guild_id=$1 AND entity_id IN ($2, $3);"
+                row = await connection.fetchrow(query, guild_id, member_id, channel.id)
 
         return row is not None
 
@@ -210,7 +214,7 @@ class Config(commands.Cog):
                 return True
 
         # check if we're plonked
-        is_plonked = await self.is_plonked(ctx.guild.id, ctx.author.id, channel_id=ctx.channel.id,
+        is_plonked = await self.is_plonked(ctx.guild.id, ctx.author.id, channel=ctx.channel,
                                                                         connection=ctx.db, check_bypass=False)
 
         return not is_plonked
