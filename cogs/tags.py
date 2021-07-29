@@ -136,9 +136,15 @@ class TagName(commands.clean_content):
         return converted if not self.lower else lower
 
 class FakeUser(discord.Object):
+    class FakeAsset:
+        url = 'https://cdn.discordapp.com/embed/avatars/0.png'
+
+        def __str__(self):
+            return self.url
+
     @property
-    def avatar_url(self):
-        return 'https://cdn.discordapp.com/embed/avatars/0.png'
+    def avatar(self):
+        return self.FakeAsset()
 
     @property
     def display_name(self):
@@ -547,7 +553,7 @@ class Tags(commands.Cog):
 
     async def member_tag_stats(self, ctx, member):
         e = discord.Embed(colour=discord.Colour.blurple())
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar.url)
         e.set_footer(text='These statistics are server-specific.')
 
         query = """SELECT COUNT(*)
@@ -724,7 +730,7 @@ class Tags(commands.Cog):
         embed.set_footer(text='Alias created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Original', value=record['name'])
@@ -739,7 +745,7 @@ class Tags(commands.Cog):
         embed.set_footer(text='Tag created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=record['uses'])
@@ -824,7 +830,7 @@ class Tags(commands.Cog):
         if rows:
             try:
                 p = TagPages(entries=rows)
-                p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
+                p.embed.set_author(name=member.display_name, icon_url=member.avatar.url)
                 await p.start(ctx)
             except menus.MenuError as e:
                 await ctx.send(e)
@@ -1157,7 +1163,7 @@ class Tags(commands.Cog):
         embed.set_footer(text='Tag added to box')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=data['uses'])
@@ -1268,7 +1274,7 @@ class Tags(commands.Cog):
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
             try:
                 p = SimplePages(entries=entries)
-                p.embed.set_author(name=user.display_name, icon_url=user.avatar_url)
+                p.embed.set_author(name=user.display_name, icon_url=user.avatar.url)
                 p.embed.title = f'{sum(u for _, u in rows)} total uses'
                 await p.start(ctx)
             except menus.MenuError as e:

@@ -364,7 +364,7 @@ class Stats(commands.Cog):
         )
 
         embed = discord.Embed(title='Command Stats', colour=member.colour)
-        embed.set_author(name=str(member), icon_url=member.avatar_url)
+        embed.set_author(name=str(member), icon_url=member.avatar.url)
 
         # total command uses
         query = "SELECT COUNT(*), MIN(used) FROM commands WHERE guild_id=$1 AND author_id=$2;"
@@ -578,7 +578,7 @@ class Stats(commands.Cog):
         e.add_field(name='Bots', value=f'{bots} ({bots/total:.2%})')
 
         if guild.icon:
-            e.set_thumbnail(url=guild.icon_url)
+            e.set_thumbnail(url=guild.icon.url)
 
         if guild.me:
             e.timestamp = guild.me.joined_at

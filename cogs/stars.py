@@ -195,7 +195,7 @@ class Stars(commands.Cog):
                 embed.add_field(name='Attachment', value=f'[{file.filename}]({file.url})', inline=False)
 
         embed.add_field(name='Original', value=f'[Jump!]({message.jump_url})', inline=False)
-        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar_url_as(format='png'))
+        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
         embed.timestamp = message.created_at
         embed.colour = self.star_gradient_colour(stars)
         return content, embed
@@ -998,7 +998,7 @@ class Stars(commands.Cog):
 
     async def star_member_stats(self, ctx, member):
         e = discord.Embed(colour=discord.Colour.gold())
-        e.set_author(name=member.display_name, icon_url=member.avatar_url_as(format='png'))
+        e.set_author(name=member.display_name, icon_url=member.avatar.url)
 
         # this query calculates
         # 1 - stars received,

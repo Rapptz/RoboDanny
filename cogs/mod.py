@@ -446,7 +446,7 @@ class Mod(commands.Cog):
 
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = now
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar.url)
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=time.format_dt(member.joined_at, "F"))
         e.add_field(name='Created', value=time.format_relative(member.created_at), inline=False)
