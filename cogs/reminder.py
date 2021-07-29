@@ -312,7 +312,7 @@ class Reminder(commands.Cog):
         except discord.HTTPException:
             return
 
-        guild_id = channel.guild.id if isinstance(channel, discord.TextChannel) else '@me'
+        guild_id = channel.guild.id if isinstance(channel, (discord.TextChannel, discord.Thread)) else '@me'
         message_id = timer.kwargs.get('message_id')
         msg = f'<@{author_id}>, {timer.human_delta}: {message}'
 
