@@ -644,7 +644,7 @@ class Meta(commands.Cog):
         perms.read_message_history = True
         perms.attach_files = True
         perms.add_reactions = True
-        await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, perms)}>')
+        await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, permissions=perms)}>')
 
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()
