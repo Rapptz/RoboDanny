@@ -732,7 +732,7 @@ class API(commands.Cog):
 
         embed = message.embeds[0]
         # Already been handled.
-        if embed.colour != discord.Colour.blurple():
+        if embed.colour not in (discord.Colour.blurple(), discord.Colour.og_blurple()):
             return
 
         user = await self.bot.get_or_fetch_member(guild, payload.user_id)
