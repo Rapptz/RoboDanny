@@ -88,7 +88,7 @@ class RedditMediaURL:
             async with ctx.session.get(url, headers=headers) as resp:
                 url = resp.url
 
-        is_valid_path = url.host.endswith('.reddit.com') and cls.VALID_PATH.match(url.path)
+        is_valid_path = url.host and url.host.endswith('.reddit.com') and cls.VALID_PATH.match(url.path)
         if not is_valid_path:
             raise commands.BadArgument('Not a reddit URL.')
 
