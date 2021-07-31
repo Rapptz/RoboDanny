@@ -511,7 +511,7 @@ class Mod(commands.Cog):
         count = max(min(count, 25), 5)
 
         if not ctx.guild.chunked:
-            await self.bot.request_offline_members(ctx.guild)
+            await ctx.guild.chunk()
 
         members = sorted(ctx.guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
 
