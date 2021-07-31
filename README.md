@@ -50,4 +50,4 @@ stat_webhook = ('<webhook_id>','<webhook_token>') # a webhook to a channel for b
 
 6. **Configuration of database**
 
-To configure the PostgreSQL database for use by the bot, go to the directory where `launcher.py` is located, and run the script by doing `python3.6 launcher.py db init`
+To configure the PostgreSQL database for use by the bot, go to the directory where `launcher.py` is located, and run the script by doing `python3.8 launcher.py db init`
