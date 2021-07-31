@@ -55,6 +55,6 @@ To configure the PostgreSQL database for use by the bot, go to the directory whe
 ## Requirements
 
 - Python 3.6+
-- v1.0.0 of discord.py
+- v2.0.0 of discord.py
 - lxml
 - psutil
