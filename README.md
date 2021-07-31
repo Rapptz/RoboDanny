@@ -8,13 +8,13 @@ I would prefer if you don't run an instance of my bot. Just call the join comman
 
 Nevertheless, the installation steps are as follows:
 
-1. **Make sure to get Python 3.5 or higher**
+1. **Make sure to get Python 3.8 or higher**
 
 This is required to actually run the bot.
 
 2. **Set up venv**
 
-Just do `python3.6 -m venv venv`
+Just do `python3.8 -m venv venv`
 
 3. **Install dependencies**
 
@@ -51,10 +51,3 @@ stat_webhook = ('<webhook_id>','<webhook_token>') # a webhook to a channel for b
 6. **Configuration of database**
 
 To configure the PostgreSQL database for use by the bot, go to the directory where `launcher.py` is located, and run the script by doing `python3.6 launcher.py db init`
-
-## Requirements
-
-- Python 3.6+
-- v1.0.0 of discord.py
-- lxml
-- psutil
