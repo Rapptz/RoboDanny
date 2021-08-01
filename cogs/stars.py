@@ -194,6 +194,10 @@ class Stars(commands.Cog):
             else:
                 embed.add_field(name='Attachment', value=f'[{file.filename}]({file.url})', inline=False)
 
+        ref = message.reference
+        if ref and isinstance(ref.resolved, discord.Message):
+            embed.add_field(name='Replying to...', value=f'[{ref.resolved.author}]({ref.resolved.jump_url})', inline=False)
+
         embed.add_field(name='Original', value=f'[Jump!]({message.jump_url})', inline=False)
         embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
         embed.timestamp = message.created_at
