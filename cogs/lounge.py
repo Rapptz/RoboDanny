@@ -124,6 +124,9 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
         if channel is None:
             return
 
+        if len(embed.fields) == 0:
+           return
+
         await channel.send(embed=embed)
 
     @commands.Cog.listener()
