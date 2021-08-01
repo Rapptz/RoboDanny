@@ -397,7 +397,8 @@ class Stars(commands.Cog):
         if msg.author.id == starrer_id:
             raise StarError('\N{NO ENTRY SIGN} You cannot star your own message.')
 
-        if (len(msg.content) == 0 and len(msg.attachments) == 0) or msg.type is not discord.MessageType.default:
+        empty_message = len(msg.content) == 0 and len(msg.attachments) == 0
+        if empty_message or msg.type not in (discord.MessageType.default, discord.MessageType.reply):
             raise StarError('\N{NO ENTRY SIGN} This message cannot be starred.')
 
         oldest_allowed = discord.utils.utcnow() - starboard.max_age
