@@ -907,7 +907,7 @@ class Mod(commands.Cog):
                 predicates.append(lambda m, x=_regex: x.match(m.name))
 
         if args.no_avatar:
-            predicates.append(lambda m: m.avatar is None)
+            predicates.append(lambda m: m.avatar == m.default_avatar)
         if args.no_roles:
             predicates.append(lambda m: len(getattr(m, 'roles', [])) <= 1)
 
