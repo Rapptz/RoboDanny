@@ -1,3 +1,6 @@
+import datetime
+
+
 class plural:
     def __init__(self, value):
         self.value = value
@@ -74,3 +77,11 @@ class TabularData:
 
         to_draw.append(sep)
         return '\n'.join(to_draw)
+
+def format_dt(dt, style=None):
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+    if style is None:
+        return f'<t:{int(dt.timestamp())}>'
+    return f'<t:{int(dt.timestamp())}:{style}>'

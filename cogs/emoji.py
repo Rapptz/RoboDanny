@@ -75,8 +75,8 @@ class EmojiURL:
             return cls(animated=partial.animated, url=str(partial.url))
 
 def usage_per_day(dt, usages):
-    tracking_started = datetime.datetime(2017, 3, 31)
-    now = datetime.datetime.utcnow()
+    tracking_started = datetime.datetime(2017, 3, 31, tzinfo=datetime.timezone.utc)
+    now = discord.utils.utcnow()
     if dt < tracking_started:
         base = tracking_started
     else:

@@ -7,4 +7,6 @@ migrations/current-*.json
 *.pyc
 *.log
 venv/*
+.venv/*
+*.sublime-*
 config.py

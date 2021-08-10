@@ -214,7 +214,7 @@ class Profile(commands.Cog):
 
         # consoles = [f'__{v}__: {record[k]}' for k, v in keys.items() if record[k] is not None]
         # e.add_field(name='Consoles', value='\n'.join(consoles) if consoles else 'None!', inline=False)
-        e.set_author(name=member.display_name, icon_url=member.avatar_url_as(format='png'))
+        e.set_author(name=member.display_name, icon_url=member.avatar.with_format('png'))
 
         extra = record['extra'] or {}
         rank = extra.get('sp2_rank', {})

@@ -6,6 +6,7 @@ from discord.ext import menus
 class RoboPages(menus.MenuPages):
     def __init__(self, source):
         super().__init__(source=source, check_embeds=True)
+        self.input_lock = asyncio.Lock()
 
     async def finalize(self, timed_out):
         try:
@@ -34,33 +35,37 @@ class RoboPages(menus.MenuPages):
 
         self.bot.loop.create_task(go_back_to_current_page())
 
-    @menus.button('\N{INPUT SYMBOL FOR NUMBERS}', position=menus.Last(1.5))
+    @menus.button('\N{INPUT SYMBOL FOR NUMBERS}', position=menus.Last(1.5), lock=False)
     async def numbered_page(self, payload):
         """lets you type a page number to go to"""
-        channel = self.message.channel
-        author_id = payload.user_id
-        to_delete = []
-        to_delete.append(await channel.send('What page do you want to go to?'))
+        if self.input_lock.locked():
+            return
 
-        def message_check(m):
-            return m.author.id == author_id and \
-                   channel == m.channel and \
-                   m.content.isdigit()
+        async with self.input_lock:
+            channel = self.message.channel
+            author_id = payload.user_id
+            to_delete = []
+            to_delete.append(await channel.send('What page do you want to go to?'))
 
-        try:
-            msg = await self.bot.wait_for('message', check=message_check, timeout=30.0)
-        except asyncio.TimeoutError:
-            to_delete.append(await channel.send('Took too long.'))
-            await asyncio.sleep(5)
-        else:
-            page = int(msg.content)
-            to_delete.append(msg)
-            await self.show_checked_page(page - 1)
+            def message_check(m):
+                return m.author.id == author_id and \
+                       channel == m.channel and \
+                       m.content.isdigit()
 
-        try:
-            await channel.delete_messages(to_delete)
-        except Exception:
-            pass
+            try:
+                msg = await self.bot.wait_for('message', check=message_check, timeout=30.0)
+            except asyncio.TimeoutError:
+                to_delete.append(await channel.send('Took too long.'))
+                await asyncio.sleep(5)
+            else:
+                page = int(msg.content)
+                to_delete.append(msg)
+                await self.show_checked_page(page - 1)
+
+            try:
+                await channel.delete_messages(to_delete)
+            except Exception:
+                pass
 
 class FieldPageSource(menus.ListPageSource):
     """A page source that requires (field_name, field_value) tuple items."""

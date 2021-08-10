@@ -136,9 +136,15 @@ class TagName(commands.clean_content):
         return converted if not self.lower else lower
 
 class FakeUser(discord.Object):
+    class FakeAsset:
+        url = 'https://cdn.discordapp.com/embed/avatars/0.png'
+
+        def __str__(self):
+            return self.url
+
     @property
-    def avatar_url(self):
-        return 'https://cdn.discordapp.com/embed/avatars/0.png'
+    def avatar(self):
+        return self.FakeAsset()
 
     @property
     def display_name(self):
@@ -339,6 +345,9 @@ class Tags(commands.Cog):
         if self.is_tag_being_made(ctx.guild.id, name):
             return await ctx.send('This tag is currently being made by someone.')
 
+        if len(content) > 2000:
+            return await ctx.send('Tag content is a maximum of 2000 characters.')
+
         await self.create_tag(ctx, name, content)
 
     @tag.command()
@@ -449,6 +458,9 @@ class Tags(commands.Cog):
         if msg.attachments:
             clean_content = f'{clean_content}\n{msg.attachments[0].url}'
 
+        if len(clean_content) > 2000:
+            return await ctx.send('Tag content is a maximum of 2000 characters.')
+
         try:
             await self.create_tag(ctx, name, clean_content)
         finally:
@@ -547,7 +559,7 @@ class Tags(commands.Cog):
 
     async def member_tag_stats(self, ctx, member):
         e = discord.Embed(colour=discord.Colour.blurple())
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar.url)
         e.set_footer(text='These statistics are server-specific.')
 
         query = """SELECT COUNT(*)
@@ -720,11 +732,11 @@ class Tags(commands.Cog):
 
         owner_id = record['lookup_owner_id']
         embed.title = record['lookup_name']
-        embed.timestamp = record['lookup_created_at']
+        embed.timestamp = record['lookup_created_at'].replace(tzinfo=datetime.timezone.utc)
         embed.set_footer(text='Alias created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Original', value=record['name'])
@@ -735,11 +747,11 @@ class Tags(commands.Cog):
 
         owner_id = record['owner_id']
         embed.title = record['name']
-        embed.timestamp = record['created_at']
+        embed.timestamp = record['created_at'].replace(tzinfo=datetime.timezone.utc)
         embed.set_footer(text='Tag created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=record['uses'])
@@ -824,7 +836,7 @@ class Tags(commands.Cog):
         if rows:
             try:
                 p = TagPages(entries=rows)
-                p.embed.set_author(name=member.display_name, icon_url=member.avatar_url)
+                p.embed.set_author(name=member.display_name, icon_url=member.avatar.url)
                 await p.start(ctx)
             except menus.MenuError as e:
                 await ctx.send(e)
@@ -1001,11 +1013,16 @@ class Tags(commands.Cog):
         has no owner because they have left the server.
         """
 
+        alias = False
         # requires 2 queries for UX
         query = "SELECT id, owner_id FROM tags WHERE location_id=$1 AND LOWER(name)=$2;"
         row = await ctx.db.fetchrow(query, ctx.guild.id, tag.lower())
         if row is None:
-            return await ctx.send(f'A tag with the name of "{tag}" does not exist.')
+            alias_query = "SELECT tag_id, owner_id FROM tag_lookup WHERE location_id = $1 and LOWER(name) = $2;"
+            row = await ctx.db.fetchrow(alias_query, ctx.guild.id, tag.lower())
+            if row is None:
+                return await ctx.send(f'A tag with the name of "{tag}" does not exist.')
+            alias = True
 
         member = await self.bot.get_or_fetch_member(ctx.guild, row[1])
         if member is not None:
@@ -1013,8 +1030,9 @@ class Tags(commands.Cog):
 
         async with ctx.acquire():
             async with ctx.db.transaction():
-                query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
-                await ctx.db.execute(query, ctx.author.id, row[0])
+                if not alias:
+                    query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
+                    await ctx.db.execute(query, ctx.author.id, row[0])
                 query = "UPDATE tag_lookup SET owner_id=$1 WHERE tag_id=$2;"
                 await ctx.db.execute(query, ctx.author.id, row[0])
 
@@ -1174,11 +1192,11 @@ class Tags(commands.Cog):
 
         owner_id = data['owner_id']
         embed.title = data['name']
-        embed.timestamp = data['created_at']
+        embed.timestamp = data['created_at'].replace(tzinfo=datetime.timezone.utc)
         embed.set_footer(text='Tag added to box')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar_url)
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=data['uses'])
@@ -1289,7 +1307,7 @@ class Tags(commands.Cog):
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
             try:
                 p = SimplePages(entries=entries)
-                p.embed.set_author(name=user.display_name, icon_url=user.avatar_url)
+                p.embed.set_author(name=user.display_name, icon_url=user.avatar.url)
                 p.embed.title = f'{sum(u for _, u in rows)} total uses'
                 await p.start(ctx)
             except menus.MenuError as e:

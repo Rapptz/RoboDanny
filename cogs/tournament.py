@@ -454,8 +454,11 @@ class Tournament(commands.Cog):
         e.timestamp = datetime.datetime.utcnow()
 
         wh_id, wh_token = self.bot.config.tourney_webhook
-        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.bot.session))
-        await hook.send(embed=e, content='@here' if ping else None)
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, session=self.bot.session)
+        if ping:
+            await hook.send(embed=e, content='@here')
+        else:
+            await hook.send(embed=e)
 
     @property
     def tournament_state(self):
@@ -1948,7 +1951,7 @@ class Tournament(commands.Cog):
 
         info = await ctx.db.fetchrow(query, member.id)
         e = discord.Embed()
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar.url)
 
         if record['challonge']:
             e.url = f'https://challonge.com/users/{record["challonge"]}'

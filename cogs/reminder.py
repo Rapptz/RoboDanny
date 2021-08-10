@@ -49,7 +49,7 @@ class Timer:
 
     @property
     def human_delta(self):
-        return time.human_timedelta(self.created_at)
+        return time.format_relative(self.created_at)
 
     def __repr__(self):
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
@@ -164,7 +164,11 @@ class Reminder(commands.Cog):
         try:
             now = kwargs.pop('created')
         except KeyError:
-            now = datetime.datetime.utcnow()
+            now = discord.utils.utcnow()
+
+        # Remove timezone information since the database does not deal with it
+        when = when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
         timer = Timer.temporary(event=event, args=args, kwargs=kwargs, expires=when, created=now)
         delta = (when - now).total_seconds()
@@ -242,7 +246,7 @@ class Reminder(commands.Cog):
 
         for _id, expires, message in records:
             shorten = textwrap.shorten(message, width=512)
-            e.add_field(name=f'{_id}: In {time.human_timedelta(expires)}', value=shorten, inline=False)
+            e.add_field(name=f'{_id}: {time.format_relative(expires)}', value=shorten, inline=False)
 
         await ctx.send(embed=e)
 
@@ -308,12 +312,12 @@ class Reminder(commands.Cog):
         except discord.HTTPException:
             return
 
-        guild_id = channel.guild.id if isinstance(channel, discord.TextChannel) else '@me'
+        guild_id = channel.guild.id if isinstance(channel, (discord.TextChannel, discord.Thread)) else '@me'
         message_id = timer.kwargs.get('message_id')
         msg = f'<@{author_id}>, {timer.human_delta}: {message}'
 
         if message_id:
-            msg = f'{msg}\n\n<https://discordapp.com/channels/{guild_id}/{channel.id}/{message_id}>'
+            msg = f'{msg}\n\n<https://discord.com/channels/{guild_id}/{channel.id}/{message_id}>'
 
         try:
             await channel.send(msg)

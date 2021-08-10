@@ -66,10 +66,16 @@ class Funhouse(commands.Cog):
                 await ctx.send(embed=discord.Embed(title='Random Dog').set_image(url=url))
 
     @commands.command(hidden=True)
-    async def translate(self, ctx, *, message: commands.clean_content):
+    async def translate(self, ctx, *, message: commands.clean_content = None):
         """Translates a message to English using Google translate."""
 
         loop = self.bot.loop
+        if message is None:
+            ref = ctx.message.reference
+            if ref and isinstance(ref.resolved, discord.Message):
+                message = ref.resolved.content
+            else:
+                return await ctx.send('Missing a message to translate')
 
         try:
             ret = await loop.run_in_executor(None, self.trans.translate, message)

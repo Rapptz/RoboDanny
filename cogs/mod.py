@@ -168,7 +168,7 @@ class SpamChecker:
         self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
 
     def is_new(self, member):
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
         seven_days_ago = now - datetime.timedelta(days=7)
         ninety_days_ago = now - datetime.timedelta(days=90)
         return member.created_at > ninety_days_ago and member.joined_at > seven_days_ago
@@ -177,7 +177,7 @@ class SpamChecker:
         if message.guild is None:
             return False
 
-        current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+        current = message.created_at.timestamp()
 
         if message.author.id in self.fast_joiners:
             bucket = self.hit_and_run.get_bucket(message)
@@ -200,7 +200,7 @@ class SpamChecker:
         return False
 
     def is_fast_join(self, member):
-        joined = member.joined_at or datetime.datetime.utcnow()
+        joined = member.joined_at or discord.utils.utcnow()
         if self.last_join is None:
             self.last_join = joined
             return False
@@ -375,8 +375,8 @@ class Mod(commands.Cog):
         if author.bot:
             return
 
-        # we're going to ignore members with roles
-        if len(author.roles) > 1:
+        # we're going to ignore members with manage messages
+        if author.guild_permissions.manage_messages:
             return
 
         guild_id = message.guild.id
@@ -426,7 +426,7 @@ class Mod(commands.Cog):
         if not config.raid_mode:
             return
 
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
 
         is_new = member.created_at > (now - datetime.timedelta(days=7))
         checker = self._spam_check[guild_id]
@@ -446,10 +446,10 @@ class Mod(commands.Cog):
 
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = now
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar.url)
         e.add_field(name='ID', value=member.id)
-        e.add_field(name='Joined', value=member.joined_at)
-        e.add_field(name='Created', value=time.human_timedelta(member.created_at), inline=False)
+        e.add_field(name='Joined', value=time.format_dt(member.joined_at, "F"))
+        e.add_field(name='Created', value=time.format_relative(member.created_at), inline=False)
 
         if config.broadcast_channel:
             try:
@@ -511,14 +511,14 @@ class Mod(commands.Cog):
         count = max(min(count, 25), 5)
 
         if not ctx.guild.chunked:
-            await self.bot.request_offline_members(ctx.guild)
+            members = await ctx.guild.chunk(cache=True)
 
         members = sorted(ctx.guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
 
         e = discord.Embed(title='New Members', colour=discord.Colour.green())
 
         for member in members:
-            body = f'Joined {time.human_timedelta(member.joined_at)}\nCreated {time.human_timedelta(member.created_at)}'
+            body = f'Joined {time.format_relative(member.joined_at)}\nCreated {time.format_relative(member.created_at)}'
             e.add_field(name=f'{member} (ID: {member.id})', value=body, inline=False)
 
         await ctx.send(embed=e)
@@ -646,7 +646,7 @@ class Mod(commands.Cog):
     async def _basic_cleanup_strategy(self, ctx, search):
         count = 0
         async for msg in ctx.history(limit=search, before=ctx.message):
-            if msg.author == ctx.me:
+            if msg.author == ctx.me and not (msg.mentions or msg.role_mentions):
                 await msg.delete()
                 count += 1
         return { 'Bot': count }
@@ -660,8 +660,16 @@ class Mod(commands.Cog):
         deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
         return Counter(m.author.display_name for m in deleted)
 
+    async def _regular_user_cleanup_strategy(self, ctx, search):
+        prefixes = tuple(self.bot.get_guild_prefixes(ctx.guild))
+
+        def check(m):
+            return (m.author == ctx.me or m.content.startswith(prefixes)) and not (m.mentions or m.role_mentions)
+
+        deleted = await ctx.channel.purge(limit=search, check=check, before=ctx.message)
+        return Counter(m.author.display_name for m in deleted)
+
     @commands.command()
-    @checks.has_permissions(manage_messages=True)
     async def cleanup(self, ctx, search=100):
         """Cleans up the bot's messages from the channel.
 
@@ -673,12 +681,22 @@ class Mod(commands.Cog):
         which people got their messages deleted and their count. This is useful
         to see which users are spammers.
 
-        You must have Manage Messages permission to use this.
+        Members with Manage Messages can search up to 1000 messages.
+        Members without can search up to 25 messages.
         """
 
         strategy = self._basic_cleanup_strategy
-        if ctx.me.permissions_in(ctx.channel).manage_messages:
-            strategy = self._complex_cleanup_strategy
+        is_mod = ctx.channel.permissions_for(ctx.author).manage_messages
+        if ctx.channel.permissions_for(ctx.me).manage_messages:
+            if is_mod:
+                strategy = self._complex_cleanup_strategy
+            else:
+                strategy = self._regular_user_cleanup_strategy
+
+        if is_mod:
+            search = min(max(2, search), 1000)
+        else:
+            search = min(max(2, search), 25)
 
         spammers = await strategy(ctx, search)
         deleted = sum(spammers.values())
@@ -889,11 +907,11 @@ class Mod(commands.Cog):
                 predicates.append(lambda m, x=_regex: x.match(m.name))
 
         if args.no_avatar:
-            predicates.append(lambda m: m.avatar is None)
+            predicates.append(lambda m: m.avatar == m.default_avatar)
         if args.no_roles:
             predicates.append(lambda m: len(getattr(m, 'roles', [])) <= 1)
 
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
         if args.created:
             def created(member, *, offset=now - datetime.timedelta(minutes=args.created)):
                 return member.created_at > offset
@@ -906,12 +924,12 @@ class Mod(commands.Cog):
                 return member.joined_at and member.joined_at > offset
             predicates.append(joined)
         if args.joined_after:
-            _joined_after_member = await converter.convert(ctx, args.joined_after)
+            _joined_after_member = await converter.convert(ctx, str(args.joined_after))
             def joined_after(member, *, _other=_joined_after_member):
                 return member.joined_at and _other.joined_at and member.joined_at > _other.joined_at
             predicates.append(joined_after)
         if args.joined_before:
-            _joined_before_member = await converter.convert(ctx, args.joined_before)
+            _joined_before_member = await converter.convert(ctx, str(args.joined_before))
             def joined_before(member, *, _other=_joined_before_member):
                 return member.joined_at and _other.joined_at and member.joined_at < _other.joined_at
             predicates.append(joined_before)
@@ -923,7 +941,7 @@ class Mod(commands.Cog):
         if args.show:
             members = sorted(members, key=lambda m: m.joined_at or now)
             fmt = "\n".join(f'{m.id}\tJoined: {m.joined_at}\tCreated: {m.created_at}\t{m}' for m in members)
-            content = f'Current Time: {datetime.datetime.utcnow()}\nTotal members: {len(members)}\n{fmt}'
+            content = f'Current Time: {discord.utils.utcnow()}\nTotal members: {len(members)}\n{fmt}'
             file = discord.File(io.BytesIO(content.encode('utf-8')), filename='members.txt')
             return await ctx.send(file=file)
 
@@ -1019,7 +1037,7 @@ class Mod(commands.Cog):
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
-        until = f'until {duration.dt:%Y-%m-%dT%H:%M UTC}'
+        until = f'until {time.format_dt(duration.dt, "F")}'
         heads_up_message = f'You have been banned from {ctx.guild.name} {until}. Reason: {reason}'
 
         try:
@@ -1035,7 +1053,7 @@ class Mod(commands.Cog):
                                                                     member.id,
                                                                     connection=ctx.db,
                                                                     created=ctx.message.created_at)
-        await ctx.send(f'Banned {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
+        await ctx.send(f'Banned {member} for {time.format_relative(duration.dt)}.')
 
     @commands.Cog.listener()
     async def on_tempban_timer_complete(self, timer):
@@ -1490,7 +1508,7 @@ class Mod(commands.Cog):
         role = discord.Object(id=ctx.guild_config.mute_role_id)
         total = len(members)
         if total == 0:
-            return await ctx.send('Missing members to mute.')
+            return await ctx.send('Missing members to unmute.')
 
         failed = 0
         for member in members:
@@ -1533,8 +1551,7 @@ class Mod(commands.Cog):
                                                                      member.id,
                                                                      role_id,
                                                                      created=ctx.message.created_at)
-        delta = time.human_timedelta(duration.dt, source=timer.created_at)
-        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {delta}.')
+        await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {time.format_relative(duration.dt)}.')
 
     @commands.Cog.listener()
     async def on_tempmute_timer_complete(self, timer):

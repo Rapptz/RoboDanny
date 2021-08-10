@@ -65,7 +65,7 @@ class RoboDanny(commands.AutoShardedBot):
         )
         super().__init__(command_prefix=_prefix_callable, description=description,
                          pm_help=None, help_attrs=dict(hidden=True),
-                         fetch_offline_members=False, heartbeat_timeout=150.0,
+                         chunk_guilds_at_startup=False, heartbeat_timeout=150.0,
                          allowed_mentions=allowed_mentions, intents=intents)
 
         self.client_id = config.client_id
@@ -105,7 +105,7 @@ class RoboDanny(commands.AutoShardedBot):
                 traceback.print_exc()
 
     def _clear_gateway_data(self):
-        one_week_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        one_week_ago = discord.utils.utcnow() - datetime.timedelta(days=7)
         for shard_id, dates in self.identifies.items():
             to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
             for index in reversed(to_remove):
@@ -121,7 +121,7 @@ class RoboDanny(commands.AutoShardedBot):
 
     async def before_identify_hook(self, shard_id, *, initial):
         self._clear_gateway_data()
-        self.identifies[shard_id].append(datetime.datetime.utcnow())
+        self.identifies[shard_id].append(discord.utils.utcnow())
         await super().before_identify_hook(shard_id, initial=initial)
 
     async def on_command_error(self, ctx, error):
@@ -277,23 +277,23 @@ class RoboDanny(commands.AutoShardedBot):
             for index in range(0, total_need_resolution, 100):
                 to_resolve = needs_resolution[index:index + 100]
                 members = await guild.query_members(limit=100, user_ids=to_resolve, cache=True)
-                for member in resolved:
+                for member in members:
                     yield member
 
     async def on_ready(self):
         if not hasattr(self, 'uptime'):
-            self.uptime = datetime.datetime.utcnow()
+            self.uptime = discord.utils.utcnow()
 
         print(f'Ready: {self.user} (ID: {self.user.id})')
 
     async def on_shard_resumed(self, shard_id):
         print(f'Shard ID {shard_id} has resumed...')
-        self.resumes[shard_id].append(datetime.datetime.utcnow())
+        self.resumes[shard_id].append(discord.utils.utcnow())
 
     @discord.utils.cached_property
     def stats_webhook(self):
         wh_id, wh_token = self.config.stat_webhook
-        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.session))
+        hook = discord.Webhook.partial(id=wh_id, token=wh_token, session=self.session)
         return hook
 
     def log_spammer(self, ctx, message, retry_after, *, autoblock=False):
@@ -309,7 +309,7 @@ class RoboDanny(commands.AutoShardedBot):
         embed.add_field(name='Member', value=f'{message.author} (ID: {message.author.id})', inline=False)
         embed.add_field(name='Guild Info', value=f'{guild_name} (ID: {guild_id})', inline=False)
         embed.add_field(name='Channel Info', value=f'{message.channel} (ID: {message.channel.id}', inline=False)
-        embed.timestamp = datetime.datetime.utcnow()
+        embed.timestamp = discord.utils.utcnow()
         return wh.send(embed=embed)
 
     async def process_commands(self, message):
@@ -325,7 +325,7 @@ class RoboDanny(commands.AutoShardedBot):
             return
 
         bucket = self.spam_control.get_bucket(message)
-        current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+        current = message.created_at.timestamp()
         retry_after = bucket.update_rate_limit(current)
         author_id = message.author.id
         if retry_after and author_id != self.owner_id:

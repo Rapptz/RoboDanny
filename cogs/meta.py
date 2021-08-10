@@ -25,7 +25,7 @@ class BotHelpPageSource(menus.ListPageSource):
         super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=6)
         self.commands = commands
         self.help_command = help_command
-        self.prefix = help_command.clean_prefix
+        self.prefix = help_command.context.clean_prefix
 
     def format_commands(self, cog, commands):
         # A field can only have 1024 characters so we need to paginate a bit
@@ -143,7 +143,7 @@ class HelpMenu(RoboPages):
 class PaginatedHelpCommand(commands.HelpCommand):
     def __init__(self):
         super().__init__(command_attrs={
-            'cooldown': commands.Cooldown(1, 3.0, commands.BucketType.member),
+            'cooldown': commands.CooldownMapping.from_cooldown(1, 3.0, commands.BucketType.member),
             'help': 'Shows help about the bot, a command, or a category'
         })
 
@@ -183,7 +183,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
-        menu = HelpMenu(GroupHelpPageSource(cog, entries, prefix=self.clean_prefix))
+        menu = HelpMenu(GroupHelpPageSource(cog, entries, prefix=self.context.clean_prefix))
         await self.context.release()
         await menu.start(self.context)
 
@@ -209,7 +209,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
         if len(entries) == 0:
             return await self.send_command_help(group)
 
-        source = GroupHelpPageSource(group, entries, prefix=self.clean_prefix)
+        source = GroupHelpPageSource(group, entries, prefix=self.context.clean_prefix)
         self.common_command_formatting(source, group)
         menu = HelpMenu(source)
         await self.context.release()
@@ -392,7 +392,7 @@ class Meta(commands.Cog):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
         user = user or ctx.author
-        avatar = user.avatar_url_as(static_format='png')
+        avatar = user.avatar.with_static_format('png')
         embed.set_author(name=str(user), url=avatar)
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
@@ -409,7 +409,7 @@ class Meta(commands.Cog):
         def format_date(dt):
             if dt is None:
                 return 'N/A'
-            return f'{dt:%Y-%m-%d %H:%M} ({time.human_timedelta(dt, accuracy=3)})'
+            return f'{time.format_dt(dt, "F")} ({time.format_relative(dt)})'
 
         e.add_field(name='ID', value=user.id, inline=False)
         e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)
@@ -430,7 +430,7 @@ class Meta(commands.Cog):
             e.colour = colour
 
         if user.avatar:
-            e.set_thumbnail(url=user.avatar_url)
+            e.set_thumbnail(url=user.avatar.url)
 
         if isinstance(user, discord.User):
             e.set_footer(text='This member is not in this server.')
@@ -474,7 +474,7 @@ class Meta(commands.Cog):
         e.title = guild.name
         e.description = f'**ID**: {guild.id}\n**Owner**: {guild.owner}'
         if guild.icon:
-            e.set_thumbnail(url=guild.icon_url)
+            e.set_thumbnail(url=guild.icon.url)
 
         channel_info = []
         key_to_emoji = {
@@ -525,7 +525,7 @@ class Meta(commands.Cog):
             boosts = f'Level {guild.premium_tier}\n{guild.premium_subscription_count} boosts'
             last_boost = max(guild.members, key=lambda m: m.premium_since or guild.created_at)
             if last_boost.premium_since is not None:
-                boosts = f'{boosts}\nLast Boost: {last_boost} ({time.human_timedelta(last_boost.premium_since, accuracy=2)})'
+                boosts = f'{boosts}\nLast Boost: {last_boost} ({time.format_relative(last_boost.premium_since)})'
             e.add_field(name='Boosts', value=boosts, inline=False)
 
         bots = sum(m.bot for m in guild.members)
@@ -557,7 +557,7 @@ class Meta(commands.Cog):
     async def say_permissions(self, ctx, member, channel):
         permissions = channel.permissions_for(member)
         e = discord.Embed(colour=member.colour)
-        avatar = member.avatar_url_as(static_format='png')
+        avatar = member.avatar.with_static_format('png')
         e.set_author(name=str(member), url=avatar)
         allowed, denied = [], []
         for name, value in permissions:
@@ -621,7 +621,7 @@ class Meta(commands.Cog):
         if author_id is None:
             member = guild.me
         else:
-            member = self.bot.get_or_fetch_member(guild, author_id)
+            member = await self.bot.get_or_fetch_member(guild, author_id)
 
         if member is None:
             return await ctx.send('Member not found?')
@@ -644,7 +644,7 @@ class Meta(commands.Cog):
         perms.read_message_history = True
         perms.attach_files = True
         perms.add_reactions = True
-        await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, perms)}>')
+        await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, permissions=perms)}>')
 
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()

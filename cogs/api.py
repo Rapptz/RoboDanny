@@ -251,6 +251,7 @@ class API(commands.Cog):
             'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
             'python': 'https://docs.python.org/3',
             'python-jp': 'https://docs.python.org/ja/3',
+            'master': 'https://discordpy.readthedocs.io/en/master',
         }
 
         if obj is None:
@@ -304,7 +305,7 @@ class API(commands.Cog):
     async def rtfm(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity.
 
-        Events, objects, and functions are all supported through a
+        Events, objects, and functions are all supported through 
         a cruddy fuzzy algorithm.
         """
         key = self.transform_rtfm_language_key(ctx, 'latest')
@@ -326,9 +327,14 @@ class API(commands.Cog):
         """Gives you a documentation link for a Python entity (Japanese)."""
         await self.do_rtfm(ctx, 'python-jp', obj)
 
+    @rtfm.command(name='master', aliases=['2.0'])
+    async def rtfm_master(self, ctx, *, obj: str = None):
+        """Gives you a documentation link for a discord.py entity (master branch)"""
+        await self.do_rtfm(ctx, 'master', obj)
+
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
-        e.set_author(name=str(member), icon_url=member.avatar_url)
+        e.set_author(name=str(member), icon_url=member.avatar.url)
 
         query = 'SELECT count FROM rtfm WHERE user_id=$1;'
         record = await ctx.db.fetchrow(query, member.id)
@@ -463,7 +469,7 @@ class API(commands.Cog):
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
-            await ctx.send(f'Blocked {member} for {time.human_timedelta(duration.dt, source=timer.created_at)}.')
+            await ctx.send(f'Blocked {member} for {time.format_relative(duration.dt)}.')
 
     @commands.Cog.listener()
     async def on_tempblock_timer_complete(self, timer):
@@ -726,7 +732,7 @@ class API(commands.Cog):
 
         embed = message.embeds[0]
         # Already been handled.
-        if embed.colour != discord.Colour.blurple():
+        if embed.colour not in (discord.Colour.blurple(), discord.Colour.og_blurple()):
             return
 
         user = await self.bot.get_or_fetch_member(guild, payload.user_id)
@@ -798,7 +804,7 @@ class API(commands.Cog):
         if not confirm:
             return await ctx.send('Aborting.')
 
-        url = f'https://discordapp.com/oauth2/authorize?client_id={user.id}&scope=bot&guild_id={ctx.guild.id}'
+        url = f'https://discord.com/oauth2/authorize?client_id={user.id}&scope=bot&guild_id={ctx.guild.id}'
         description = f'{reason}\n\n[Invite URL]({url})'
         embed = discord.Embed(title='Bot Request', colour=discord.Colour.blurple(), description=description)
         embed.add_field(name='Author', value=f'{ctx.author} (ID: {ctx.author.id})', inline=False)
@@ -807,7 +813,7 @@ class API(commands.Cog):
 
         # data for the bot to retrieve later
         embed.set_footer(text=ctx.author.id)
-        embed.set_author(name=user.id, icon_url=user.avatar_url_as(format='png'))
+        embed.set_author(name=user.id, icon_url=user.avatar.url)
 
         channel = ctx.guild.get_channel(info['channel'])
         try:

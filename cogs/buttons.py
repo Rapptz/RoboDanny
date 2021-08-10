@@ -88,7 +88,7 @@ class RedditMediaURL:
             async with ctx.session.get(url, headers=headers) as resp:
                 url = resp.url
 
-        is_valid_path = url.host.endswith('.reddit.com') and cls.VALID_PATH.match(url.path)
+        is_valid_path = url.host and url.host.endswith('.reddit.com') and cls.VALID_PATH.match(url.path)
         if not is_valid_path:
             raise commands.BadArgument('Not a reddit URL.')
 
@@ -152,7 +152,7 @@ class SpoilerCache:
 
         user = bot.get_user(self.author_id)
         if user:
-            embed.set_author(name=str(user), icon_url=user.avatar_url_as(format='png'))
+            embed.set_author(name=str(user), icon_url=user.avatar.url)
 
         return embed
 
@@ -164,12 +164,12 @@ class SpoilerCache:
 
         embed.set_footer(text=storage_message.id)
         embed.colour = 0x01AEEE
-        embed.set_author(name=ctx.author, icon_url=ctx.author.avatar_url_as(format='png'))
+        embed.set_author(name=ctx.author, icon_url=ctx.author.avatar.url)
         return embed
 
 class SpoilerCooldown(commands.CooldownMapping):
     def __init__(self):
-        super().__init__(commands.Cooldown(1, 10.0, commands.BucketType.user))
+        super().__init__(commands.Cooldown(1, 10.0), commands.BucketType.user)
 
     def _bucket_key(self, tup):
         return tup
@@ -229,11 +229,15 @@ class Buttons(commands.Cog):
         """
 
         e = discord.Embed(title='Feedback', colour=0x738bd7)
-        channel = self.bot.get_channel(263814407191134218)
+        guild = self.bot.get_guild(182325885867786241)
+        if guild is None:
+            return
+
+        channel = guild.get_channel(263814407191134218)
         if channel is None:
             return
 
-        e.set_author(name=str(ctx.author), icon_url=ctx.author.avatar_url)
+        e.set_author(name=str(ctx.author), icon_url=ctx.author.avatar.url)
         e.description = content
         e.timestamp = ctx.message.created_at
 

@@ -1,6 +1,6 @@
 git+https://github.com/Rapptz/discord.py@master
 git+https://github.com/ssut/py-googletrans@master
-git+https://github.com/Rapptz/discord-ext-menus@84caae8038d0d
+git+https://github.com/Rapptz/discord-ext-menus@fbb8803779373357e274e1540b368365fd9d8074
 lxml
 psutil
 asyncpg>=0.12.0

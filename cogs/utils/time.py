@@ -1,7 +1,7 @@
 import datetime
 import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
-from .formats import plural, human_join
+from .formats import plural, human_join, format_dt as format_dt
 from discord.ext import commands
 import re
 
@@ -26,7 +26,7 @@ class ShortTime:
             raise commands.BadArgument('invalid time provided')
 
         data = { k: int(v) for k, v in match.groupdict(default=0).items() }
-        now = now or datetime.datetime.utcnow()
+        now = now or datetime.datetime.now(datetime.timezone.utc)
         self.dt = now + relativedelta(**data)
 
     @classmethod
@@ -159,7 +159,7 @@ class UserFriendlyTime(commands.Converter):
             if status.accuracy == pdt.pdtContext.ACU_HALFDAY:
                 dt = dt.replace(day=now.day + 1)
 
-            result.dt =  dt
+            result.dt =  dt.replace(tzinfo=datetime.timezone.utc)
 
             if begin in (0, 1):
                 if begin == 1:
@@ -183,7 +183,13 @@ class UserFriendlyTime(commands.Converter):
             raise
 
 def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
-    now = source or datetime.datetime.utcnow()
+    now = source or datetime.datetime.now(datetime.timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=datetime.timezone.utc)
+
     # Microsecond free zone
     now = now.replace(microsecond=0)
     dt = dt.replace(microsecond=0)
@@ -242,3 +248,6 @@ def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
             return human_join(output, final='and') + suffix
         else:
             return ' '.join(output) + suffix
+
+def format_relative(dt):
+    return format_dt(dt, 'R')

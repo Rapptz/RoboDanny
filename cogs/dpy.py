@@ -14,23 +14,10 @@ DISCORD_PY_API_CHANNEL_ID = 381889733053251584
 DISCORD_PY_GUILD_ID = 336642139381301249
 DISCORD_PY_BOTS_ROLE = 381980817125015563
 DISCORD_PY_REWRITE_ROLE = 381981861041143808
-DISCORD_PY_TESTER_ROLE = 669155135829835787
+DISCORD_PY_TESTER_ROLE = 859169678966784031
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 490289254757564426, 738572311107469354)
-
-DISCORD_BOT_BLOG = 'https://blog.discord.com/the-future-of-bots-on-discord-4e6e050ab52e'
-DISCORD_BOT_BLOG_RESPONSE = f"""Hello! It seems you've sent a message involving <{DISCORD_BOT_BLOG}>.
-
-This blog post is mainly marketing, therefore:
-
-1. No, discord.py does not work with it because there is nothing to work *with*.
-2. Nothing in that blog post actually exists.
-3. When the time comes and there's something concrete then we will care about the features in the blog post.
-4. You do not have to verify your bot if you're under 100 guilds.
-
-Thank you for understanding!
-"""
 
 GITHUB_TODO_COLUMN = 9341868
 GITHUB_PROGRESS_COLUMN = 9341869
@@ -60,6 +47,21 @@ def is_doc_helper():
     def predicate(ctx):
         return ctx.author._roles.has(714516281293799438)
     return commands.check(predicate)
+
+class GistContent:
+    def __init__(self, argument: str):
+        try:
+            block, code = argument.split('\n', 1)
+        except ValueError:
+            self.source = argument
+            self.language = None
+        else:
+            if not block.startswith('```') and not code.endswith('```'):
+                self.source = argument
+                self.language = None
+            else:
+                self.language = block[3:]
+                self.source = code.rstrip('`').replace('```', '')
 
 def make_field_from_note(data, column_id):
     id = data['id']
@@ -167,25 +169,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
                 await member.add_roles(discord.Object(id=DISCORD_PY_JP_ROLE))
             self._invite_cache[invite.code] = invite.uses
 
-    async def redirect_attachments(self, message):
-        attachment = message.attachments[0]
-        if not attachment.filename.endswith(('.txt', '.py', '.json')):
-            return
-
-        # If this file is more than 2MiB then it's definitely too big
-        if attachment.size > (2 * 1024 * 1024):
-            return
-
-        try:
-            contents = await attachment.read()
-            contents = contents.decode('utf-8')
-        except (UnicodeDecodeError, discord.HTTPException):
-            return
-
-        description = f'A file by {message.author} in the discord.py guild'
-        gist = await self.create_gist(contents, description=description, filename=attachment.filename)
-        await message.channel.send(f'File automatically uploaded to gist: <{gist}>')
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id not in (DISCORD_PY_GUILD_ID, DISCORD_API_GUILD_ID):
@@ -199,19 +182,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         if message.author.bot:
             return
-
-        # The "General" category
-        if DISCORD_BOT_BLOG in message.content and message.channel.category_id == 381963245382139916:
-            try:
-                await message.delete()
-                await message.author.send(DISCORD_BOT_BLOG_RESPONSE)
-            except discord.HTTPException:
-                pass
-            finally:
-                return
-
-        if message.channel.id in DISCORD_PY_HELP_CHANNELS and len(message.attachments) == 1:
-            return await self.redirect_attachments(message)
 
         # Handle some #emoji-suggestions auto moderator and things
         # Process is mainly informal anyway
@@ -399,6 +369,17 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             await channel.send(page)
 
         await ctx.send(ctx.tick(True))
+
+    @commands.command(name='gist', hidden=True)
+    @commands.is_owner()
+    async def gist(self, ctx, *, content: GistContent):
+        """Posts a gist"""
+        if content.language is None:
+            url = await self.create_gist(content.source, filename='input.md', public=False)
+        else:
+            url = await self.create_gist(content.source, filename=f'input.{content.language}', public=False)
+
+        await ctx.send(f'<{url}>')
 
 def setup(bot):
     bot.add_cog(DPYExclusive(bot))
