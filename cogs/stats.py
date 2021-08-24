@@ -1,3 +1,4 @@
+import sys
 from discord.ext import commands, tasks, menus
 from collections import Counter, defaultdict
 
@@ -1062,9 +1063,14 @@ class Stats(commands.Cog):
 old_on_error = commands.AutoShardedBot.on_error
 
 async def on_error(self, event, *args, **kwargs):
+    (exc_type, exc, tb) = sys.exc_info()
+    # Silence command errors that somehow get bubbled up far enough here
+    if isinstance(exc, commands.CommandInvokeError):
+        return
+
     e = discord.Embed(title='Event Error', colour=0xa32952)
     e.add_field(name='Event', value=event)
-    e.description = f'```py\n{traceback.format_exc()}\n```'
+    e.description = f'```py\n{traceback.format_exception(exc_type, exc, tb)}\n```'
     e.timestamp = discord.utils.utcnow()
 
     args_str = ['```py']
