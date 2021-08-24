@@ -655,7 +655,7 @@ class Stars(commands.Cog):
 
     @commands.group(invoke_without_command=True, ignore_extra=False)
     @commands.guild_only()
-    async def star(self, ctx, message: MessageID):
+    async def star(self, ctx, message: MessageID = None):
         """Stars a message via message ID.
 
         To star a message you should right click on the on a message and then
@@ -666,6 +666,8 @@ class Stars(commands.Cog):
 
         You can only star a message once.
         """
+        if message is None:
+            return await ctx.send_help(ctx.command)
 
         try:
             await self.star_message(ctx.channel, message, ctx.author.id)
