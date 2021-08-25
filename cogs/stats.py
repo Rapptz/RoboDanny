@@ -135,8 +135,8 @@ class Stats(commands.Cog):
         await self.register_command(ctx)
 
     @commands.Cog.listener()
-    async def on_socket_response(self, msg):
-        self.bot.socket_stats[msg.get('t')] += 1
+    async def on_socket_event_type(self, event_type):
+        self.bot.socket_stats[event_type] += 1
 
     @discord.utils.cached_property
     def webhook(self):

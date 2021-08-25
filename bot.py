@@ -41,6 +41,7 @@ initial_extensions = (
     'cogs.funhouse',
 )
 
+
 def _prefix_callable(bot, msg):
     user_id = bot.user.id
     base = [f'<@!{user_id}> ', f'<@{user_id}> ']
@@ -50,6 +51,7 @@ def _prefix_callable(bot, msg):
     else:
         base.extend(bot.prefixes.get(msg.guild.id, ['?', '!']))
     return base
+
 
 class RoboDanny(commands.AutoShardedBot):
     def __init__(self):
@@ -63,10 +65,17 @@ class RoboDanny(commands.AutoShardedBot):
             messages=True,
             reactions=True,
         )
-        super().__init__(command_prefix=_prefix_callable, description=description,
-                         pm_help=None, help_attrs=dict(hidden=True),
-                         chunk_guilds_at_startup=False, heartbeat_timeout=150.0,
-                         allowed_mentions=allowed_mentions, intents=intents)
+        super().__init__(
+            command_prefix=_prefix_callable,
+            description=description,
+            pm_help=None,
+            help_attrs=dict(hidden=True),
+            chunk_guilds_at_startup=False,
+            heartbeat_timeout=150.0,
+            allowed_mentions=allowed_mentions,
+            intents=intents,
+            enable_debug_events=True,
+        )
 
         self.client_id = config.client_id
         self.carbon_key = config.carbon_key
@@ -116,7 +125,7 @@ class RoboDanny(commands.AutoShardedBot):
             for index in reversed(to_remove):
                 del dates[index]
 
-    async def on_socket_response(self, msg):
+    async def on_socket_raw_receive(self, msg):
         self._prev_events.append(msg)
 
     async def before_identify_hook(self, shard_id, *, initial):
@@ -153,7 +162,6 @@ class RoboDanny(commands.AutoShardedBot):
             raise RuntimeError('Cannot have more than 10 custom prefixes.')
         else:
             await self.prefixes.put(guild.id, sorted(set(prefixes), reverse=True))
-
 
     async def add_to_blacklist(self, object_id):
         await self.blacklist.put(object_id, True)
@@ -275,7 +283,7 @@ class RoboDanny(commands.AutoShardedBot):
         else:
             # We need to chunk these in bits of 100...
             for index in range(0, total_need_resolution, 100):
-                to_resolve = needs_resolution[index:index + 100]
+                to_resolve = needs_resolution[index : index + 100]
                 members = await guild.query_members(limit=100, user_ids=to_resolve, cache=True)
                 for member in members:
                     yield member
@@ -366,7 +374,7 @@ class RoboDanny(commands.AutoShardedBot):
             with open('prev_events.log', 'w', encoding='utf-8') as fp:
                 for data in self._prev_events:
                     try:
-                        x = json.dumps(data, ensure_ascii=True, indent=4)
+                        x = json.dumps(json.loads(data), ensure_ascii=True, indent=4)
                     except:
                         fp.write(f'{data}\n')
                     else:
