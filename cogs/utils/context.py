@@ -1,7 +1,11 @@
+from __future__ import annotations
+
+from typing import Optional
 from discord.ext import commands
 import asyncio
 import discord
 import io
+
 
 class _ContextDBAcquire:
     __slots__ = ('ctx', 'timeout')
@@ -19,6 +23,47 @@ class _ContextDBAcquire:
 
     async def __aexit__(self, *args):
         await self.ctx.release()
+
+
+class ConfirmationView(discord.ui.View):
+    def __init__(self, *, timeout: float, author_id: int, reacquire: bool, ctx: Context, delete_after: bool) -> None:
+        super().__init__(timeout=timeout)
+        self.value: Optional[bool] = None
+        self.delete_after: bool = delete_after
+        self.author_id: int = author_id
+        self.ctx: Context = ctx
+        self.reacquire: bool = reacquire
+        self.message: Optional[discord.Message] = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user and interaction.user.id == self.author_id:
+            return True
+        else:
+            await interaction.response.send_message('This confirmation dialog is not for you.', ephemeral=True)
+            return False
+
+    async def on_timeout(self) -> None:
+        if self.reacquire:
+            await self.ctx.acquire()
+        if self.delete_after and self.message:
+            await self.message.delete()
+
+    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+    async def confirm(self, button: discord.ui.Button, interaction: discord.Interaction):
+        self.value = True
+        await interaction.response.defer()
+        if self.delete_after:
+            await interaction.delete_original_message()
+        self.stop()
+
+    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
+    async def cancel(self, button: discord.ui.Button, interaction: discord.Interaction):
+        self.value = False
+        await interaction.response.defer()
+        if self.delete_after:
+            await interaction.delete_original_message()
+        self.stop()
+
 
 class Context(commands.Context):
     def __init__(self, **kwargs):
@@ -90,7 +135,15 @@ class Context(commands.Context):
         finally:
             await self.acquire()
 
-    async def prompt(self, message, *, timeout=60.0, delete_after=True, reacquire=True, author_id=None):
+    async def prompt(
+        self,
+        message: str,
+        *,
+        timeout: float = 60.0,
+        delete_after: bool = True,
+        reacquire: bool = True,
+        author_id: Optional[int] = None,
+    ) -> Optional[bool]:
         """An interactive reaction confirmation dialog.
 
         Parameters
@@ -116,52 +169,17 @@ class Context(commands.Context):
             ``None`` if deny due to timeout
         """
 
-        if not self.channel.permissions_for(self.me).add_reactions:
-            raise RuntimeError('Bot does not have Add Reactions permission.')
-
-        fmt = f'{message}\n\nReact with \N{WHITE HEAVY CHECK MARK} to confirm or \N{CROSS MARK} to deny.'
-
         author_id = author_id or self.author.id
-        msg = await self.send(fmt)
-
-        confirm = None
-
-        def check(payload):
-            nonlocal confirm
-
-            if payload.message_id != msg.id or payload.user_id != author_id:
-                return False
-
-            codepoint = str(payload.emoji)
-
-            if codepoint == '\N{WHITE HEAVY CHECK MARK}':
-                confirm = True
-                return True
-            elif codepoint == '\N{CROSS MARK}':
-                confirm = False
-                return True
-
-            return False
-
-        for emoji in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}'):
-            await msg.add_reaction(emoji)
-
-        if reacquire:
-            await self.release()
-
-        try:
-            await self.bot.wait_for('raw_reaction_add', check=check, timeout=timeout)
-        except asyncio.TimeoutError:
-            confirm = None
-
-        try:
-            if reacquire:
-                await self.acquire()
-
-            if delete_after:
-                await msg.delete()
-        finally:
-            return confirm
+        view = ConfirmationView(
+            timeout=timeout,
+            delete_after=delete_after,
+            reacquire=reacquire,
+            ctx=self,
+            author_id=author_id,
+        )
+        view.message = await self.send(message, view=view)
+        await view.wait()
+        return view.value
 
     def tick(self, opt, label=None):
         lookup = {
