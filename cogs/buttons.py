@@ -152,7 +152,7 @@ class SpoilerCache:
 
         user = bot.get_user(self.author_id)
         if user:
-            embed.set_author(name=str(user), icon_url=user.avatar.url)
+            embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         return embed
 
@@ -164,7 +164,7 @@ class SpoilerCache:
 
         embed.set_footer(text=storage_message.id)
         embed.colour = 0x01AEEE
-        embed.set_author(name=ctx.author, icon_url=ctx.author.avatar.url)
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
         return embed
 
 class SpoilerCooldown(commands.CooldownMapping):
@@ -237,7 +237,7 @@ class Buttons(commands.Cog):
         if channel is None:
             return
 
-        e.set_author(name=str(ctx.author), icon_url=ctx.author.avatar.url)
+        e.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
         e.description = content
         e.timestamp = ctx.message.created_at
 

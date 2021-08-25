@@ -392,7 +392,7 @@ class Meta(commands.Cog):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
         user = user or ctx.author
-        avatar = user.avatar.with_static_format('png')
+        avatar = user.display_avatar.with_static_format('png')
         embed.set_author(name=str(user), url=avatar)
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
@@ -429,8 +429,7 @@ class Meta(commands.Cog):
         if colour.value:
             e.colour = colour
 
-        if user.avatar:
-            e.set_thumbnail(url=user.avatar.url)
+        e.set_thumbnail(url=user.display_avatar.url)
 
         if isinstance(user, discord.User):
             e.set_footer(text='This member is not in this server.')
@@ -557,7 +556,7 @@ class Meta(commands.Cog):
     async def say_permissions(self, ctx, member, channel):
         permissions = channel.permissions_for(member)
         e = discord.Embed(colour=member.colour)
-        avatar = member.avatar.with_static_format('png')
+        avatar = member.display_avatar.with_static_format('png')
         e.set_author(name=str(member), url=avatar)
         allowed, denied = [], []
         for name, value in permissions:

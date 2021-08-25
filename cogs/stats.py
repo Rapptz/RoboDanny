@@ -227,7 +227,7 @@ class Stats(commands.Cog):
         # To properly cache myself, I need to use the bot support server.
         support_guild = self.bot.get_guild(182325885867786241)
         owner = await self.bot.get_or_fetch_member(support_guild, self.bot.owner_id)
-        embed.set_author(name=str(owner), icon_url=owner.avatar.url)
+        embed.set_author(name=str(owner), icon_url=owner.display_avatar.url)
 
         # statistics
         total_members = 0
@@ -370,7 +370,7 @@ class Stats(commands.Cog):
         )
 
         embed = discord.Embed(title='Command Stats', colour=member.colour)
-        embed.set_author(name=str(member), icon_url=member.avatar.url)
+        embed.set_author(name=str(member), icon_url=member.display_avatar.url)
 
         # total command uses
         query = "SELECT COUNT(*), MIN(used) FROM commands WHERE guild_id=$1 AND author_id=$2;"

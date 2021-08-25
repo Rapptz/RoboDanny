@@ -334,7 +334,7 @@ class API(commands.Cog):
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
-        e.set_author(name=str(member), icon_url=member.avatar.url)
+        e.set_author(name=str(member), icon_url=member.display_avatar.url)
 
         query = 'SELECT count FROM rtfm WHERE user_id=$1;'
         record = await ctx.db.fetchrow(query, member.id)
@@ -813,7 +813,7 @@ class API(commands.Cog):
 
         # data for the bot to retrieve later
         embed.set_footer(text=ctx.author.id)
-        embed.set_author(name=user.id, icon_url=user.avatar.url)
+        embed.set_author(name=user.id, icon_url=user.display_avatar.url)
 
         channel = ctx.guild.get_channel(info['channel'])
         try:
