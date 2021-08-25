@@ -191,9 +191,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
             # Ignore missing permission errors
             if isinstance(error.original, discord.HTTPException) and error.original.code == 50013:
                 return
-            import traceback
 
-            traceback.print_exc()
             await ctx.send(str(error.original))
 
     def get_command_signature(self, command):
