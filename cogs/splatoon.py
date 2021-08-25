@@ -1051,7 +1051,7 @@ class Splatoon(commands.Cog):
 
         p = FieldPageSource(entries, per_page=4)
         p.embed.colour = 0xF02D7D
-        menu = RoboPages(p, ctx=ctx, show_skip_pages=False)
+        menu = RoboPages(p, ctx=ctx, compact=True)
         await menu.start()
 
     @commands.command(aliases=['maps'])
@@ -1093,7 +1093,7 @@ class Splatoon(commands.Cog):
         if not salmon:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        pages = RoboPages(SalmonRunPageSource(salmon), ctx=ctx, show_skip_pages=False)
+        pages = RoboPages(SalmonRunPageSource(salmon), ctx=ctx, compact=True)
         await pages.start()
 
     @commands.command(aliases=['splatnetshop'])
@@ -1102,7 +1102,7 @@ class Splatoon(commands.Cog):
         if not self.sp2_shop:
             return await ctx.send('Nothing currently being sold...')
 
-        pages = RoboPages(GearPageSource(self.sp2_shop), ctx=ctx, show_skip_pages=True)
+        pages = RoboPages(GearPageSource(self.sp2_shop), ctx=ctx, compact=True)
         await pages.start()
 
     @commands.command()

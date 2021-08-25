@@ -15,7 +15,7 @@ class RoboPages(discord.ui.View):
         *,
         ctx: commands.Context,
         check_embeds: bool = True,
-        show_skip_pages: bool = True,
+        compact: bool = False,
     ):
         super().__init__()
         self.source: menus.PageSource = source
@@ -23,20 +23,26 @@ class RoboPages(discord.ui.View):
         self.ctx: commands.Context = ctx
         self.message: Optional[discord.Message] = None
         self.current_page: int = 0
+        self.compact: bool = compact
         self.input_lock = asyncio.Lock()
 
         self.clear_items()
+        if not compact:
+            self.numbered_page.row = 1
+            self.stop_pages.row = 1
+
         if source.is_paginating():
             max_pages = source.get_max_pages()
             use_last_and_first = max_pages is not None and max_pages >= 2
             if use_last_and_first:
                 self.add_item(self.go_to_first_page)  # type: ignore
             self.add_item(self.go_to_previous_page)  # type: ignore
-            self.add_item(self.go_to_current_page)  # type: ignore
+            if not compact:
+                self.add_item(self.go_to_current_page)  # type: ignore
             self.add_item(self.go_to_next_page)  # type: ignore
             if use_last_and_first:
                 self.add_item(self.go_to_last_page)  # type: ignore
-            if show_skip_pages:
+            if not compact:
                 self.add_item(self.numbered_page)  # type: ignore
             self.add_item(self.stop_pages)  # type: ignore
 
@@ -62,6 +68,9 @@ class RoboPages(discord.ui.View):
                 await interaction.response.edit_message(**kwargs, view=self)
 
     def _update_labels(self, page_number: int) -> None:
+        if self.compact:
+            return
+
         self.go_to_current_page.label = str(page_number + 1)
         self.go_to_previous_page.label = str(page_number)
         self.go_to_next_page.label = str(page_number + 2)
@@ -142,7 +151,7 @@ class RoboPages(discord.ui.View):
         await self.show_page(interaction, self.source.get_max_pages() - 1)
 
 
-    @discord.ui.button(label='Skip to page...', style=discord.ButtonStyle.grey, row=1)
+    @discord.ui.button(label='Skip to page...', style=discord.ButtonStyle.grey)
     async def numbered_page(self, button: discord.ui.Button, interaction: discord.Interaction):
         """lets you type a page number to go to"""
         if self.input_lock.locked():
@@ -170,7 +179,7 @@ class RoboPages(discord.ui.View):
                 await msg.delete()
                 await self.show_checked_page(interaction, page - 1)
 
-    @discord.ui.button(label='Quit', style=discord.ButtonStyle.red, row=1)
+    @discord.ui.button(label='Quit', style=discord.ButtonStyle.red)
     async def stop_pages(self, button: discord.ui.Button, interaction: discord.Interaction):
         """stops the pagination session."""
         await interaction.response.defer()
