@@ -69,6 +69,10 @@ class Reminder(commands.Cog):
         self._current_timer = None
         self._task = bot.loop.create_task(self.dispatch_timers())
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{ALARM CLOCK}')
+
     def cog_unload(self):
         self._task.cancel()
 

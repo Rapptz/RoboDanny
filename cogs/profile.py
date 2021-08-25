@@ -167,8 +167,13 @@ class SplatoonWeapon(commands.Converter):
             return weapon
 
 class Profile(commands.Cog):
+    """Manage your Splatoon profile"""
     def __init__(self, bot):
         self.bot = bot
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{ADULT}')
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):

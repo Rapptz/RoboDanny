@@ -75,6 +75,10 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
         # (position, category_id): [(name, bucket, position, id)]
         self._channel_snapshot = {}
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='cplusplus', id=813908027182678046)
+
     def make_snapshot(self, before=None):
         before = before or discord.Object(id=0)
         ret = {}

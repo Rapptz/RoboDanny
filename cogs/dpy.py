@@ -85,6 +85,10 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         self.bot.loop.create_task(self._prepare_invites())
         self._req_lock = asyncio.Lock(loop=self.bot.loop)
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='dpy', id=596577034537402378)
+
     async def _prepare_invites(self):
         await self.bot.wait_until_ready()
         guild = self.bot.get_guild(DISCORD_PY_GUILD_ID)

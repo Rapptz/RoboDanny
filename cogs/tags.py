@@ -163,13 +163,17 @@ class TagMember(commands.Converter):
             raise e
 
 class Tags(commands.Cog):
-    """The tag related commands."""
+    """Commands to fetch something by a tag name"""
 
     def __init__(self, bot):
         self.bot = bot
 
         # guild_id: set(name)
         self._reserved_tags_being_made = {}
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{LABEL}\ufe0f')
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, (UnavailableTagCommand, UnableToUseBox)):

@@ -259,6 +259,10 @@ class Mod(commands.Cog):
         self._batch_message_lock = asyncio.Lock(loop=bot.loop)
         self.bulk_send_messages.start()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='DiscordCertifiedModerator', id=847961544124923945)
+
     def __repr__(self):
         return '<cogs.Mod>'
 

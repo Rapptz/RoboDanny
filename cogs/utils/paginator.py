@@ -25,28 +25,30 @@ class RoboPages(discord.ui.View):
         self.current_page: int = 0
         self.compact: bool = compact
         self.input_lock = asyncio.Lock()
-
         self.clear_items()
-        if not compact:
+        self.fill_items()
+
+    def fill_items(self) -> None:
+        if not self.compact:
             self.numbered_page.row = 1
             self.stop_pages.row = 1
 
-        if source.is_paginating():
-            max_pages = source.get_max_pages()
+        if self.source.is_paginating():
+            max_pages = self.source.get_max_pages()
             use_last_and_first = max_pages is not None and max_pages >= 2
             if use_last_and_first:
                 self.add_item(self.go_to_first_page)  # type: ignore
             self.add_item(self.go_to_previous_page)  # type: ignore
-            if not compact:
+            if not self.compact:
                 self.add_item(self.go_to_current_page)  # type: ignore
             self.add_item(self.go_to_next_page)  # type: ignore
             if use_last_and_first:
                 self.add_item(self.go_to_last_page)  # type: ignore
-            if not compact:
+            if not self.compact:
                 self.add_item(self.numbered_page)  # type: ignore
             self.add_item(self.stop_pages)  # type: ignore
 
-    async def _get_kwargs_from_page(self, page: int) -> Optional[Dict[str, Any]]:
+    async def _get_kwargs_from_page(self, page: int) -> Dict[str, Any]:
         value = await discord.utils.maybe_coroutine(self.source.format_page, self, page)
         if isinstance(value, dict):
             return value
@@ -54,6 +56,8 @@ class RoboPages(discord.ui.View):
             return {'content': value, 'embed': None}
         elif isinstance(value, discord.Embed):
             return {'embed': value, 'content': None}
+        else:
+            return {}
 
     async def show_page(self, interaction: discord.Interaction, page_number: int) -> None:
         page = await self.source.get_page(page_number)
@@ -68,7 +72,12 @@ class RoboPages(discord.ui.View):
                 await interaction.response.edit_message(**kwargs, view=self)
 
     def _update_labels(self, page_number: int) -> None:
+        self.go_to_first_page.disabled = page_number == 0
         if self.compact:
+            max_pages = self.source.get_max_pages()
+            self.go_to_last_page.disabled = max_pages is None or (page_number + 1) >= max_pages
+            self.go_to_next_page.disabled = max_pages is not None and (page_number + 1) >= max_pages
+            self.go_to_previous_page.disabled = page_number == 0
             return
 
         self.go_to_current_page.label = str(page_number + 1)
@@ -76,9 +85,11 @@ class RoboPages(discord.ui.View):
         self.go_to_next_page.label = str(page_number + 2)
         self.go_to_next_page.disabled = False
         self.go_to_previous_page.disabled = False
+        self.go_to_first_page.disabled = False
 
         max_pages = self.source.get_max_pages()
         if max_pages is not None:
+            self.go_to_last_page.disabled = (page_number + 1) >= max_pages
             if (page_number + 1) >= max_pages:
                 self.go_to_next_page.disabled = True
                 self.go_to_next_page.label = '…'
@@ -123,7 +134,7 @@ class RoboPages(discord.ui.View):
         page = await self.source.get_page(0)
         kwargs = await self._get_kwargs_from_page(page)
         self._update_labels(0)
-        self.message = await self.ctx.send(**kwargs, view=self)  # type: ignore
+        self.message = await self.ctx.send(**kwargs, view=self)
 
     @discord.ui.button(label='≪', style=discord.ButtonStyle.grey)
     async def go_to_first_page(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -185,69 +196,6 @@ class RoboPages(discord.ui.View):
         await interaction.response.defer()
         await interaction.delete_original_message()
         self.stop()
-
-
-class LegacyRoboPages(menus.MenuPages):
-    def __init__(self, source):
-        super().__init__(source=source, check_embeds=True)
-        self.input_lock = asyncio.Lock()
-
-    async def finalize(self, timed_out):
-        try:
-            if timed_out:
-                await self.message.clear_reactions()
-            else:
-                await self.message.delete()
-        except discord.HTTPException:
-            pass
-
-    @menus.button('\N{INFORMATION SOURCE}\ufe0f', position=menus.Last(3))
-    async def show_help(self, payload):
-        """shows this message"""
-        embed = discord.Embed(title='Paginator help', description='Hello! Welcome to the help page.')
-        messages = []
-        for (emoji, button) in self.buttons.items():
-            messages.append(f'{emoji}: {button.action.__doc__}')
-
-        embed.add_field(name='What are these reactions for?', value='\n'.join(messages), inline=False)
-        embed.set_footer(text=f'We were on page {self.current_page + 1} before this message.')
-        await self.message.edit(content=None, embed=embed)
-
-        async def go_back_to_current_page():
-            await asyncio.sleep(30.0)
-            await self.show_page(self.current_page)
-
-        self.bot.loop.create_task(go_back_to_current_page())
-
-    @menus.button('\N{INPUT SYMBOL FOR NUMBERS}', position=menus.Last(1.5), lock=False)
-    async def numbered_page(self, payload):
-        """lets you type a page number to go to"""
-        if self.input_lock.locked():
-            return
-
-        async with self.input_lock:
-            channel = self.message.channel
-            author_id = payload.user_id
-            to_delete = []
-            to_delete.append(await channel.send('What page do you want to go to?'))
-
-            def message_check(m):
-                return m.author.id == author_id and channel == m.channel and m.content.isdigit()
-
-            try:
-                msg = await self.bot.wait_for('message', check=message_check, timeout=30.0)
-            except asyncio.TimeoutError:
-                to_delete.append(await channel.send('Took too long.'))
-                await asyncio.sleep(5)
-            else:
-                page = int(msg.content)
-                to_delete.append(msg)
-                await self.show_checked_page(page - 1)
-
-            try:
-                await channel.delete_messages(to_delete)
-            except Exception:
-                pass
 
 
 class FieldPageSource(menus.ListPageSource):

@@ -75,6 +75,10 @@ class Stats(commands.Cog):
         self._gateway_queue = asyncio.Queue(loop=bot.loop)
         self.gateway_worker.start()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{BAR CHART}')
+
     async def bulk_insert(self):
         query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command, failed)
                    SELECT x.guild, x.channel, x.author, x.used, x.prefix, x.command, x.failed

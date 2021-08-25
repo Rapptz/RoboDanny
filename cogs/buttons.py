@@ -186,6 +186,10 @@ class Buttons(commands.Cog):
         self._spoiler_cache = LRU(128)
         self._spoiler_cooldown = SpoilerCooldown()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{RADIO BUTTON}')
+
     @commands.command(hidden=True)
     async def feelgood(self, ctx):
         """press"""

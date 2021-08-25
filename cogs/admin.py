@@ -86,6 +86,10 @@ class Admin(commands.Cog):
         self._last_result = None
         self.sessions = set()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='stafftools', id=314348604095594498)
+
     async def run_process(self, command):
         try:
             process = await asyncio.create_subprocess_shell(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

@@ -117,6 +117,10 @@ class Stars(commands.Cog):
         self._locks = weakref.WeakValueDictionary()
         self.spoilers = re.compile(r'\|\|(.+?)\|\|')
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{WHITE MEDIUM STAR}')
+
     def cog_unload(self):
         self.clean_message_cache.cancel()
 

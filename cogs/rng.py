@@ -1,3 +1,4 @@
+import discord
 from discord.ext import commands
 import random as rng
 from collections import Counter
@@ -9,6 +10,10 @@ class RNG(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{GAME DIE}')
 
     @commands.group(pass_context=True)
     async def random(self, ctx):

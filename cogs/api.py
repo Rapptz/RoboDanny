@@ -168,6 +168,10 @@ class API(commands.Cog):
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
         self._recently_blocked = set()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{PERSONAL COMPUTER}')
+
     @commands.Cog.listener()
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_API_ID:

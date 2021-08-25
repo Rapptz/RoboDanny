@@ -112,6 +112,10 @@ class Emoji(commands.Cog):
         self.bulk_insert.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert.start()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{LOWER LEFT PAINTBRUSH}\ufe0f')
+
     def cog_unload(self):
         self.bulk_insert.stop()
 

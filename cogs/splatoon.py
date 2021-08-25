@@ -548,6 +548,10 @@ class Splatoon(commands.Cog):
         self.sp2_festival = None
         self.sp2_salmonrun = []
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='SquidPink', id=230079634086166530)
+
     def cog_unload(self):
         if self._splatnet2:
             self._splatnet2.cancel()

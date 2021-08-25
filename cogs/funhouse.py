@@ -13,6 +13,10 @@ class Funhouse(commands.Cog):
         self.bot = bot
         self.trans = googletrans.Translator()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{MAPLE LEAF}')
+
     def is_outside_voice(self, state):
         return state.channel is None or state.channel.id != GENERAL_VOICE_ID
 

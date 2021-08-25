@@ -172,6 +172,10 @@ class Config(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{GEAR}\ufe0f')
+
     @cache.cache(strategy=cache.Strategy.lru, maxsize=1024, ignore_kwargs=True)
     async def is_plonked(self, guild_id, member_id, channel=None, *, connection=None, check_bypass=True):
         if member_id in self.bot.blacklist or guild_id in self.bot.blacklist:
