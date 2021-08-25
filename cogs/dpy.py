@@ -314,10 +314,8 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         source = FieldPageSource(todos, per_page=8)
         source.embed.colour = 0x28A745
-        try:
-            await RoboPages(source).start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        pages = RoboPages(source, ctx=ctx)
+        await pages.start()
 
     @github_todo.command(name='create')
     async def gh_todo_create(self, ctx, *, content: typing.Union[int, str]):

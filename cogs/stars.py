@@ -814,17 +814,14 @@ class Stars(commands.Cog):
         records = [r[0] for r in records]
         members = [str(member) async for member in self.bot.resolve_member_ids(ctx.guild, records)]
 
-        p = SimplePages(entries=members, per_page=20)
+        p = SimplePages(entries=members, per_page=20, ctx=ctx)
         base = format(plural(len(records)), 'star')
         if len(records) > len(members):
             p.embed.title = f'{base} ({len(records) - len(members)} left server)'
         else:
             p.embed.title = base
 
-        try:
-            await p.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        await p.start()
 
     @star.command(name='migrate')
     @requires_starboard()

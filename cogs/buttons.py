@@ -438,11 +438,8 @@ class Buttons(commands.Cog):
             if not data:
                 return await ctx.send('No results found, sorry.')
 
-        pages = RoboPages(UrbanDictionaryPageSource(data))
-        try:
-            await pages.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        pages = RoboPages(UrbanDictionaryPageSource(data), ctx=ctx)
+        await pages.start()
 
 def setup(bot):
     bot.add_cog(Buttons(bot))

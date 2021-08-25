@@ -446,7 +446,6 @@ class Admin(commands.Cog):
     async def sh(self, ctx, *, command):
         """Runs a shell command."""
         from cogs.utils.paginator import TextPageSource, RoboPages
-        from discord.ext.menus import MenuError
 
         async with ctx.typing():
             stdout, stderr = await self.run_process(command)
@@ -456,11 +455,8 @@ class Admin(commands.Cog):
         else:
             text = stdout
 
-        pages = RoboPages(TextPageSource(text))
-        try:
-            await pages.start(ctx)
-        except MenuError as e:
-            await ctx.send(str(e))
+        pages = RoboPages(TextPageSource(text), ctx=ctx)
+        await pages.start()
 
     @commands.command(hidden=True)
     async def perf(self, ctx, *, command):

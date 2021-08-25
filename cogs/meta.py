@@ -1,6 +1,6 @@
 from discord.ext import commands, menus
 from .utils import checks, formats, time
-from .utils.paginator import RoboPages
+from .utils.paginator import LegacyRoboPages
 import discord
 from collections import OrderedDict, deque, Counter
 import os, datetime
@@ -105,7 +105,7 @@ class GroupHelpPageSource(menus.ListPageSource):
         embed.set_footer(text=f'Use "{self.prefix}help command" for more info on a command.')
         return embed
 
-class HelpMenu(RoboPages):
+class HelpMenu(LegacyRoboPages):
     def __init__(self, source):
         super().__init__(source)
 

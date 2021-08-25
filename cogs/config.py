@@ -310,10 +310,8 @@ class Config(commands.Cog):
         await ctx.release()
 
         source = PlonkedPageSource(self.bot, guild, records)
-        try:
-            await RoboPages(source).start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(str(e))
+        pages = RoboPages(source, ctx=ctx)
+        await pages.start()
 
     @ignore.command(name='all')
     @checks.is_mod()

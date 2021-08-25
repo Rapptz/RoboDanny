@@ -1049,12 +1049,10 @@ class Splatoon(commands.Cog):
             for r in data
         ]
 
-        try:
-            p = FieldPages(ctx, entries=entries, per_page=4)
-            p.embed.colour = 0xF02D7D
-            await p.paginate()
-        except menus.MenuError as e:
-            await ctx.send(e)
+        p = FieldPageSource(entries, per_page=4)
+        p.embed.colour = 0xF02D7D
+        menu = RoboPages(p, ctx=ctx, show_skip_pages=False)
+        await menu.start()
 
     @commands.command(aliases=['maps'])
     async def schedule(self, ctx, *, type: mode_key = None):
@@ -1095,10 +1093,8 @@ class Splatoon(commands.Cog):
         if not salmon:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        try:
-            await menus.MenuPages(SalmonRunPageSource(salmon), delete_message_after=True).start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        pages = RoboPages(SalmonRunPageSource(salmon), ctx=ctx, show_skip_pages=False)
+        await pages.start()
 
     @commands.command(aliases=['splatnetshop'])
     async def splatshop(self, ctx):
@@ -1106,11 +1102,8 @@ class Splatoon(commands.Cog):
         if not self.sp2_shop:
             return await ctx.send('Nothing currently being sold...')
 
-        pages = menus.MenuPages(GearPageSource(self.sp2_shop), delete_message_after=True)
-        try:
-            await pages.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        pages = RoboPages(GearPageSource(self.sp2_shop), ctx=ctx, show_skip_pages=True)
+        await pages.start()
 
     @commands.command()
     async def splatfest(self, ctx):
@@ -1170,11 +1163,8 @@ class Splatoon(commands.Cog):
         **Note**: you must pass a query before passing a filter.
         """
 
-        pages = menus.MenuPages(GearPageSource(query), delete_message_after=True)
-        try:
-            await pages.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        pages = RoboPages(GearPageSource(query), ctx=ctx, show_skip_pages=True)
+        await pages.start()
 
     @commands.command()
     async def scrim(self, ctx, games=5, *, mode: str = None):

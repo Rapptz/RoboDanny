@@ -44,9 +44,9 @@ class TagPageEntry:
         return f'{self.name} (ID: {self.id})'
 
 class TagPages(SimplePages):
-    def __init__(self, entries, *, per_page=12):
+    def __init__(self, entries, *, ctx: commands.Context, per_page: int = 12):
         converted = [TagPageEntry(entry) for entry in entries]
-        super().__init__(converted, per_page=per_page)
+        super().__init__(converted, per_page=per_page, ctx=ctx)
 
 def can_use_box():
     def pred(ctx):
@@ -834,12 +834,9 @@ class Tags(commands.Cog):
         await ctx.release()
 
         if rows:
-            try:
-                p = TagPages(entries=rows)
-                p.embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
-                await p.start(ctx)
-            except menus.MenuError as e:
-                await ctx.send(e)
+            p = TagPages(entries=rows, ctx=ctx)
+            p.embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+            await p.start()
         else:
             await ctx.send(f'{member} has no tags.')
 
@@ -911,11 +908,8 @@ class Tags(commands.Cog):
 
         if rows:
             # PSQL orders this oddly for some reason
-            try:
-                p = TagPages(entries=rows, per_page=20)
-                await p.start(ctx)
-            except menus.MenuError as e:
-                await ctx.send(e)
+            p = TagPages(entries=rows, per_page=20, ctx=ctx)
+            await p.start()
         else:
             await ctx.send('This server has no server-specific tags.')
 
@@ -967,13 +961,9 @@ class Tags(commands.Cog):
         results = await ctx.db.fetch(sql, ctx.guild.id, query)
 
         if results:
-            try:
-                p = TagPages(entries=results, per_page=20)
-            except menus.MenuError as e:
-                await ctx.send(e)
-            else:
-                await ctx.release()
-                await p.start(ctx)
+            p = TagPages(entries=results, per_page=20, ctx=ctx)
+            await ctx.release()
+            await p.start()
         else:
             await ctx.send('No tags found.')
 
@@ -1198,11 +1188,8 @@ class Tags(commands.Cog):
         data = [r[0] for r in data]
         data.sort()
 
-        try:
-            p = SimplePages(entries=data, per_page=20)
-            await p.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        p = SimplePages(entries=data, per_page=20, ctx=ctx)
+        await p.start()
 
     @box.command(name='stats')
     async def box_stats(self, ctx):
@@ -1278,13 +1265,10 @@ class Tags(commands.Cog):
 
         if rows:
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
-            try:
-                p = SimplePages(entries=entries)
-                p.embed.set_author(name=user.display_name, icon_url=user.display_avatar.url)
-                p.embed.title = f'{sum(u for _, u in rows)} total uses'
-                await p.start(ctx)
-            except menus.MenuError as e:
-                await ctx.send(e)
+            p = SimplePages(entries=entries, ctx=ctx)
+            p.embed.set_author(name=user.display_name, icon_url=user.display_avatar.url)
+            p.embed.title = f'{sum(u for _, u in rows)} total uses'
+            await p.start()
         else:
             await ctx.send(f'{user} has no tags.')
 
