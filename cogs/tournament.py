@@ -1565,7 +1565,7 @@ class Tournament(commands.Cog):
             fields['Failed Removals'] = 'None'
 
         await self.log("Check-In Processed", ctx, **fields)
-        await ctx.message.add_reaction(ctx.tick(True).strip('<:>'))
+        await ctx.message.add_reaction(ctx.tick(True))
 
     @commands.command()
     @in_booyah_guild()
