@@ -152,7 +152,7 @@ class SpoilerCache:
 
         user = bot.get_user(self.author_id)
         if user:
-            embed.set_author(name=str(user), icon_url=user.avatar.url)
+            embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         return embed
 
@@ -164,7 +164,7 @@ class SpoilerCache:
 
         embed.set_footer(text=storage_message.id)
         embed.colour = 0x01AEEE
-        embed.set_author(name=ctx.author, icon_url=ctx.author.avatar.url)
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
         return embed
 
 class SpoilerCooldown(commands.CooldownMapping):
@@ -185,6 +185,10 @@ class Buttons(commands.Cog):
         self.bot = bot
         self._spoiler_cache = LRU(128)
         self._spoiler_cooldown = SpoilerCooldown()
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{RADIO BUTTON}')
 
     @commands.command(hidden=True)
     async def feelgood(self, ctx):
@@ -237,7 +241,7 @@ class Buttons(commands.Cog):
         if channel is None:
             return
 
-        e.set_author(name=str(ctx.author), icon_url=ctx.author.avatar.url)
+        e.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
         e.description = content
         e.timestamp = ctx.message.created_at
 
@@ -438,11 +442,8 @@ class Buttons(commands.Cog):
             if not data:
                 return await ctx.send('No results found, sorry.')
 
-        pages = RoboPages(UrbanDictionaryPageSource(data))
-        try:
-            await pages.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        pages = RoboPages(UrbanDictionaryPageSource(data), ctx=ctx)
+        await pages.start()
 
 def setup(bot):
     bot.add_cog(Buttons(bot))

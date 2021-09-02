@@ -117,6 +117,10 @@ class Stars(commands.Cog):
         self._locks = weakref.WeakValueDictionary()
         self.spoilers = re.compile(r'\|\|(.+?)\|\|')
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{WHITE MEDIUM STAR}')
+
     def cog_unload(self):
         self.clean_message_cache.cancel()
 
@@ -199,7 +203,7 @@ class Stars(commands.Cog):
             embed.add_field(name='Replying to...', value=f'[{ref.resolved.author}]({ref.resolved.jump_url})', inline=False)
 
         embed.add_field(name='Original', value=f'[Jump!]({message.jump_url})', inline=False)
-        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+        embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
         embed.timestamp = message.created_at
         embed.colour = self.star_gradient_colour(stars)
         return content, embed
@@ -814,17 +818,14 @@ class Stars(commands.Cog):
         records = [r[0] for r in records]
         members = [str(member) async for member in self.bot.resolve_member_ids(ctx.guild, records)]
 
-        p = SimplePages(entries=members, per_page=20)
+        p = SimplePages(entries=members, per_page=20, ctx=ctx)
         base = format(plural(len(records)), 'star')
         if len(records) > len(members):
             p.embed.title = f'{base} ({len(records) - len(members)} left server)'
         else:
             p.embed.title = base
 
-        try:
-            await p.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        await p.start()
 
     @star.command(name='migrate')
     @requires_starboard()
@@ -1007,7 +1008,7 @@ class Stars(commands.Cog):
 
     async def star_member_stats(self, ctx, member):
         e = discord.Embed(colour=discord.Colour.gold())
-        e.set_author(name=member.display_name, icon_url=member.avatar.url)
+        e.set_author(name=member.display_name, icon_url=member.display_avatar.url)
 
         # this query calculates
         # 1 - stars received,

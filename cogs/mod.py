@@ -259,6 +259,10 @@ class Mod(commands.Cog):
         self._batch_message_lock = asyncio.Lock(loop=bot.loop)
         self.bulk_send_messages.start()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='DiscordCertifiedModerator', id=847961544124923945)
+
     def __repr__(self):
         return '<cogs.Mod>'
 
@@ -446,7 +450,7 @@ class Mod(commands.Cog):
 
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = now
-        e.set_author(name=str(member), icon_url=member.avatar.url)
+        e.set_author(name=str(member), icon_url=member.display_avatar.url)
         e.add_field(name='ID', value=member.id)
         e.add_field(name='Joined', value=time.format_dt(member.joined_at, "F"))
         e.add_field(name='Created', value=time.format_relative(member.created_at), inline=False)
@@ -907,7 +911,7 @@ class Mod(commands.Cog):
                 predicates.append(lambda m, x=_regex: x.match(m.name))
 
         if args.no_avatar:
-            predicates.append(lambda m: m.avatar == m.default_avatar)
+            predicates.append(lambda m: m.avatar is None)
         if args.no_roles:
             predicates.append(lambda m: len(getattr(m, 'roles', [])) <= 1)
 

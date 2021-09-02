@@ -86,6 +86,10 @@ class Admin(commands.Cog):
         self._last_result = None
         self.sessions = set()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='stafftools', id=314348604095594498)
+
     async def run_process(self, command):
         try:
             process = await asyncio.create_subprocess_shell(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -446,7 +450,6 @@ class Admin(commands.Cog):
     async def sh(self, ctx, *, command):
         """Runs a shell command."""
         from cogs.utils.paginator import TextPageSource, RoboPages
-        from discord.ext.menus import MenuError
 
         async with ctx.typing():
             stdout, stderr = await self.run_process(command)
@@ -456,11 +459,8 @@ class Admin(commands.Cog):
         else:
             text = stdout
 
-        pages = RoboPages(TextPageSource(text))
-        try:
-            await pages.start(ctx)
-        except MenuError as e:
-            await ctx.send(str(e))
+        pages = RoboPages(TextPageSource(text), ctx=ctx)
+        await pages.start()
 
     @commands.command(hidden=True)
     async def perf(self, ctx, *, command):

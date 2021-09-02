@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from discord.ext import commands, menus
 from .utils import checks, formats, time
 from .utils.paginator import RoboPages
@@ -9,7 +11,8 @@ import copy
 import unicodedata
 import inspect
 import itertools
-from typing import Union
+from typing import Any, Dict, List, Optional, Union
+
 
 class Prefix(commands.Converter):
     async def convert(self, ctx, argument):
@@ -18,73 +21,9 @@ class Prefix(commands.Converter):
             raise commands.BadArgument('That is a reserved prefix already in use.')
         return argument
 
-class BotHelpPageSource(menus.ListPageSource):
-    def __init__(self, help_command, commands):
-        # entries = [(cog, len(sub)) for cog, sub in commands.items()]
-        # entries.sort(key=lambda t: (t[0].qualified_name, t[1]), reverse=True)
-        super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=6)
-        self.commands = commands
-        self.help_command = help_command
-        self.prefix = help_command.context.clean_prefix
-
-    def format_commands(self, cog, commands):
-        # A field can only have 1024 characters so we need to paginate a bit
-        # just in case it doesn't fit perfectly
-        # However, we have 6 per page so I'll try cutting it off at around 800 instead
-        # Since there's a 6000 character limit overall in the embed
-        if cog.description:
-            short_doc = cog.description.split('\n', 1)[0] + '\n'
-        else:
-            short_doc = 'No help found...\n'
-
-        current_count = len(short_doc)
-        ending_note = '+%d not shown'
-        ending_length = len(ending_note)
-
-        page = []
-        for command in commands:
-            value = f'`{command.name}`'
-            count = len(value) + 1 # The space
-            if count + current_count < 800:
-                current_count += count
-                page.append(value)
-            else:
-                # If we're maxed out then see if we can add the ending note
-                if current_count + ending_length + 1 > 800:
-                    # If we are, pop out the last element to make room
-                    page.pop()
-
-                # Done paginating so just exit
-                break
-
-        if len(page) == len(commands):
-            # We're not hiding anything so just return it as-is
-            return short_doc + ' '.join(page)
-
-        hidden = len(commands) - len(page)
-        return short_doc + ' '.join(page) + '\n' + (ending_note % hidden)
-
-
-    async def format_page(self, menu, cogs):
-        prefix = menu.ctx.prefix
-        description = f'Use "{prefix}help command" for more info on a command.\n' \
-                      f'Use "{prefix}help category" for more info on a category.\n' \
-                       'For more help, join the official bot support server: https://discord.gg/DWEaqMy'
-
-        embed = discord.Embed(title='Categories', description=description, colour=discord.Colour.blurple())
-
-        for cog in cogs:
-            commands = self.commands.get(cog)
-            if commands:
-                value = self.format_commands(cog, commands)
-                embed.add_field(name=cog.qualified_name, value=value, inline=True)
-
-        maximum = self.get_max_pages()
-        embed.set_footer(text=f'Page {menu.current_page + 1}/{maximum}')
-        return embed
 
 class GroupHelpPageSource(menus.ListPageSource):
-    def __init__(self, group, commands, *, prefix):
+    def __init__(self, group: Union[commands.Group, commands.Cog], commands: List[commands.Command], *, prefix: str):
         super().__init__(entries=commands, per_page=6)
         self.group = group
         self.prefix = prefix
@@ -92,7 +31,7 @@ class GroupHelpPageSource(menus.ListPageSource):
         self.description = self.group.description
 
     async def format_page(self, menu, commands):
-        embed = discord.Embed(title=self.title, description=self.description, colour=discord.Colour.blurple())
+        embed = discord.Embed(title=self.title, description=self.description, colour=discord.Colour(0xA8B9CD))
 
         for command in commands:
             signature = f'{command.qualified_name} {command.signature}'
@@ -105,50 +44,154 @@ class GroupHelpPageSource(menus.ListPageSource):
         embed.set_footer(text=f'Use "{self.prefix}help command" for more info on a command.')
         return embed
 
-class HelpMenu(RoboPages):
-    def __init__(self, source):
-        super().__init__(source)
 
-    @menus.button('\N{WHITE QUESTION MARK ORNAMENT}', position=menus.Last(5))
-    async def show_bot_help(self, payload):
-        """shows how to use the bot"""
+class HelpSelectMenu(discord.ui.Select['HelpMenu']):
+    def __init__(self, commands: Dict[commands.Cog, List[commands.Command]], bot: commands.AutoShardedBot):
+        super().__init__(
+            placeholder='Select a category...',
+            min_values=1,
+            max_values=1,
+            row=0,
+        )
+        self.commands = commands
+        self.bot = bot
+        self.__fill_options()
 
-        embed = discord.Embed(title='Using the bot', colour=discord.Colour.blurple())
-        embed.title = 'Using the bot'
-        embed.description = 'Hello! Welcome to the help page.'
+    def __fill_options(self) -> None:
+        self.add_option(
+            label='Index',
+            emoji='\N{WAVING HAND SIGN}',
+            value='__index',
+            description='The help page showing how to use the bot.',
+        )
+        for cog, commands in self.commands.items():
+            if not commands:
+                continue
+            description = cog.description.split('\n', 1)[0] or None
+            emoji = getattr(cog, 'display_emoji', None)
+            self.add_option(label=cog.qualified_name, value=cog.qualified_name, description=description, emoji=emoji)
 
-        entries = (
-            ('<argument>', 'This means the argument is __**required**__.'),
-            ('[argument]', 'This means the argument is __**optional**__.'),
-            ('[A|B]', 'This means that it can be __**either A or B**__.'),
-            ('[argument...]', 'This means you can have multiple arguments.\n' \
-                              'Now that you know the basics, it should be noted that...\n' \
-                              '__**You do not type in the brackets!**__')
+    async def callback(self, interaction: discord.Interaction):
+        assert self.view is not None
+        value = self.values[0]
+        if value == '__index':
+            await self.view.rebind(FrontPageSource(), interaction)
+        else:
+            cog = self.bot.get_cog(value)
+            if cog is None:
+                await interaction.response.send_message('Somehow this category does not exist?', ephemeral=True)
+                return
+
+            commands = self.commands[cog]
+            if not commands:
+                await interaction.response.send_message('This category has no commands for you', ephemeral=True)
+                return
+
+            source = GroupHelpPageSource(cog, commands, prefix=self.view.ctx.clean_prefix)
+            await self.view.rebind(source, interaction)
+
+
+class FrontPageSource(menus.PageSource):
+    def is_paginating(self) -> bool:
+        # This forces the buttons to appear even in the front page
+        return True
+
+    def get_max_pages(self) -> Optional[int]:
+        # There's only one actual page in the front page
+        # However we need at least 2 to show all the buttons
+        return 2
+
+    async def get_page(self, page_number: int) -> Any:
+        # The front page is a dummy
+        self.index = page_number
+        return self
+
+    def format_page(self, menu: HelpMenu, page):
+        embed = discord.Embed(title='Bot Help', colour=discord.Colour(0xA8B9CD))
+        embed.description = inspect.cleandoc(
+            f"""
+            Hello! Welcome to the help page.
+
+            Use "{menu.ctx.clean_prefix}help command" for more info on a command.
+            Use "{menu.ctx.clean_prefix}help category" for more info on a category.
+            Use the dropdown menu below to select a category.
+        """
         )
 
-        embed.add_field(name='How do I use this bot?', value='Reading the bot signature is pretty simple.')
+        embed.add_field(
+            name='Support Server',
+            value='For more help, consider joining the official server over at https://discord.gg/DWEaqMy',
+            inline=False,
+        )
 
-        for name, value in entries:
-            embed.add_field(name=name, value=value, inline=False)
+        created_at = time.format_dt(menu.ctx.bot.user.created_at, 'F')
+        if self.index == 0:
+            embed.add_field(
+                name='Who are you?',
+                value=(
+                    "I'm a bot made by Danny#0007. I'm the oldest running Discord bot! I've been running since "
+                    f'{created_at}. I have features such as moderation, tags, starboard, and more. You can get more '
+                    'information on my commands by using the dropdown below.\n\n'
+                    "I'm also open source. You can see my code on [GitHub](https://github.com/Rapptz/RoboDanny)!"
+                ),
+                inline=False,
+            )
+        elif self.index == 1:
+            entries = (
+                ('<argument>', 'This means the argument is __**required**__.'),
+                ('[argument]', 'This means the argument is __**optional**__.'),
+                ('[A|B]', 'This means that it can be __**either A or B**__.'),
+                (
+                    '[argument...]',
+                    'This means you can have multiple arguments.\n'
+                    'Now that you know the basics, it should be noted that...\n'
+                    '__**You do not type in the brackets!**__',
+                ),
+            )
 
-        embed.set_footer(text=f'We were on page {self.current_page + 1} before this message.')
-        await self.message.edit(embed=embed)
+            embed.add_field(name='How do I use this bot?', value='Reading the bot signature is pretty simple.')
 
-        async def go_back_to_current_page():
-            await asyncio.sleep(30.0)
-            await self.show_page(self.current_page)
+            for name, value in entries:
+                embed.add_field(name=name, value=value, inline=False)
 
-        self.bot.loop.create_task(go_back_to_current_page())
+        return embed
+
+
+class HelpMenu(RoboPages):
+    def __init__(self, source: menus.PageSource, ctx: commands.Context):
+        super().__init__(source, ctx=ctx, compact=True)
+
+    def add_categories(self, commands: Dict[commands.Cog, List[commands.Command]]) -> None:
+        self.clear_items()
+        self.add_item(HelpSelectMenu(commands, self.ctx.bot))
+        self.fill_items()
+
+    async def rebind(self, source: menus.PageSource, interaction: discord.Interaction) -> None:
+        self.source = source
+        self.current_page = 0
+
+        await self.source._prepare_once()
+        page = await self.source.get_page(0)
+        kwargs = await self._get_kwargs_from_page(page)
+        self._update_labels(0)
+        await interaction.response.edit_message(**kwargs, view=self)
+
 
 class PaginatedHelpCommand(commands.HelpCommand):
     def __init__(self):
-        super().__init__(command_attrs={
-            'cooldown': commands.CooldownMapping.from_cooldown(1, 3.0, commands.BucketType.member),
-            'help': 'Shows help about the bot, a command, or a category'
-        })
+        super().__init__(
+            command_attrs={
+                'cooldown': commands.CooldownMapping.from_cooldown(1, 3.0, commands.BucketType.member),
+                'help': 'Shows help about the bot, a command, or a category',
+            }
+        )
 
     async def on_help_command_error(self, ctx, error):
         if isinstance(error, commands.CommandInvokeError):
+            # Ignore missing permission errors
+            if isinstance(error.original, discord.HTTPException) and error.original.code == 50013:
+                return
+
             await ctx.send(str(error.original))
 
     def get_command_signature(self, command):
@@ -165,27 +208,31 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
     async def send_bot_help(self, mapping):
         bot = self.context.bot
-        entries = await self.filter_commands(bot.commands, sort=True)
 
-        all_commands = {}
-        for command in entries:
-            if command.cog is None:
+        def key(command) -> str:
+            cog = command.cog
+            return cog.qualified_name if cog else '\U0010ffff'
+
+        entries: List[commands.Command] = await self.filter_commands(bot.commands, sort=True, key=key)
+
+        all_commands: Dict[commands.Cog, List[commands.Command]] = {}
+        for name, children in itertools.groupby(entries, key=key):
+            if name == '\U0010ffff':
                 continue
-            try:
-                all_commands[command.cog].append(command)
-            except KeyError:
-                all_commands[command.cog] = [command]
 
+            cog = bot.get_cog(name)
+            all_commands[cog] = sorted(children, key=lambda c: c.qualified_name)
 
-        menu = HelpMenu(BotHelpPageSource(self, all_commands))
+        menu = HelpMenu(FrontPageSource(), ctx=self.context)
+        menu.add_categories(all_commands)
         await self.context.release()
-        await menu.start(self.context)
+        await menu.start()
 
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
-        menu = HelpMenu(GroupHelpPageSource(cog, entries, prefix=self.context.clean_prefix))
+        menu = HelpMenu(GroupHelpPageSource(cog, entries, prefix=self.context.clean_prefix), ctx=self.context)
         await self.context.release()
-        await menu.start(self.context)
+        await menu.start()
 
     def common_command_formatting(self, embed_like, command):
         embed_like.title = self.get_command_signature(command)
@@ -196,7 +243,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
     async def send_command_help(self, command):
         # No pagination necessary for a single command.
-        embed = discord.Embed(colour=discord.Colour.blurple())
+        embed = discord.Embed(colour=discord.Colour(0xA8B9CD))
         self.common_command_formatting(embed, command)
         await self.context.send(embed=embed)
 
@@ -211,9 +258,10 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
         source = GroupHelpPageSource(group, entries, prefix=self.context.clean_prefix)
         self.common_command_formatting(source, group)
-        menu = HelpMenu(source)
+        menu = HelpMenu(source, ctx=self.context)
         await self.context.release()
-        await menu.start(self.context)
+        await menu.start()
+
 
 class Meta(commands.Cog):
     """Commands for utilities related to Discord or the Bot itself."""
@@ -223,6 +271,10 @@ class Meta(commands.Cog):
         self.old_help_command = bot.help_command
         bot.help_command = PaginatedHelpCommand()
         bot.help_command.cog = self
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{WHITE QUESTION MARK ORNAMENT}')
 
     def cog_unload(self):
         self.bot.help_command = self.old_help_command
@@ -247,6 +299,7 @@ class Meta(commands.Cog):
             digit = f'{ord(c):x}'
             name = unicodedata.name(c, 'Name not found.')
             return f'`\\U{digit:>08}`: {name} - {c} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{digit}>'
+
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
             return await ctx.send('Output too long to display.')
@@ -392,7 +445,7 @@ class Meta(commands.Cog):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
         user = user or ctx.author
-        avatar = user.avatar.with_static_format('png')
+        avatar = user.display_avatar.with_static_format('png')
         embed.set_author(name=str(user), url=avatar)
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
@@ -429,8 +482,7 @@ class Meta(commands.Cog):
         if colour.value:
             e.colour = colour
 
-        if user.avatar:
-            e.set_thumbnail(url=user.avatar.url)
+        e.set_thumbnail(url=user.display_avatar.url)
 
         if isinstance(user, discord.User):
             e.set_footer(text='This member is not in this server.')
@@ -509,7 +561,7 @@ class Meta(commands.Cog):
             'LURKABLE': 'Lurkable',
             'NEWS': 'News Channels',
             'ANIMATED_ICON': 'Animated Icon',
-            'BANNER': 'Banner'
+            'BANNER': 'Banner',
         }
 
         for feature, label in all_features.items():
@@ -543,9 +595,10 @@ class Meta(commands.Cog):
                 emoji_stats['regular'] += 1
                 emoji_stats['disabled'] += not emoji.available
 
-        fmt = f'Regular: {emoji_stats["regular"]}/{guild.emoji_limit}\n' \
-              f'Animated: {emoji_stats["animated"]}/{guild.emoji_limit}\n' \
-
+        fmt = (
+            f'Regular: {emoji_stats["regular"]}/{guild.emoji_limit}\n'
+            f'Animated: {emoji_stats["animated"]}/{guild.emoji_limit}\n'
+        )
         if emoji_stats['disabled'] or emoji_stats['animated_disabled']:
             fmt = f'{fmt}Disabled: {emoji_stats["disabled"]} regular, {emoji_stats["animated_disabled"]} animated\n'
 
@@ -557,7 +610,7 @@ class Meta(commands.Cog):
     async def say_permissions(self, ctx, member, channel):
         permissions = channel.permissions_for(member)
         e = discord.Embed(colour=member.colour)
-        avatar = member.avatar.with_static_format('png')
+        avatar = member.display_avatar.with_static_format('png')
         e.set_author(name=str(member), url=avatar)
         allowed, denied = [], []
         for name, value in permissions:
@@ -660,6 +713,7 @@ class Meta(commands.Cog):
             await asyncio.sleep(1)
 
         await ctx.send('go')
+
 
 def setup(bot):
     bot.add_cog(Meta(bot))

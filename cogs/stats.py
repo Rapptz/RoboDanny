@@ -1,3 +1,4 @@
+import sys
 from discord.ext import commands, tasks, menus
 from collections import Counter, defaultdict
 
@@ -74,6 +75,10 @@ class Stats(commands.Cog):
         self._gateway_queue = asyncio.Queue(loop=bot.loop)
         self.gateway_worker.start()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{BAR CHART}')
+
     async def bulk_insert(self):
         query = """INSERT INTO commands (guild_id, channel_id, author_id, used, prefix, command, failed)
                    SELECT x.guild, x.channel, x.author, x.used, x.prefix, x.command, x.failed
@@ -134,8 +139,8 @@ class Stats(commands.Cog):
         await self.register_command(ctx)
 
     @commands.Cog.listener()
-    async def on_socket_response(self, msg):
-        self.bot.socket_stats[msg.get('t')] += 1
+    async def on_socket_event_type(self, event_type):
+        self.bot.socket_stats[event_type] += 1
 
     @discord.utils.cached_property
     def webhook(self):
@@ -226,7 +231,7 @@ class Stats(commands.Cog):
         # To properly cache myself, I need to use the bot support server.
         support_guild = self.bot.get_guild(182325885867786241)
         owner = await self.bot.get_or_fetch_member(support_guild, self.bot.owner_id)
-        embed.set_author(name=str(owner), icon_url=owner.avatar.url)
+        embed.set_author(name=str(owner), icon_url=owner.display_avatar.url)
 
         # statistics
         total_members = 0
@@ -369,7 +374,7 @@ class Stats(commands.Cog):
         )
 
         embed = discord.Embed(title='Command Stats', colour=member.colour)
-        embed.set_author(name=str(member), icon_url=member.avatar.url)
+        embed.set_author(name=str(member), icon_url=member.display_avatar.url)
 
         # total command uses
         query = "SELECT COUNT(*), MIN(used) FROM commands WHERE guild_id=$1 AND author_id=$2;"
@@ -1062,9 +1067,15 @@ class Stats(commands.Cog):
 old_on_error = commands.AutoShardedBot.on_error
 
 async def on_error(self, event, *args, **kwargs):
+    (exc_type, exc, tb) = sys.exc_info()
+    # Silence command errors that somehow get bubbled up far enough here
+    if isinstance(exc, commands.CommandInvokeError):
+        return
+
     e = discord.Embed(title='Event Error', colour=0xa32952)
     e.add_field(name='Event', value=event)
-    e.description = f'```py\n{traceback.format_exc()}\n```'
+    trace = "".join(traceback.format_exception(exc_type, exc, tb))
+    e.description = f'```py\n{trace}\n```'
     e.timestamp = discord.utils.utcnow()
 
     args_str = ['```py']

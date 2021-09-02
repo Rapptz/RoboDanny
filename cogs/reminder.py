@@ -51,6 +51,12 @@ class Timer:
     def human_delta(self):
         return time.format_relative(self.created_at)
 
+    @property
+    def author_id(self):
+        if self.args:
+            return int(self.args[0])
+        return None
+
     def __repr__(self):
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
 
@@ -62,6 +68,10 @@ class Reminder(commands.Cog):
         self._have_data = asyncio.Event(loop=bot.loop)
         self._current_timer = None
         self._task = bot.loop.create_task(self.dispatch_timers())
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{ALARM CLOCK}')
 
     def cog_unload(self):
         self._task.cancel()
@@ -301,6 +311,12 @@ class Reminder(commands.Cog):
 
         query = """DELETE FROM reminders WHERE event = 'reminder' AND extra #>> '{args,0}' = $1;"""
         await ctx.db.execute(query, author_id)
+
+        # Check if the current timer is the one being cleared and cancel it if so
+        if self._current_timer and self._current_timer.author_id == ctx.author.id:
+            self._task.cancel()
+            self._task = self.bot.loop.create_task(self.dispatch_timers())
+
         await ctx.send(f'Successfully deleted {formats.plural(total):reminder}.')
 
     @commands.Cog.listener()

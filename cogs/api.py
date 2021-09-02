@@ -168,6 +168,10 @@ class API(commands.Cog):
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
         self._recently_blocked = set()
 
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{PERSONAL COMPUTER}')
+
     @commands.Cog.listener()
     async def on_member_join(self, member):
         if member.guild.id != DISCORD_API_ID:
@@ -334,7 +338,7 @@ class API(commands.Cog):
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
-        e.set_author(name=str(member), icon_url=member.avatar.url)
+        e.set_author(name=str(member), icon_url=member.display_avatar.url)
 
         query = 'SELECT count FROM rtfm WHERE user_id=$1;'
         record = await ctx.db.fetchrow(query, member.id)
@@ -612,9 +616,9 @@ class API(commands.Cog):
         role = discord.utils.find(lambda r: r.id == role_id, ctx.guild.roles)
         if role is not None:
             await action(role)
-            await ctx.message.add_reaction(ctx.tick(True).strip('<:>'))
+            await ctx.message.add_reaction(ctx.tick(True))
         else:
-            await ctx.message.add_reaction(ctx.tick(False).strip('<:>'))
+            await ctx.message.add_reaction(ctx.tick(False))
 
     @commands.command()
     @commands.guild_only()
@@ -813,7 +817,7 @@ class API(commands.Cog):
 
         # data for the bot to retrieve later
         embed.set_footer(text=ctx.author.id)
-        embed.set_author(name=user.id, icon_url=user.avatar.url)
+        embed.set_author(name=user.id, icon_url=user.display_avatar.url)
 
         channel = ctx.guild.get_channel(info['channel'])
         try:

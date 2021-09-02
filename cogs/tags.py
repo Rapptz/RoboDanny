@@ -44,9 +44,9 @@ class TagPageEntry:
         return f'{self.name} (ID: {self.id})'
 
 class TagPages(SimplePages):
-    def __init__(self, entries, *, per_page=12):
+    def __init__(self, entries, *, ctx: commands.Context, per_page: int = 12):
         converted = [TagPageEntry(entry) for entry in entries]
-        super().__init__(converted, per_page=per_page)
+        super().__init__(converted, per_page=per_page, ctx=ctx)
 
 def can_use_box():
     def pred(ctx):
@@ -163,13 +163,17 @@ class TagMember(commands.Converter):
             raise e
 
 class Tags(commands.Cog):
-    """The tag related commands."""
+    """Commands to fetch something by a tag name"""
 
     def __init__(self, bot):
         self.bot = bot
 
         # guild_id: set(name)
         self._reserved_tags_being_made = {}
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{LABEL}\ufe0f')
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, (UnavailableTagCommand, UnableToUseBox)):
@@ -559,7 +563,7 @@ class Tags(commands.Cog):
 
     async def member_tag_stats(self, ctx, member):
         e = discord.Embed(colour=discord.Colour.blurple())
-        e.set_author(name=str(member), icon_url=member.avatar.url)
+        e.set_author(name=str(member), icon_url=member.display_avatar.url)
         e.set_footer(text='These statistics are server-specific.')
 
         query = """SELECT COUNT(*)
@@ -736,7 +740,7 @@ class Tags(commands.Cog):
         embed.set_footer(text='Alias created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar.url)
+        embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Original', value=record['name'])
@@ -751,7 +755,7 @@ class Tags(commands.Cog):
         embed.set_footer(text='Tag created at')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar.url)
+        embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=record['uses'])
@@ -834,12 +838,9 @@ class Tags(commands.Cog):
         await ctx.release()
 
         if rows:
-            try:
-                p = TagPages(entries=rows)
-                p.embed.set_author(name=member.display_name, icon_url=member.avatar.url)
-                await p.start(ctx)
-            except menus.MenuError as e:
-                await ctx.send(e)
+            p = TagPages(entries=rows, ctx=ctx)
+            p.embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+            await p.start()
         else:
             await ctx.send(f'{member} has no tags.')
 
@@ -938,11 +939,8 @@ class Tags(commands.Cog):
 
         if rows:
             # PSQL orders this oddly for some reason
-            try:
-                p = TagPages(entries=rows, per_page=20)
-                await p.start(ctx)
-            except menus.MenuError as e:
-                await ctx.send(e)
+            p = TagPages(entries=rows, per_page=20, ctx=ctx)
+            await p.start()
         else:
             await ctx.send('This server has no server-specific tags.')
 
@@ -994,13 +992,9 @@ class Tags(commands.Cog):
         results = await ctx.db.fetch(sql, ctx.guild.id, query)
 
         if results:
-            try:
-                p = TagPages(entries=results, per_page=20)
-            except menus.MenuError as e:
-                await ctx.send(e)
-            else:
-                await ctx.release()
-                await p.start(ctx)
+            p = TagPages(entries=results, per_page=20, ctx=ctx)
+            await ctx.release()
+            await p.start()
         else:
             await ctx.send('No tags found.')
 
@@ -1196,7 +1190,7 @@ class Tags(commands.Cog):
         embed.set_footer(text='Tag added to box')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.avatar.url)
+        embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
         embed.add_field(name='Uses', value=data['uses'])
@@ -1225,11 +1219,8 @@ class Tags(commands.Cog):
         data = [r[0] for r in data]
         data.sort()
 
-        try:
-            p = SimplePages(entries=data, per_page=20)
-            await p.start(ctx)
-        except menus.MenuError as e:
-            await ctx.send(e)
+        p = SimplePages(entries=data, per_page=20, ctx=ctx)
+        await p.start()
 
     @box.command(name='stats')
     async def box_stats(self, ctx):
@@ -1305,13 +1296,10 @@ class Tags(commands.Cog):
 
         if rows:
             entries = [f'{name} ({uses} uses)' for name, uses in rows]
-            try:
-                p = SimplePages(entries=entries)
-                p.embed.set_author(name=user.display_name, icon_url=user.avatar.url)
-                p.embed.title = f'{sum(u for _, u in rows)} total uses'
-                await p.start(ctx)
-            except menus.MenuError as e:
-                await ctx.send(e)
+            p = SimplePages(entries=entries, ctx=ctx)
+            p.embed.set_author(name=user.display_name, icon_url=user.display_avatar.url)
+            p.embed.title = f'{sum(u for _, u in rows)} total uses'
+            await p.start()
         else:
             await ctx.send(f'{user} has no tags.')
 

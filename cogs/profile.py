@@ -167,8 +167,13 @@ class SplatoonWeapon(commands.Converter):
             return weapon
 
 class Profile(commands.Cog):
+    """Manage your Splatoon profile"""
     def __init__(self, bot):
         self.bot = bot
+
+    @property
+    def display_emoji(self) -> discord.PartialEmoji:
+        return discord.PartialEmoji(name='\N{ADULT}')
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -214,7 +219,7 @@ class Profile(commands.Cog):
 
         # consoles = [f'__{v}__: {record[k]}' for k, v in keys.items() if record[k] is not None]
         # e.add_field(name='Consoles', value='\n'.join(consoles) if consoles else 'None!', inline=False)
-        e.set_author(name=member.display_name, icon_url=member.avatar.with_format('png'))
+        e.set_author(name=member.display_name, icon_url=member.display_avatar.with_format('png'))
 
         extra = record['extra'] or {}
         rank = extra.get('sp2_rank', {})

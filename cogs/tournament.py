@@ -1565,7 +1565,7 @@ class Tournament(commands.Cog):
             fields['Failed Removals'] = 'None'
 
         await self.log("Check-In Processed", ctx, **fields)
-        await ctx.message.add_reaction(ctx.tick(True).strip('<:>'))
+        await ctx.message.add_reaction(ctx.tick(True))
 
     @commands.command()
     @in_booyah_guild()
@@ -1951,7 +1951,7 @@ class Tournament(commands.Cog):
 
         info = await ctx.db.fetchrow(query, member.id)
         e = discord.Embed()
-        e.set_author(name=str(member), icon_url=member.avatar.url)
+        e.set_author(name=str(member), icon_url=member.display_avatar.url)
 
         if record['challonge']:
             e.url = f'https://challonge.com/users/{record["challonge"]}'
