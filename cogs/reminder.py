@@ -331,12 +331,15 @@ class Reminder(commands.Cog):
         guild_id = channel.guild.id if isinstance(channel, (discord.TextChannel, discord.Thread)) else '@me'
         message_id = timer.kwargs.get('message_id')
         msg = f'<@{author_id}>, {timer.human_delta}: {message}'
+        view = discord.utils.MISSING
 
         if message_id:
-            msg = f'{msg}\n\n<https://discord.com/channels/{guild_id}/{channel.id}/{message_id}>'
+            url = f'https://discord.com/channels/{guild_id}/{channel.id}/{message_id}'
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label='Go to original message', url=url))
 
         try:
-            await channel.send(msg)
+            await channel.send(msg, view=view)
         except discord.HTTPException:
             return
 
