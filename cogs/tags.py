@@ -394,7 +394,7 @@ class Tags(commands.Cog):
         create command.
         """
 
-        await ctx.send('Hello. What would you like the name tag to be?')
+        await ctx.send("Hello. What would you like the tag's name to be?")
 
         converter = TagName()
         original = ctx.message
