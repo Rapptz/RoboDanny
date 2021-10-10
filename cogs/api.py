@@ -309,7 +309,7 @@ class API(commands.Cog):
     async def rtfm(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity.
 
-        Events, objects, and functions are all supported through
+        Events, objects, and functions are all supported through 
         a cruddy fuzzy algorithm.
         """
         key = self.transform_rtfm_language_key(ctx, 'latest')
@@ -409,15 +409,7 @@ class API(commands.Cog):
 
         try:
             for channel in channels:
-                await channel.set_permissions(
-                    member,
-                    send_messages=False,
-                    add_reactions=False,
-                    create_public_threads=False,
-                    create_private_threads=False,
-                    send_messages_in_threads=False,
-                    reason=reason
-                )
+                await channel.set_permissions(member, send_messages=False, add_reactions=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -437,15 +429,7 @@ class API(commands.Cog):
 
         try:
             for channel in channels:
-                await channel.set_permissions(
-                    member,
-                    send_messages=None,
-                    add_reactions=None,
-                    create_public_threads=None,
-                    create_private_threads=None,
-                    send_messages_in_threads=None,
-                    reason=reason
-                )
+                await channel.set_permissions(member, send_messages=None, add_reactions=None, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -485,15 +469,7 @@ class API(commands.Cog):
 
         try:
             for channel in channels:
-                await channel.set_permissions(
-                    member,
-                    send_messages=False,
-                    add_reactions=False,
-                    create_public_threads=False,
-                    create_private_threads=False,
-                    send_messages_in_threads=False,
-                    reason=reason
-                )
+                await channel.set_permissions(member, send_messages=False, add_reactions=False, reason=reason)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -535,15 +511,7 @@ class API(commands.Cog):
 
         for ch in self.get_block_channels(guild, channel):
             try:
-                await ch.set_permissions(
-                    to_unblock,
-                    send_messages=None,
-                    add_reactions=None,
-                    create_public_threads=None,
-                    create_private_threads=None,
-                    send_messages_in_threads=None,
-                    reason=reason,
-                )
+                await ch.set_permissions(to_unblock, send_messages=None, add_reactions=None, reason=reason)
             except:
                 pass
 
