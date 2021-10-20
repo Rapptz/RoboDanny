@@ -786,10 +786,10 @@ class API(commands.Cog):
                 return False
             if msg.channel.id != ctx.channel.id:
                 return False
-            if msg.content in ('**I agree**', 'I agree'):
+            if msg.content in ('**I agree**', 'I agree', 'i agree'):
                 confirm = True
                 return True
-            elif msg.content in ('**Abort**', 'Abort'):
+            elif msg.content in ('**Abort**', 'Abort', 'abort'):
                 confirm = False
                 return True
             return False
