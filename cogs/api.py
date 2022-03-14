@@ -331,7 +331,7 @@ class API(commands.Cog):
         """Gives you a documentation link for a Python entity (Japanese)."""
         await self.do_rtfm(ctx, 'python-jp', obj)
 
-    @rtfm.command(name='master', aliases=['2.0'])
+    @rtfm.command(name='master', aliases=['2.0', 'm'])
     async def rtfm_master(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity (master branch)"""
         await self.do_rtfm(ctx, 'master', obj)
