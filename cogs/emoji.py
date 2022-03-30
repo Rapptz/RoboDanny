@@ -415,7 +415,7 @@ class Emoji(commands.Cog):
 
     @commands.group(name='emoji')
     @commands.guild_only()
-    @checks.has_guild_permissions(manage_emoji=True)
+    @checks.has_guild_permissions(manage_emojis=True)
     async def _emoji(self, ctx):
         """Emoji management commands."""
         if ctx.subcommand_passed is None:
