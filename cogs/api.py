@@ -251,11 +251,11 @@ class API(commands.Cog):
 
     async def do_rtfm(self, ctx, key, obj):
         page_types = {
+            'stable': 'https://discordpy.readthedocs.io/en/stable',
             'latest': 'https://discordpy.readthedocs.io/en/latest',
             'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
             'python': 'https://docs.python.org/3',
             'python-jp': 'https://docs.python.org/ja/3',
-            'master': 'https://discordpy.readthedocs.io/en/master',
         }
 
         if obj is None:
@@ -312,7 +312,7 @@ class API(commands.Cog):
         Events, objects, and functions are all supported through 
         a cruddy fuzzy algorithm.
         """
-        key = self.transform_rtfm_language_key(ctx, 'latest')
+        key = self.transform_rtfm_language_key(ctx, 'stable')
         await self.do_rtfm(ctx, key, obj)
 
     @rtfm.command(name='jp')
@@ -331,10 +331,10 @@ class API(commands.Cog):
         """Gives you a documentation link for a Python entity (Japanese)."""
         await self.do_rtfm(ctx, 'python-jp', obj)
 
-    @rtfm.command(name='master', aliases=['2.0'])
+    @rtfm.command(name='master', aliases=['2.0', 'latest'])
     async def rtfm_master(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity (master branch)"""
-        await self.do_rtfm(ctx, 'master', obj)
+        await self.do_rtfm(ctx, 'latest', obj)
 
     async def _member_stats(self, ctx, member, total_uses):
         e = discord.Embed(title='RTFM Stats')
