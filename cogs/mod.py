@@ -163,11 +163,19 @@ class SpamChecker:
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join = None
         self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
-        self.by_mentions = None
+        self._by_mentions = None
+        self._by_mentions_rate = None
 
         # user_id flag mapping (for about 30 minutes)
         self.fast_joiners = cache.ExpiringCache(seconds=1800.0)
         self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
+
+    def by_mentions(self, config):
+        mention_threshold = config.mention_count * 2
+        if self._by_mentions_rate != mention_threshold:
+            self._by_mentions = commands.CooldownMapping.from_cooldown(mention_threshold, 12, commands.BucketType.member)
+            self._by_mentions_rate = mention_threshold
+        return self._by_mentions
 
     def is_new(self, member):
         now = discord.utils.utcnow()
@@ -218,10 +226,7 @@ class SpamChecker:
     def is_mention_spam(self, message, config, current):
         if not config.mention_count:
             return False
-        mention_threshold = config.mention_count * 2
-        if self.by_mentions is None or self.by_mentions.rate != mention_threshold:
-            self.by_mentions = commands.CooldownMapping.from_cooldown(mention_threshold, 12, commands.BucketType.member)
-        mention_bucket = self.by_mentions.get_bucket(message)
+        mention_bucket = self.by_mentions(config).get_bucket(message, current)
         mention_count = sum(not m.bot and m.id != message.author.id for m in message.mentions)
         return mention_bucket.update_rate_limit(current, tokens=mention_count)
 
