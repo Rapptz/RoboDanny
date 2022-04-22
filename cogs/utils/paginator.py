@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 import discord
 from discord.ext import commands
 from discord.ext.commands import Paginator as CommandPaginator
 from discord.ext import menus
+
+if TYPE_CHECKING:
+    from .context import Context
 
 
 class RoboPages(discord.ui.View):
@@ -13,14 +16,14 @@ class RoboPages(discord.ui.View):
         self,
         source: menus.PageSource,
         *,
-        ctx: commands.Context,
+        ctx: Context,
         check_embeds: bool = True,
         compact: bool = False,
     ):
         super().__init__()
         self.source: menus.PageSource = source
         self.check_embeds: bool = check_embeds
-        self.ctx: commands.Context = ctx
+        self.ctx: Context = ctx
         self.message: Optional[discord.Message] = None
         self.current_page: int = 0
         self.compact: bool = compact
@@ -37,16 +40,16 @@ class RoboPages(discord.ui.View):
             max_pages = self.source.get_max_pages()
             use_last_and_first = max_pages is not None and max_pages >= 2
             if use_last_and_first:
-                self.add_item(self.go_to_first_page)  # type: ignore
-            self.add_item(self.go_to_previous_page)  # type: ignore
+                self.add_item(self.go_to_first_page)
+            self.add_item(self.go_to_previous_page)
             if not self.compact:
-                self.add_item(self.go_to_current_page)  # type: ignore
-            self.add_item(self.go_to_next_page)  # type: ignore
+                self.add_item(self.go_to_current_page)
+            self.add_item(self.go_to_next_page)
             if use_last_and_first:
-                self.add_item(self.go_to_last_page)  # type: ignore
+                self.add_item(self.go_to_last_page)
             if not self.compact:
-                self.add_item(self.numbered_page)  # type: ignore
-            self.add_item(self.stop_pages)  # type: ignore
+                self.add_item(self.numbered_page)
+            self.add_item(self.stop_pages)
 
     async def _get_kwargs_from_page(self, page: int) -> Dict[str, Any]:
         value = await discord.utils.maybe_coroutine(self.source.format_page, self, page)
@@ -126,7 +129,7 @@ class RoboPages(discord.ui.View):
             await interaction.response.send_message('An unknown error occurred, sorry', ephemeral=True)
 
     async def start(self) -> None:
-        if self.check_embeds and not self.ctx.channel.permissions_for(self.ctx.me).embed_links:
+        if self.check_embeds and not self.ctx.channel.permissions_for(self.ctx.me).embed_links:  # type: ignore
             await self.ctx.send('Bot does not have embed links permission in this channel.')
             return
 
@@ -255,6 +258,6 @@ class SimplePages(RoboPages):
     Basically an embed with some normal formatting.
     """
 
-    def __init__(self, entries, *, ctx: commands.Context, per_page: int = 12):
+    def __init__(self, entries, *, ctx: Context, per_page: int = 12):
         super().__init__(SimplePageSource(entries, per_page=per_page), ctx=ctx)
         self.embed = discord.Embed(colour=discord.Colour.blurple())

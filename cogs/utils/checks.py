@@ -1,4 +1,10 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from discord.ext import commands
+
+if TYPE_CHECKING:
+    from .context import GuildContext
 
 # The permission system of the bot is based on a "just works" basis
 # You have permissions and the bot has permissions. If you meet the permissions
@@ -9,7 +15,7 @@ from discord.ext import commands
 # Of course, the owner will always be able to execute commands.
 
 
-async def check_permissions(ctx, perms, *, check=all):
+async def check_permissions(ctx: GuildContext, perms: dict[str, bool], *, check=all):
     is_owner = await ctx.bot.is_owner(ctx.author)
     if is_owner:
         return True
@@ -18,14 +24,14 @@ async def check_permissions(ctx, perms, *, check=all):
     return check(getattr(resolved, name, None) == value for name, value in perms.items())
 
 
-def has_permissions(*, check=all, **perms):
-    async def pred(ctx):
+def has_permissions(*, check=all, **perms: bool):
+    async def pred(ctx: GuildContext):
         return await check_permissions(ctx, perms, check=check)
 
     return commands.check(pred)
 
 
-async def check_guild_permissions(ctx, perms, *, check=all):
+async def check_guild_permissions(ctx: GuildContext, perms: dict[str, bool], *, check=all):
     is_owner = await ctx.bot.is_owner(ctx.author)
     if is_owner:
         return True
@@ -37,8 +43,8 @@ async def check_guild_permissions(ctx, perms, *, check=all):
     return check(getattr(resolved, name, None) == value for name, value in perms.items())
 
 
-def has_guild_permissions(*, check=all, **perms):
-    async def pred(ctx):
+def has_guild_permissions(*, check=all, **perms: bool):
+    async def pred(ctx: GuildContext):
         return await check_guild_permissions(ctx, perms, check=check)
 
     return commands.check(pred)
@@ -48,39 +54,39 @@ def has_guild_permissions(*, check=all, **perms):
 
 
 def is_mod():
-    async def pred(ctx):
+    async def pred(ctx: GuildContext) -> bool:
         return await check_guild_permissions(ctx, {'manage_guild': True})
 
     return commands.check(pred)
 
 
 def is_admin():
-    async def pred(ctx):
+    async def pred(ctx: GuildContext) -> bool:
         return await check_guild_permissions(ctx, {'administrator': True})
 
     return commands.check(pred)
 
 
-def mod_or_permissions(**perms):
+def mod_or_permissions(**perms: bool):
     perms['manage_guild'] = True
 
-    async def predicate(ctx):
+    async def predicate(ctx: GuildContext) -> bool:
         return await check_guild_permissions(ctx, perms, check=any)
 
     return commands.check(predicate)
 
 
-def admin_or_permissions(**perms):
+def admin_or_permissions(**perms: bool):
     perms['administrator'] = True
 
-    async def predicate(ctx):
+    async def predicate(ctx: GuildContext) -> bool:
         return await check_guild_permissions(ctx, perms, check=any)
 
     return commands.check(predicate)
 
 
-def is_in_guilds(*guild_ids):
-    def predicate(ctx):
+def is_in_guilds(*guild_ids: int):
+    def predicate(ctx: GuildContext) -> bool:
         guild = ctx.guild
         if guild is None:
             return False

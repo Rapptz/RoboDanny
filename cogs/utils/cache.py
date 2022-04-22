@@ -1,14 +1,38 @@
+from __future__ import annotations
+
 import inspect
 import asyncio
 import enum
 import time
 
 from functools import wraps
+from typing import Any, Awaitable, Callable, Coroutine, MutableMapping, TypeVar, Protocol
 
 from lru import LRU
 
+R = TypeVar('R')
 
-def _wrap_and_store_coroutine(cache, key, coro):
+# Can't use ParamSpec due to https://github.com/python/typing/discussions/946
+class CacheProtocol(Protocol[R]):
+    cache: MutableMapping[str, R]
+
+    def __call__(self, *args: Any, **kwds: Any) -> R:
+        ...
+
+    def get_key(self, *args: Any, **kwargs: Any) -> str:
+        ...
+
+    def invalidate(self, *args: Any, **kwargs: Any) -> bool:
+        ...
+
+    def invalidate_containing(self, key: str) -> None:
+        ...
+
+    def get_stats(self) -> tuple[int, int]:
+        ...
+
+
+def _wrap_and_store_coroutine(cache: MutableMapping[str, R], key: str, coro: Awaitable[R]) -> Coroutine[Any, Any, R]:
     async def func():
         value = await coro
         cache[key] = value
@@ -17,7 +41,7 @@ def _wrap_and_store_coroutine(cache, key, coro):
     return func()
 
 
-def _wrap_new_coroutine(value):
+def _wrap_new_coroutine(value: R) -> Coroutine[Any, Any, R]:
     async def new_coroutine():
         return value
 
@@ -25,8 +49,8 @@ def _wrap_new_coroutine(value):
 
 
 class ExpiringCache(dict):
-    def __init__(self, seconds):
-        self.__ttl = seconds
+    def __init__(self, seconds: float):
+        self.__ttl: float = seconds
         super().__init__()
 
     def __verify_cache_integrity(self):
@@ -36,15 +60,15 @@ class ExpiringCache(dict):
         for k in to_remove:
             del self[k]
 
-    def __contains__(self, key):
+    def __contains__(self, key: str):
         self.__verify_cache_integrity()
         return super().__contains__(key)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         self.__verify_cache_integrity()
         return super().__getitem__(key)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any):
         super().__setitem__(key, (value, time.monotonic()))
 
 
@@ -54,8 +78,12 @@ class Strategy(enum.Enum):
     timed = 3
 
 
-def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
-    def decorator(func):
+def cache(
+    maxsize: int = 128,
+    strategy: Strategy = Strategy.lru,
+    ignore_kwargs: bool = False,
+) -> Callable[[Callable[..., R]], CacheProtocol[R]]:
+    def decorator(func: Callable[..., R]) -> CacheProtocol[R]:
         if strategy is Strategy.lru:
             _internal_cache = LRU(maxsize)
             _stats = _internal_cache.get_stats
@@ -66,7 +94,7 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
             _internal_cache = ExpiringCache(maxsize)
             _stats = lambda: (0, 0)
 
-        def _make_key(args, kwargs):
+        def _make_key(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
             # this is a bit of a cluster fuck
             # we do care what 'self' parameter is when we __repr__ it
             def _true_repr(o):
@@ -91,7 +119,7 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
             return ':'.join(key)
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any):
             key = _make_key(args, kwargs)
             try:
                 value = _internal_cache[key]
@@ -108,7 +136,7 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
                     return _wrap_new_coroutine(value)
                 return value
 
-        def _invalidate(*args, **kwargs):
+        def _invalidate(*args: Any, **kwargs: Any) -> bool:
             try:
                 del _internal_cache[_make_key(args, kwargs)]
             except KeyError:
@@ -116,7 +144,7 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
             else:
                 return True
 
-        def _invalidate_containing(key):
+        def _invalidate_containing(key: str) -> None:
             to_remove = []
             for k in _internal_cache.keys():
                 if key in k:
@@ -132,6 +160,6 @@ def cache(maxsize=128, strategy=Strategy.lru, ignore_kwargs=False):
         wrapper.invalidate = _invalidate
         wrapper.get_stats = _stats
         wrapper.invalidate_containing = _invalidate_containing
-        return wrapper
+        return wrapper  # type: ignore
 
     return decorator
