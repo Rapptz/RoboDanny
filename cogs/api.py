@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypedDict, Union
+from typing_extensions import Annotated
 
 from discord.ext import commands
 from .utils import checks, db, fuzzy, cache, time
@@ -80,7 +81,7 @@ def is_discord_py_helper(member: discord.Member) -> bool:
 
 
 def can_use_block():
-    def predicate(ctx:GuildContext) -> bool:
+    def predicate(ctx: GuildContext) -> bool:
         if ctx.guild is None:
             return False
 
@@ -839,7 +840,7 @@ class API(commands.Cog):
 
     @commands.command()
     @in_testing()
-    async def addbot(self, ctx, user: BotUser, *, reason: str):
+    async def addbot(self, ctx: GuildContext, user: Annotated[discord.User, BotUser], *, reason: str):
         """Requests your bot to be added to the server.
 
         To request your bot you must pass your bot's user ID and a reason
@@ -892,7 +893,7 @@ class API(commands.Cog):
         embed.set_footer(text=ctx.author.id)
         embed.set_author(name=user.id, icon_url=user.display_avatar.url)
 
-        channel = ctx.guild.get_channel(info['channel'])
+        channel: discord.abc.Messageable = ctx.guild.get_channel(info['channel'])  # type: ignore
         try:
             msg = await channel.send(embed=embed)
             await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
@@ -904,9 +905,9 @@ class API(commands.Cog):
         await ctx.send('Your bot has been requested to the moderators. I will DM you the status of your request.')
 
     @addbot.error
-    async def on_addbot_error(self, ctx, error):
+    async def on_addbot_error(self, ctx: GuildContext, error: commands.CommandError):
         if isinstance(error, (commands.BadArgument, commands.MissingRequiredArgument)):
-            return await ctx.send(error)
+            return await ctx.send(str(error))
 
 
 async def setup(bot):
