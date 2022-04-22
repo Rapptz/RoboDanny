@@ -9,11 +9,15 @@ import logging
 import traceback
 import aiohttp
 import sys
-from typing import AsyncIterator, Iterable, Optional, Union
+from typing import TYPE_CHECKING, AsyncIterator, Iterable, Optional, Union
 from collections import Counter, defaultdict
 
 import config
 import asyncpg
+
+if TYPE_CHECKING:
+    from cogs.reminder import Reminder
+
 
 description = """
 Hello! I am a bot written by Danny to provide some nice utilities.
@@ -384,3 +388,7 @@ class RoboDanny(commands.AutoShardedBot):
     @property
     def config(self):
         return __import__('config')
+
+    @property
+    def reminder(self) -> Optional[Reminder]:
+        return self.get_cog('Reminder')  # type: ignore
