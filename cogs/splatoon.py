@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 GameEntry = namedtuple('GameEntry', ('stage', 'mode'))
 
+
 def is_valid_entry(result, entry):
     # no dupes
     if entry in result:
@@ -35,6 +36,7 @@ def is_valid_entry(result, entry):
             return False
 
     return True
+
 
 def get_random_scrims(modes, maps, count):
     result = []
@@ -51,6 +53,7 @@ def get_random_scrims(modes, maps, count):
                 break
 
     return result
+
 
 RESOURCE_TO_EMOJI = {
     # Some of these names can be finnicky.
@@ -90,6 +93,7 @@ RESOURCE_TO_EMOJI = {
 # Hopefully by completely dropping Splatoon 1 support in
 # the future.
 
+
 class BrandResults:
     __slots__ = ('ability_name', 'info', 'buffs', 'nerfs')
 
@@ -101,6 +105,7 @@ class BrandResults:
 
     def is_brand(self):
         return self.ability_name is None
+
 
 class Rotation:
     def __init__(self, data):
@@ -118,6 +123,7 @@ class Rotation:
 
     def get_generic_value(self):
         return f'{self.stage_a} and {self.stage_b}'
+
 
 class Gear:
     __slots__ = ('kind', 'brand', 'name', 'stars', 'main', 'frequent_skill', 'price', 'image')
@@ -152,6 +158,7 @@ class Gear:
         self.frequent_skill = data.get('frequent_skill')
         return self
 
+
 class SalmonRun:
     def __init__(self, data):
         fromutc = datetime.datetime.utcfromtimestamp
@@ -174,6 +181,7 @@ class SalmonRun:
     @property
     def image(self):
         return self._image and f'https://app.splatoon2.nintendo.net{self._image}'
+
 
 class SalmonRunPageSource(menus.ListPageSource):
     def __init__(self, entries):
@@ -202,11 +210,12 @@ class SalmonRunPageSource(menus.ListPageSource):
 
         return e
 
+
 class Splatfest:
     def __init__(self, data):
         names = data['names']
-        self.alpha = names['alpha_short'] # Pearl
-        self.bravo = names['bravo_short'] # Marina
+        self.alpha = names['alpha_short']  # Pearl
+        self.bravo = names['bravo_short']  # Marina
         self.alpha_long = names['alpha_long']
         self.bravo_long = names['bravo_long']
 
@@ -253,12 +262,14 @@ class Splatfest:
         e.set_image(url=f'https://app.splatoon2.nintendo.net{self.image}')
         return e
 
+
 class Merchandise:
     def __init__(self, data):
         self.gear = Gear(data['gear'])
         self.skill = data['skill']['name']
         self.price = data['price']
         self.end_time = datetime.datetime.utcfromtimestamp(data['end_time'])
+
 
 class GearPageSource(menus.ListPageSource):
     def __init__(self, entries):
@@ -327,25 +338,26 @@ class GearPageSource(menus.ListPageSource):
 
         return e
 
+
 # JSON stuff
+
 
 class Splatoon2Encoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Gear):
-            payload = {
-                attr: getattr(obj, attr)
-                for attr in Gear.__slots__
-            }
+            payload = {attr: getattr(obj, attr) for attr in Gear.__slots__}
             payload['__gear__'] = True
             return payload
         if isinstance(obj, SalmonRun):
             return obj.to_dict()
         return super().default(obj)
 
+
 def splatoon2_decoder(obj):
     if '__gear__' in obj:
         return Gear.from_json(obj)
     return obj
+
 
 def mode_key(argument):
     lower = argument.lower().strip('"')
@@ -358,7 +370,9 @@ def mode_key(argument):
     else:
         raise commands.BadArgument('Unknown schedule type, try: "ranked", "regular", or "league"')
 
+
 _iso_regex = re.compile(r'([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})[T\s]([0-9]{1,2})\:([0-9]{1,2})')
+
 
 def iso8601(argument, *, _re=_iso_regex):
     # YYYY-MM-DDTHH:MM
@@ -367,6 +381,7 @@ def iso8601(argument, *, _re=_iso_regex):
         raise commands.BadArgument(f'Bad time provided ({argument})')
 
     return datetime.datetime(*map(int, m.groups()))
+
 
 class BrandOrAbility(commands.Converter):
     async def convert(self, ctx, argument):
@@ -426,6 +441,7 @@ class BrandOrAbility(commands.Converter):
 
         return result
 
+
 class GearQuery(commands.Converter):
     async def convert(self, ctx, argument):
         import shlex
@@ -440,7 +456,7 @@ class GearQuery(commands.Converter):
             '--brand': None,
             '--ability': None,
             '--frequent': None,
-            '--type': None
+            '--type': None,
         }
 
         current = 'query'
@@ -468,11 +484,13 @@ class GearQuery(commands.Converter):
         data = ctx.cog.splat2_data
         importance = []
 
+        # fmt: off
         frequent_lookup = {
             x['buffed'].lower(): x['name']
             for x in data['brands']
             if x['buffed']
         }
+        # fmt: on
 
         # search by name, main ability or brand
         # sort by importance
@@ -516,7 +534,6 @@ class GearQuery(commands.Converter):
 
                 importance.append((gear, important))
 
-
         importance.sort(key=lambda t: t[1], reverse=True)
         if len(importance) == 0:
             raise commands.BadArgument('Could not find anything.')
@@ -527,6 +544,7 @@ class GearQuery(commands.Converter):
 
         return [g for g, _ in importance]
 
+
 class Splatoon(commands.Cog):
     """Splatoon related commands."""
 
@@ -534,8 +552,9 @@ class Splatoon(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.splat2_data = config.Config('splatoon2.json', loop=bot.loop,
-                                         object_hook=splatoon2_decoder, encoder=Splatoon2Encoder)
+        self.splat2_data = config.Config(
+            'splatoon2.json', loop=bot.loop, object_hook=splatoon2_decoder, encoder=Splatoon2Encoder
+        )
         self.map_data = []
 
         self._splatnet2 = None
@@ -574,7 +593,7 @@ class Splatoon(commands.Cog):
             while not self.bot.is_closed():
                 iksm = self.splat2_data.get('iksm_session')
                 if iksm is not None:
-                    self.bot.session.cookie_jar.update_cookies({ 'iksm_session': iksm }, response_url=self.BASE_URL)
+                    self.bot.session.cookie_jar.update_cookies({'iksm_session': iksm}, response_url=self.BASE_URL)
                     self._is_authenticated.set()
 
                 expires = datetime.datetime.utcfromtimestamp(self.splat2_data.get('iksm_expires', 0.0))
@@ -593,13 +612,13 @@ class Splatoon(commands.Cog):
                 data = {
                     'client_id': '71b963c1b7b6d119',
                     'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer-session-token',
-                    'session_token': session_token
+                    'session_token': session_token,
                 }
                 headers = {
                     'Content-Type': 'application/json; charset=utf-8',
                     'X-Platform': 'Android',
                     'X-ProductVersion': '1.1.0',
-                    'User-Agent': 'com.nintendo.znca/1.1.0 (Android/4.4.2)'
+                    'User-Agent': 'com.nintendo.znca/1.1.0 (Android/4.4.2)',
                 }
 
                 # first, authenticate into the accounts.nintendo.com for our Bearer token and ID token.
@@ -607,7 +626,7 @@ class Splatoon(commands.Cog):
                     if resp.status != 200:
                         extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     # we don't care when the token expires but we need our ID token
@@ -620,7 +639,7 @@ class Splatoon(commands.Cog):
                         "language": "en-US",
                         'naCountry': 'US',
                         "naBirthday": "1989-04-06",
-                        "naIdToken": id_token
+                        "naIdToken": id_token,
                     }
                 }
 
@@ -631,50 +650,50 @@ class Splatoon(commands.Cog):
                     if resp.status != 200:
                         extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     js = await resp.json()
                     if js['status'] != 0:
                         extra = f'Firebase issue for {url}:\n```js\n{json.dumps(js, indent=4)}\n```'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     token = js['result'].get('webApiServerCredential', {}).get('accessToken')
                     if token is None:
                         extra = f'SplatNet 2 authentication error: No accessToken for {url}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                 # get the web service token
                 data = {
                     "parameter": {
-                        "id": 5741031244955648 # SplatNet 2 ID
+                        "id": 5741031244955648,
                     }
-                }
+                }  # SplatNet 2 ID
                 url = 'https://api-lp1.znc.srv.nintendo.net/v1/Game/GetWebServiceToken'
                 headers['Authorization'] = f'Bearer {token}'
                 async with session.post(url, headers=headers, data=json.dumps(data)) as resp:
                     if resp.status != 200:
                         extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     js = await resp.json()
                     if js['status'] != 0:
                         extra = f'Firebase issue for {url}:\n```js\n{json.dumps(js, indent=4)}\n```'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     access_token = js['result'].get('accessToken')
                     if access_token is None:
                         extra = f'SplatNet 2 authentication error: No accessToken for {url}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                 # Now we can **finally** access SplatNet 2
@@ -686,7 +705,7 @@ class Splatoon(commands.Cog):
                     if resp.status != 200:
                         extra = f'SplatNet 2 authentication error: {resp.status} for {url}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     # finally our shit
@@ -695,7 +714,7 @@ class Splatoon(commands.Cog):
                     if m is None:
                         extra = f'Regex fucked up. See {resp.cookie}'
                         await self.bot.get_cog('Stats').log_error(extra=extra)
-                        await asyncio.sleep(300.0) # try again in 5 minutes
+                        await asyncio.sleep(300.0)  # try again in 5 minutes
                         continue
 
                     iksm = m.group('session')
@@ -723,22 +742,16 @@ class Splatoon(commands.Cog):
             async with self.bot.session.get(self.BASE_URL / 'api/schedules') as resp:
                 if resp.status != 200:
                     await self.bot.get_cog('Stats').log_error(extra=f'Splatnet schedule responded with {resp.status}.')
-                    return 300.0 # try again in 5 minutes
+                    return 300.0  # try again in 5 minutes
 
                 data = await resp.json()
                 gachi = data.get('gachi', [])
-                self.sp2_map_data['Ranked Battle'] = [
-                    Rotation(d) for d in gachi
-                ]
+                self.sp2_map_data['Ranked Battle'] = [Rotation(d) for d in gachi]
                 regular = data.get('regular', [])
-                self.sp2_map_data['Regular Battle'] = [
-                    Rotation(d) for d in regular
-                ]
+                self.sp2_map_data['Regular Battle'] = [Rotation(d) for d in regular]
 
                 league = data.get('league', [])
-                self.sp2_map_data['League Battle'] = [
-                    Rotation(d) for d in league
-                ]
+                self.sp2_map_data['League Battle'] = [Rotation(d) for d in league]
 
                 newest = []
                 for key, value in self.sp2_map_data.items():
@@ -751,7 +764,7 @@ class Splatoon(commands.Cog):
                 try:
                     new = max(newest)
                 except ValueError:
-                    return 300.0 # try again in 5 minutes
+                    return 300.0  # try again in 5 minutes
 
                 now = datetime.datetime.utcnow()
                 return 300.0 if now > new else (new - now).total_seconds()
@@ -765,7 +778,7 @@ class Splatoon(commands.Cog):
             async with self.bot.session.get(self.BASE_URL / 'api/onlineshop/merchandises') as resp:
                 if resp.status != 200:
                     await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Shop responded with {resp.status}.')
-                    return 300.0 # try again in 5 minutes
+                    return 300.0  # try again in 5 minutes
 
                 data = await resp.json()
                 merch = data.get('merchandises')
@@ -814,7 +827,7 @@ class Splatoon(commands.Cog):
             async with self.bot.session.get(self.BASE_URL / 'api/results') as resp:
                 if resp.status != 200:
                     await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Stats responded with {resp.status}.')
-                    return 300.0 # try again in 5 minutes
+                    return 300.0  # try again in 5 minutes
 
                 data = await resp.json()
                 results = data['results']
@@ -870,7 +883,7 @@ class Splatoon(commands.Cog):
                         for team in js.get('my_team_members', []):
                             self.scrape_data_from_player(team.get('player', {}), bulk_lookup)
 
-                    await asyncio.sleep(1) # one request a second so we don't abuse
+                    await asyncio.sleep(1)  # one request a second so we don't abuse
 
                 log.info('Scraped Splatoon 2 results from %s games.', added)
 
@@ -891,7 +904,7 @@ class Splatoon(commands.Cog):
                         old.append(value)
 
                 await self.splat2_data.save()
-                return 3600.0 # redo in an hour
+                return 3600.0  # redo in an hour
         except Exception as e:
             await self.bot.get_cog('Stats').log_error(extra=f'Splatnet Stat Error')
             return 300.0
@@ -1032,9 +1045,7 @@ class Splatoon(commands.Cog):
             else:
                 end_time = rotation.end_time
 
-            e.add_field(name=f'{key}: {rotation.mode}',
-                        value=f'{rotation.stage_a} and {rotation.stage_b}',
-                        inline=False)
+            e.add_field(name=f'{key}: {rotation.mode}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
 
         if end_time is not None:
             e.title = f'For {time.human_timedelta(end_time)}...'
@@ -1048,8 +1059,10 @@ class Splatoon(commands.Cog):
             return await ctx.send('Sorry, no map data found...')
 
         entries = [
-            (f'Now: {r.mode}' if r.current else f'In {time.human_timedelta(r.start_time)}: {r.mode}',
-            f'{r.stage_a} and {r.stage_b}')
+            (
+                f'Now: {r.mode}' if r.current else f'In {time.human_timedelta(r.start_time)}: {r.mode}',
+                f'{r.stage_a} and {r.stage_b}',
+            )
             for r in data
         ]
 
@@ -1081,9 +1094,7 @@ class Splatoon(commands.Cog):
             else:
                 start_time = rotation.start_time
 
-            e.add_field(name=f'{key}: {rotation.mode}',
-                        value=f'{rotation.stage_a} and {rotation.stage_b}',
-                        inline=False)
+            e.add_field(name=f'{key}: {rotation.mode}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
 
         if start_time is not None:
             e.title = f'In {time.human_timedelta(start_time)}'
@@ -1213,7 +1224,7 @@ class Splatoon(commands.Cog):
         entry = {
             'name': name,
             'sub': sub,
-            'special': special
+            'special': special,
         }
         weapons.append(entry)
         await self.splat2_data.put('weapons', weapons)
@@ -1227,6 +1238,7 @@ class Splatoon(commands.Cog):
         entry.append(name)
         await self.splat2_data.put('maps', entry)
         await ctx.send('\N{OK HAND SIGN}')
+
 
 async def setup(bot):
     await bot.add_cog(Splatoon(bot))

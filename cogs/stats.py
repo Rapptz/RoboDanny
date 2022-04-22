@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 
 LOGGING_CHANNEL = 309632009427222529
 
+
 class GatewayHandler(logging.Handler):
     def __init__(self, cog):
         self.cog = cog
@@ -36,6 +37,7 @@ class GatewayHandler(logging.Handler):
 
     def emit(self, record):
         self.cog.add_record(record)
+
 
 class Commands(db.Table):
     id = db.PrimaryKeyColumn()
@@ -48,19 +50,24 @@ class Commands(db.Table):
     command = db.Column(db.String, index=True)
     failed = db.Column(db.Boolean, index=True)
 
+
 _INVITE_REGEX = re.compile(r'(?:https?:\/\/)?discord(?:\.gg|\.com|app\.com\/invite)?\/[A-Za-z0-9]+')
+
 
 def censor_invite(obj, *, _regex=_INVITE_REGEX):
     return _regex.sub('[censored-invite]', str(obj))
 
+
 def hex_value(arg):
     return int(arg, base=16)
+
 
 def object_at(addr):
     for o in gc.get_objects():
         if id(o) == addr:
             return o
     return None
+
 
 class Stats(commands.Cog):
     """Bot usage statistics."""
@@ -124,15 +131,17 @@ class Stats(commands.Cog):
 
         log.info(f'{message.created_at}: {message.author} in {destination}: {message.content}')
         async with self._batch_lock:
-            self._data_batch.append({
-                'guild': guild_id,
-                'channel': ctx.channel.id,
-                'author': ctx.author.id,
-                'used': message.created_at.isoformat(),
-                'prefix': ctx.prefix,
-                'command': command,
-                'failed': ctx.command_failed,
-            })
+            self._data_batch.append(
+                {
+                    'guild': guild_id,
+                    'channel': ctx.channel.id,
+                    'author': ctx.author.id,
+                    'used': message.created_at.isoformat(),
+                    'prefix': ctx.prefix,
+                    'command': command,
+                    'failed': ctx.command_failed,
+                }
+            )
 
     @commands.Cog.listener()
     async def on_command_completion(self, ctx):
@@ -149,7 +158,7 @@ class Stats(commands.Cog):
         return hook
 
     async def log_error(self, *, ctx=None, extra=None):
-        e = discord.Embed(title='Error', colour=0xdd5f53)
+        e = discord.Embed(title='Error', colour=0xDD5F53)
         e.description = f'```py\n{traceback.format_exc()}\n```'
         e.add_field(name='Extra', value=extra, inline=False)
         e.timestamp = discord.utils.utcnow()
@@ -278,7 +287,7 @@ class Stats(commands.Cog):
             '\N{SECOND PLACE MEDAL}',
             '\N{THIRD PLACE MEDAL}',
             '\N{SPORTS MEDAL}',
-            '\N{SPORTS MEDAL}'
+            '\N{SPORTS MEDAL}',
         )
 
         embed = discord.Embed(title='Server Command Stats', colour=discord.Colour.blurple())
@@ -306,8 +315,10 @@ class Stats(commands.Cog):
 
         records = await ctx.db.fetch(query, ctx.guild.id)
 
-        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records)) or 'No Commands'
+        value = (
+            '\n'.join(f'{lookup[index]}: {command} ({uses} uses)' for (index, (command, uses)) in enumerate(records))
+            or 'No Commands'
+        )
 
         embed.add_field(name='Top Commands', value=value, inline=True)
 
@@ -323,8 +334,10 @@ class Stats(commands.Cog):
 
         records = await ctx.db.fetch(query, ctx.guild.id)
 
-        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records)) or 'No Commands.'
+        value = (
+            '\n'.join(f'{lookup[index]}: {command} ({uses} uses)' for (index, (command, uses)) in enumerate(records))
+            or 'No Commands.'
+        )
         embed.add_field(name='Top Commands Today', value=value, inline=True)
         embed.add_field(name='\u200b', value='\u200b', inline=True)
 
@@ -337,11 +350,14 @@ class Stats(commands.Cog):
                    LIMIT 5;
                 """
 
-
         records = await ctx.db.fetch(query, ctx.guild.id)
 
-        value = '\n'.join(f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)'
-                          for (index, (author_id, uses)) in enumerate(records)) or 'No bot users.'
+        value = (
+            '\n'.join(
+                f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)' for (index, (author_id, uses)) in enumerate(records)
+            )
+            or 'No bot users.'
+        )
 
         embed.add_field(name='Top Command Users', value=value, inline=True)
 
@@ -355,11 +371,14 @@ class Stats(commands.Cog):
                    LIMIT 5;
                 """
 
-
         records = await ctx.db.fetch(query, ctx.guild.id)
 
-        value = '\n'.join(f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)'
-                          for (index, (author_id, uses)) in enumerate(records)) or 'No command users.'
+        value = (
+            '\n'.join(
+                f'{lookup[index]}: <@!{author_id}> ({uses} bot uses)' for (index, (author_id, uses)) in enumerate(records)
+            )
+            or 'No command users.'
+        )
 
         embed.add_field(name='Top Command Users Today', value=value, inline=True)
         await ctx.send(embed=embed)
@@ -370,7 +389,7 @@ class Stats(commands.Cog):
             '\N{SECOND PLACE MEDAL}',
             '\N{THIRD PLACE MEDAL}',
             '\N{SPORTS MEDAL}',
-            '\N{SPORTS MEDAL}'
+            '\N{SPORTS MEDAL}',
         )
 
         embed = discord.Embed(title='Command Stats', colour=member.colour)
@@ -399,8 +418,10 @@ class Stats(commands.Cog):
 
         records = await ctx.db.fetch(query, ctx.guild.id, member.id)
 
-        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records)) or 'No Commands'
+        value = (
+            '\n'.join(f'{lookup[index]}: {command} ({uses} uses)' for (index, (command, uses)) in enumerate(records))
+            or 'No Commands'
+        )
 
         embed.add_field(name='Most Used Commands', value=value, inline=False)
 
@@ -417,8 +438,10 @@ class Stats(commands.Cog):
 
         records = await ctx.db.fetch(query, ctx.guild.id, member.id)
 
-        value = '\n'.join(f'{lookup[index]}: {command} ({uses} uses)'
-                          for (index, (command, uses)) in enumerate(records)) or 'No Commands'
+        value = (
+            '\n'.join(f'{lookup[index]}: {command} ({uses} uses)' for (index, (command, uses)) in enumerate(records))
+            or 'No Commands'
+        )
 
         embed.add_field(name='Most Used Commands Today', value=value, inline=False)
         await ctx.send(embed=embed)
@@ -450,7 +473,7 @@ class Stats(commands.Cog):
             '\N{SECOND PLACE MEDAL}',
             '\N{THIRD PLACE MEDAL}',
             '\N{SPORTS MEDAL}',
-            '\N{SPORTS MEDAL}'
+            '\N{SPORTS MEDAL}',
         )
 
         query = """SELECT command, COUNT(*) AS "uses"
@@ -520,15 +543,17 @@ class Stats(commands.Cog):
                 question += count
 
         e = discord.Embed(title='Last 24 Hour Command Stats', colour=discord.Colour.blurple())
-        e.description = f'{failed + success + question} commands used today. ' \
-                        f'({success} succeeded, {failed} failed, {question} unknown)'
+        e.description = (
+            f'{failed + success + question} commands used today. '
+            f'({success} succeeded, {failed} failed, {question} unknown)'
+        )
 
         lookup = (
             '\N{FIRST PLACE MEDAL}',
             '\N{SECOND PLACE MEDAL}',
             '\N{THIRD PLACE MEDAL}',
             '\N{SPORTS MEDAL}',
-            '\N{SPORTS MEDAL}'
+            '\N{SPORTS MEDAL}',
         )
 
         query = """SELECT command, COUNT(*) AS "uses"
@@ -607,12 +632,12 @@ class Stats(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
-        e = discord.Embed(colour=0x53dda4, title='New Guild') # green colour
+        e = discord.Embed(colour=0x53DDA4, title='New Guild')  # green colour
         await self.send_guild_stats(e, guild)
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
-        e = discord.Embed(colour=0xdd5f53, title='Left Guild') # red colour
+        e = discord.Embed(colour=0xDD5F53, title='Left Guild')  # red colour
         await self.send_guild_stats(e, guild)
 
     @commands.Cog.listener()
@@ -625,7 +650,7 @@ class Stats(commands.Cog):
         if isinstance(error, (discord.Forbidden, discord.NotFound, menus.MenuError)):
             return
 
-        e = discord.Embed(title='Command Error', colour=0xcc3366)
+        e = discord.Embed(title='Command Error', colour=0xCC3366)
         e.add_field(name='Name', value=ctx.command.qualified_name)
         e.add_field(name='Author', value=f'{ctx.author} (ID: {ctx.author.id})')
 
@@ -647,10 +672,7 @@ class Stats(commands.Cog):
         self._gateway_queue.put_nowait(record)
 
     async def notify_gateway_status(self, record):
-        attributes = {
-            'INFO': '\N{INFORMATION SOURCE}',
-            'WARNING': '\N{WARNING SIGN}'
-        }
+        attributes = {'INFO': '\N{INFORMATION SOURCE}', 'WARNING': '\N{WARNING SIGN}'}
 
         emoji = attributes.get(record.levelname, '\N{CROSS MARK}')
         dt = datetime.datetime.utcfromtimestamp(record.created)
@@ -680,7 +702,7 @@ class Stats(commands.Cog):
         description = [
             f'Total `Pool.acquire` Waiters: {total_waiting}',
             f'Current Pool Generation: {current_generation}',
-            f'Connections In Use: {len(pool._holders) - pool._queue.qsize()}'
+            f'Connections In Use: {len(pool._holders) - pool._queue.qsize()}',
         ]
 
         questionable_connections = 0
@@ -697,10 +719,7 @@ class Stats(commands.Cog):
         embed.add_field(name='Connections', value=f'```py\n{joined_value}\n```', inline=False)
 
         spam_control = self.bot.spam_control
-        being_spammed = [
-            str(key) for key, value in spam_control._cache.items()
-            if value._tokens == 0
-        ]
+        being_spammed = [str(key) for key, value in spam_control._cache.items() if value._tokens == 0]
 
         description.append(f'Current Spammers: {", ".join(being_spammed) if being_spammed else "None"}')
         description.append(f'Questionable Connections: {questionable_connections}')
@@ -718,17 +737,11 @@ class Stats(commands.Cog):
         else:
             all_tasks = task_retriever(loop=self.bot.loop)
 
-        event_tasks = [
-            t for t in all_tasks
-            if 'Client._run_event' in repr(t) and not t.done()
-        ]
+        event_tasks = [t for t in all_tasks if 'Client._run_event' in repr(t) and not t.done()]
 
         cogs_directory = os.path.dirname(__file__)
         tasks_directory = os.path.join('discord', 'ext', 'tasks', '__init__.py')
-        inner_tasks = [
-            t for t in all_tasks
-            if cogs_directory in repr(t) or tasks_directory in repr(t)
-        ]
+        inner_tasks = [t for t in all_tasks if cogs_directory in repr(t) or tasks_directory in repr(t)]
 
         bad_inner_tasks = ", ".join(hex(id(t)) for t in inner_tasks if t.done() and t._exception is not None)
         total_warnings += bool(bad_inner_tasks)
@@ -763,6 +776,8 @@ class Stats(commands.Cog):
         """Gateway related stats."""
 
         yesterday = discord.utils.utcnow() - datetime.timedelta(days=1)
+
+        # fmt: off
         identifies = {
             shard_id: sum(1 for dt in dates if dt > yesterday)
             for shard_id, dates in self.bot.identifies.items()
@@ -771,12 +786,13 @@ class Stats(commands.Cog):
             shard_id: sum(1 for dt in dates if dt > yesterday)
             for shard_id, dates in self.bot.resumes.items()
         }
+        # fmt: on
 
         total_identifies = sum(identifies.values())
 
         builder = [
             f'Total RESUMEs: {sum(resumes.values())}',
-            f'Total IDENTIFYs: {total_identifies}'
+            f'Total IDENTIFYs: {total_identifies}',
         ]
 
         shard_count = len(self.bot.shards)
@@ -962,10 +978,7 @@ class Stats(commands.Cog):
                    ORDER BY 2 DESC
                 """
 
-        all_commands = {
-            c.qualified_name: 0
-            for c in self.bot.walk_commands()
-        }
+        all_commands = {c.qualified_name: 0 for c in self.bot.walk_commands()}
 
         records = await ctx.db.fetch(query, datetime.timedelta(days=days))
         for name, uses in records:
@@ -1034,6 +1047,7 @@ class Stats(commands.Cog):
 
         class Count:
             __slots__ = ('success', 'failed', 'total')
+
             def __init__(self):
                 self.success = 0
                 self.failed = 0
@@ -1055,16 +1069,15 @@ class Stats(commands.Cog):
 
         table = formats.TabularData()
         table.set_columns(['Cog', 'Success', 'Failed', 'Total'])
-        data = sorted([
-            (cog, e.success, e.failed, e.total)
-            for cog, e in data.items()
-        ], key=lambda t: t[-1], reverse=True)
+        data = sorted([(cog, e.success, e.failed, e.total) for cog, e in data.items()], key=lambda t: t[-1], reverse=True)
 
         table.add_rows(data)
         render = table.render()
         await ctx.safe_send(f'```\n{render}\n```')
 
+
 old_on_error = commands.AutoShardedBot.on_error
+
 
 async def on_error(self, event, *args, **kwargs):
     (exc_type, exc, tb) = sys.exc_info()
@@ -1072,7 +1085,7 @@ async def on_error(self, event, *args, **kwargs):
     if isinstance(exc, commands.CommandInvokeError):
         return
 
-    e = discord.Embed(title='Event Error', colour=0xa32952)
+    e = discord.Embed(title='Event Error', colour=0xA32952)
     e.add_field(name='Event', value=event)
     trace = "".join(traceback.format_exception(exc_type, exc, tb))
     e.description = f'```py\n{trace}\n```'
@@ -1089,6 +1102,7 @@ async def on_error(self, event, *args, **kwargs):
     except:
         pass
 
+
 async def setup(bot):
     if not hasattr(bot, 'command_stats'):
         bot.command_stats = Counter()
@@ -1101,6 +1115,7 @@ async def setup(bot):
     bot._stats_cog_gateway_handler = handler = GatewayHandler(cog)
     logging.getLogger().addHandler(handler)
     commands.AutoShardedBot.on_error = on_error
+
 
 async def teardown(bot):
     commands.AutoShardedBot.on_error = old_on_error

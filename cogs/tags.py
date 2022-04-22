@@ -13,29 +13,39 @@ import asyncpg
 import argparse
 import shlex
 
+
 class Arguments(argparse.ArgumentParser):
     def error(self, message):
         raise RuntimeError(message)
 
+
 class UnavailableTagCommand(commands.CheckFailure):
     def __str__(self):
-        return 'Sorry. This command is unavailable in private messages.\n' \
-               'Consider browsing or using the tag box instead.\nSee ?tag box for more info.'
+        return (
+            'Sorry. This command is unavailable in private messages.\n'
+            'Consider browsing or using the tag box instead.\nSee ?tag box for more info.'
+        )
+
 
 class UnableToUseBox(commands.CheckFailure):
     def __str__(self):
         return 'You do not have permissions to use the tag box. Manage Messages required!'
 
+
 def suggest_box():
     """Custom commands.guild_only with different error checking."""
+
     def pred(ctx):
         if ctx.guild is None:
             raise UnavailableTagCommand()
         return True
+
     return commands.check(pred)
+
 
 class TagPageEntry:
     __slots__ = ('id', 'name')
+
     def __init__(self, entry):
         self.id = entry['id']
         self.name = entry['name']
@@ -43,10 +53,12 @@ class TagPageEntry:
     def __str__(self):
         return f'{self.name} (ID: {self.id})'
 
+
 class TagPages(SimplePages):
     def __init__(self, entries, *, ctx: commands.Context, per_page: int = 12):
         converted = [TagPageEntry(entry) for entry in entries]
         super().__init__(converted, per_page=per_page, ctx=ctx)
+
 
 def can_use_box():
     def pred(ctx):
@@ -60,11 +72,14 @@ def can_use_box():
             raise UnableToUseBox()
 
         return True
+
     return commands.check(pred)
+
 
 # The tag data is heavily duplicated (denormalized) and heavily indexed to speed up
 # retrieval at the expense of making inserts a little bit slower. This is a fine trade-off
 # because tags are retrieved much more often than created.
+
 
 class TagsTable(db.Table, table_name='tags'):
     id = db.PrimaryKeyColumn()
@@ -83,11 +98,14 @@ class TagsTable(db.Table, table_name='tags'):
         statement = super().create_table(exists_ok=exists_ok)
 
         # create the indexes
-        sql = "CREATE INDEX IF NOT EXISTS tags_name_trgm_idx ON tags USING GIN (name gin_trgm_ops);\n" \
-              "CREATE INDEX IF NOT EXISTS tags_name_lower_idx ON tags (LOWER(name));\n" \
-              "CREATE UNIQUE INDEX IF NOT EXISTS tags_uniq_idx ON tags (LOWER(name), location_id);"
+        sql = (
+            "CREATE INDEX IF NOT EXISTS tags_name_trgm_idx ON tags USING GIN (name gin_trgm_ops);\n"
+            "CREATE INDEX IF NOT EXISTS tags_name_lower_idx ON tags (LOWER(name));\n"
+            "CREATE UNIQUE INDEX IF NOT EXISTS tags_uniq_idx ON tags (LOWER(name), location_id);"
+        )
 
         return statement + '\n' + sql
+
 
 class TagLookup(db.Table, table_name='tag_lookup'):
     id = db.PrimaryKeyColumn()
@@ -105,11 +123,14 @@ class TagLookup(db.Table, table_name='tag_lookup'):
         statement = super().create_table(exists_ok=exists_ok)
 
         # create the indexes
-        sql = "CREATE INDEX IF NOT EXISTS tag_lookup_name_trgm_idx ON tag_lookup USING GIN (name gin_trgm_ops);\n" \
-              "CREATE INDEX IF NOT EXISTS tag_lookup_name_lower_idx ON tag_lookup (LOWER(name));\n" \
-              "CREATE UNIQUE INDEX IF NOT EXISTS tag_lookup_uniq_idx ON tag_lookup (LOWER(name), location_id);"
+        sql = (
+            "CREATE INDEX IF NOT EXISTS tag_lookup_name_trgm_idx ON tag_lookup USING GIN (name gin_trgm_ops);\n"
+            "CREATE INDEX IF NOT EXISTS tag_lookup_name_lower_idx ON tag_lookup (LOWER(name));\n"
+            "CREATE UNIQUE INDEX IF NOT EXISTS tag_lookup_uniq_idx ON tag_lookup (LOWER(name), location_id);"
+        )
 
         return statement + '\n' + sql
+
 
 class TagName(commands.clean_content):
     def __init__(self, *, lower=False):
@@ -135,6 +156,7 @@ class TagName(commands.clean_content):
 
         return converted if not self.lower else lower
 
+
 class FakeUser(discord.Object):
     class FakeAsset:
         url = 'https://cdn.discordapp.com/embed/avatars/0.png'
@@ -153,6 +175,7 @@ class FakeUser(discord.Object):
     def __str__(self):
         return str(self.id)
 
+
 class TagMember(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -161,6 +184,7 @@ class TagMember(commands.Converter):
             if argument.isdigit():
                 return FakeUser(id=int(argument))
             raise e
+
 
 class Tags(commands.Cog):
     """Commands to fetch something by a tag name"""
@@ -419,8 +443,9 @@ class Tags(commands.Cog):
             ctx.message = original
 
         if self.is_tag_being_made(ctx.guild.id, name):
-            return await ctx.send('Sorry. This tag is currently being made by someone. ' \
-                                 f'Redo the command "{ctx.prefix}tag make" to retry.')
+            return await ctx.send(
+                'Sorry. This tag is currently being made by someone. ' f'Redo the command "{ctx.prefix}tag make" to retry.'
+            )
 
         # reacquire our connection since we need the query
         await ctx.acquire()
@@ -433,13 +458,15 @@ class Tags(commands.Cog):
         query = """SELECT 1 FROM tags WHERE location_id=$1 AND LOWER(name)=$2;"""
         row = await ctx.db.fetchrow(query, ctx.guild.id, name.lower())
         if row is not None:
-            return await ctx.send('Sorry. A tag with that name already exists. ' \
-                                 f'Redo the command "{ctx.prefix}tag make" to retry.')
-
+            return await ctx.send(
+                'Sorry. A tag with that name already exists. ' f'Redo the command "{ctx.prefix}tag make" to retry.'
+            )
 
         self.add_in_progress_tag(ctx.guild.id, name)
-        await ctx.send(f'Neat. So the name is {name}. What about the tag\'s content? ' \
-                       f'**You can type {ctx.prefix}abort to abort the tag make process.**')
+        await ctx.send(
+            f'Neat. So the name is {name}. What about the tag\'s content? '
+            f'**You can type {ctx.prefix}abort to abort the tag make process.**'
+        )
 
         # release while we wait for response
         await ctx.release()
@@ -505,14 +532,15 @@ class Tags(commands.Cog):
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
 
-
         def emojize(seq):
-            emoji = 129351 # ord(':first_place:')
+            emoji = 129351  # ord(':first_place:')
             for index, value in enumerate(seq):
                 yield chr(emoji + index), value
 
-        value = '\n'.join(f'{emoji}: {name} ({uses} uses)' if name else f'{emoji}: Nothing!'
-                          for (emoji, (name, uses, _, _)) in emojize(records))
+        value = '\n'.join(
+            f'{emoji}: {name} ({uses} uses)' if name else f'{emoji}: Nothing!'
+            for (emoji, (name, uses, _, _)) in emojize(records)
+        )
 
         e.add_field(name='Top Tags', value=value, inline=False)
 
@@ -533,8 +561,10 @@ class Tags(commands.Cog):
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None) for i in range(0, 3 - len(records)))
 
-        value = '\n'.join(f'{emoji}: <@{author_id}> ({uses} times)' if author_id else f'{emoji}: No one!'
-                          for (emoji, (uses, author_id)) in emojize(records))
+        value = '\n'.join(
+            f'{emoji}: <@{author_id}> ({uses} times)' if author_id else f'{emoji}: No one!'
+            for (emoji, (uses, author_id)) in emojize(records)
+        )
         e.add_field(name='Top Tag Users', value=value, inline=False)
 
         # tag creators
@@ -555,8 +585,10 @@ class Tags(commands.Cog):
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None) for i in range(0, 3 - len(records)))
 
-        value = '\n'.join(f'{emoji}: <@{owner_id}> ({count} tags)' if owner_id else f'{emoji}: No one!'
-                          for (emoji, (count, owner_id)) in emojize(records))
+        value = '\n'.join(
+            f'{emoji}: <@{owner_id}> ({count} tags)' if owner_id else f'{emoji}: No one!'
+            for (emoji, (count, owner_id)) in emojize(records)
+        )
         e.add_field(name='Top Tag Creators', value=value, inline=False)
 
         await ctx.send(embed=e)
@@ -602,7 +634,7 @@ class Tags(commands.Cog):
             # fill with data to ensure that we have a minimum of 3
             records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
 
-        emoji = 129351 # ord(':first_place:')
+        emoji = 129351  # ord(':first_place:')
 
         for (offset, (name, uses, _, _)) in enumerate(records):
             if name:
@@ -713,7 +745,6 @@ class Tags(commands.Cog):
             await ctx.send('Could not delete tag. Either it does not exist or you do not have permissions to do so.')
             return
 
-
         if bypass_owner_check:
             clause = 'id=$1 AND location_id=$2'
             args = [deleted[0], ctx.guild.id]
@@ -777,7 +808,7 @@ class Tags(commands.Cog):
 
         await ctx.send(embed=embed)
 
-    @tag.command( aliases=['owner'])
+    @tag.command(aliases=['owner'])
     @suggest_box()
     async def info(self, ctx, *, name: TagName(lower=True)):
         """Retrieves info about a tag.
@@ -930,7 +961,7 @@ class Tags(commands.Cog):
 
         query = "SELECT COUNT(*) FROM tags WHERE location_id=$1 AND owner_id=$2;"
         count = await ctx.db.fetchrow(query, ctx.guild.id, member.id)
-        count = count[0] # COUNT(*) always returns 0 or higher
+        count = count[0]  # COUNT(*) always returns 0 or higher
 
         if count == 0:
             return await ctx.send(f'{member} does not have any tags to purge.')
@@ -1236,7 +1267,7 @@ class Tags(commands.Cog):
         embed.add_field(name='Total Uses', value=top_tags[0]['Total Uses'])
         embed.add_field(name='Tag Creators', value=top_creators[0]['Creator Count'])
 
-        emoji = 129351 # ord(':first_place:')
+        emoji = 129351  # ord(':first_place:')
 
         for offset, (name, uses, _, _) in enumerate(top_tags):
             embed.add_field(name=f'{chr(emoji + offset)} Tag', value=f'{name} ({uses} uses)')
@@ -1280,6 +1311,7 @@ class Tags(commands.Cog):
     async def config(self, ctx):
         """This is a reserved tag command. Check back later."""
         pass
+
 
 async def setup(bot):
     await bot.add_cog(Tags(bot))

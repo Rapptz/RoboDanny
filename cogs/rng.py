@@ -5,6 +5,7 @@ from collections import Counter
 from typing import Optional
 from .utils.formats import plural
 
+
 class RNG(commands.Cog):
     """Utilities that provide pseudo-RNG."""
 
@@ -57,7 +58,7 @@ class RNG(commands.Cog):
         maps = splatoon.splat2_data.get('maps', [])
 
         stage = rng.choice(maps) if maps else 'Random Stage'
-        modes = [ 'Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control' ]
+        modes = ['Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control']
         mode = rng.choice(modes)
         result = [f'Playing {mode} on {stage}', '', '**Team Alpha**']
 
@@ -141,11 +142,19 @@ class RNG(commands.Cog):
     @random.command()
     async def lenny(self, ctx):
         """Displays a random lenny face."""
-        lenny = rng.choice([
-            "( ͡° ͜ʖ ͡°)", "( ͠° ͟ʖ ͡°)", "ᕦ( ͡° ͜ʖ ͡°)ᕤ", "( ͡~ ͜ʖ ͡°)",
-            "( ͡o ͜ʖ ͡o)", "͡(° ͜ʖ ͡ -)", "( ͡͡ ° ͜ ʖ ͡ °)﻿", "(ง ͠° ͟ل͜ ͡°)ง",
-            "ヽ༼ຈل͜ຈ༽ﾉ"
-        ])
+        lenny = rng.choice(
+            [
+                "( ͡° ͜ʖ ͡°)",
+                "( ͠° ͟ʖ ͡°)",
+                "ᕦ( ͡° ͜ʖ ͡°)ᕤ",
+                "( ͡~ ͜ʖ ͡°)",
+                "( ͡o ͜ʖ ͡o)",
+                "͡(° ͜ʖ ͡ -)",
+                "( ͡͡ ° ͜ ʖ ͡ °)﻿",
+                "(ง ͠° ͟ل͜ ͡°)ง",
+                "ヽ༼ຈل͜ຈ༽ﾉ",
+            ]
+        )
         await ctx.send(lenny)
 
     @commands.command()
@@ -182,6 +191,7 @@ class RNG(commands.Cog):
             builder.append(f'{index}. {elem} ({plural(count):time}, {count/times:.2%})')
 
         await ctx.send('\n'.join(builder))
+
 
 async def setup(bot):
     await bot.add_cog(RNG(bot))

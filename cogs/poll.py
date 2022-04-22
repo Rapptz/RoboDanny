@@ -1,9 +1,11 @@
 from discord.ext import commands
 import asyncio
 
+
 def to_emoji(c):
-    base = 0x1f1e6
+    base = 0x1F1E6
     return chr(base + c)
+
 
 class Polls(commands.Cog):
     """Poll voting system."""
@@ -44,7 +46,7 @@ class Polls(commands.Cog):
         try:
             await ctx.channel.delete_messages(messages)
         except:
-            pass # oh well
+            pass  # oh well
 
         answer = '\n'.join(f'{keycap}: {content}' for keycap, content in answers)
         actual_poll = await ctx.send(f'{ctx.author} asks: {question}\n\n{answer}')
@@ -85,6 +87,7 @@ class Polls(commands.Cog):
         poll = await ctx.send(f'{ctx.author} asks: {question}\n\n{body}')
         for emoji, _ in choices:
             await poll.add_reaction(emoji)
+
 
 async def setup(bot):
     await bot.add_cog(Polls(bot))

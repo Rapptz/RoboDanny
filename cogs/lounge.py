@@ -9,8 +9,10 @@ from lxml import etree
 LOUNGE_GUILD_ID = 145079846832308224
 META_CHANNEL_ID = 335119551702499328
 
+
 class CodeBlock:
     missing_error = 'Missing code block. Please use the following markdown\n\\`\\`\\`language\ncode here\n\\`\\`\\`'
+
     def __init__(self, argument):
         try:
             block, code = argument.split('\n', 1)
@@ -30,7 +32,7 @@ class CodeBlock:
             'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
             'py': 'python3 main.cpp',
             'python': 'python3 main.cpp',
-            'haskell': 'runhaskell main.cpp'
+            'haskell': 'runhaskell main.cpp',
         }
 
         cpp = cmds['cpp']
@@ -45,6 +47,7 @@ class CodeBlock:
                 fmt = 'Could not find a language to compile with.'
             raise commands.BadArgument(fmt) from e
 
+
 class ChannelSnapshot:
     __slots__ = ('name', 'bucket', 'position', 'id')
 
@@ -55,13 +58,18 @@ class ChannelSnapshot:
         self.id = channel.id
 
     def __lt__(self, other):
-        return isinstance(other, ChannelSnapshot) and (self.bucket, self.position, self.id) < (other.bucket, other.position, other.id)
+        return isinstance(other, ChannelSnapshot) and (self.bucket, self.position, self.id) < (
+            other.bucket,
+            other.position,
+            other.id,
+        )
 
     def __eq__(self, other):
         return isinstance(other, ChannelSnapshot) and self.id == other.id
 
     def __str__(self):
         return f'<#{self.id}>'
+
 
 class Lounge(commands.Cog, name='Lounge<C++>'):
     """Commands made for Lounge<C++>.
@@ -97,11 +105,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
     @staticmethod
     def logically_sorted_snapshot(snapshot):
         as_list = sorted(snapshot.items(), key=lambda t: t[0])
-        return {
-            category: sorted(channels)
-            for ((_, category), channels) in as_list
-        }
-
+        return {category: sorted(channels) for ((_, category), channels) in as_list}
 
     async def display_snapshot(self):
         guild = self.bot.get_guild(LOUNGE_GUILD_ID)
@@ -129,7 +133,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
             return
 
         if len(embed.fields) == 0:
-           return
+            return
 
         await channel.send(embed=embed)
 
@@ -168,7 +172,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
         """
         payload = {
             'cmd': code.command,
-            'src': code.source
+            'src': code.source,
         }
 
         data = json.dumps(payload)
@@ -207,7 +211,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
         url = 'https://en.cppreference.com/mwiki/index.php'
         params = {
             'title': 'Special:Search',
-            'search': query
+            'search': query,
         }
 
         headers = {
@@ -257,6 +261,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
 
             e.add_field(name='See More', value=f'[`{discord.utils.escape_markdown(query)}` results]({resp.url})')
             await ctx.send(embed=e)
+
 
 async def setup(bot):
     await bot.add_cog(Lounge(bot))

@@ -13,6 +13,7 @@ import re
 
 log = logging.getLogger(__name__)
 
+
 def can_use_spoiler():
     def predicate(ctx):
         if ctx.guild is None:
@@ -20,15 +21,21 @@ def can_use_spoiler():
 
         my_permissions = ctx.channel.permissions_for(ctx.guild.me)
         if not (my_permissions.read_message_history and my_permissions.manage_messages and my_permissions.add_reactions):
-            raise commands.BadArgument('Need Read Message History, Add Reactions and Manage Messages ' \
-                                       'to permission to use this. Sorry if I spoiled you.')
+            raise commands.BadArgument(
+                'Need Read Message History, Add Reactions and Manage Messages '
+                'to permission to use this. Sorry if I spoiled you.'
+            )
         return True
+
     return commands.check(predicate)
+
 
 SPOILER_EMOJI_ID = 430469957042831371
 
+
 class UrbanDictionaryPageSource(menus.ListPageSource):
     BRACKETED = re.compile(r'(\[(.+?)\])')
+
     def __init__(self, data):
         super().__init__(entries=data, per_page=1)
 
@@ -65,6 +72,7 @@ class UrbanDictionaryPageSource(menus.ListPageSource):
 
         return embed
 
+
 class RedditMediaURL:
     def __init__(self, url):
         self.url = url
@@ -78,7 +86,7 @@ class RedditMediaURL:
             raise commands.BadArgument('Not a valid URL.')
 
         headers = {
-            'User-Agent': 'Discord:RoboDanny:v4.0 (by /u/Rapptz)'
+            'User-Agent': 'Discord:RoboDanny:v4.0 (by /u/Rapptz)',
         }
         await ctx.trigger_typing()
         if url.host == 'v.redd.it':
@@ -117,6 +125,7 @@ class RedditMediaURL:
                 raise commands.BadArgument('Could not fetch fall back URL.')
 
             return cls(fallback_url)
+
 
 class SpoilerCache:
     __slots__ = ('author_id', 'channel_id', 'title', 'text', 'attachments')
@@ -165,6 +174,7 @@ class SpoilerCache:
         embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
         return embed
 
+
 class SpoilerCooldown(commands.CooldownMapping):
     def __init__(self):
         super().__init__(commands.Cooldown(1, 10.0), commands.BucketType.user)
@@ -175,6 +185,7 @@ class SpoilerCooldown(commands.CooldownMapping):
     def is_rate_limited(self, message_id, user_id):
         bucket = self.get_bucket((message_id, user_id))
         return bucket.update_rate_limit() is not None
+
 
 class Buttons(commands.Cog):
     """Buttons that make you feel."""
@@ -205,7 +216,7 @@ class Buttons(commands.Cog):
             'https://www.youtube.com/watch?v=HEXWRTEbj1I',
             'https://www.youtube.com/watch?v=i0p1bmr0EmE',
             'an intense feeling of deep affection',
-            'something we don\'t have'
+            'something we don\'t have',
         ]
 
         response = random.choice(responses)
@@ -230,7 +241,7 @@ class Buttons(commands.Cog):
         You can only request feedback once a minute.
         """
 
-        e = discord.Embed(title='Feedback', colour=0x738bd7)
+        e = discord.Embed(title='Feedback', colour=0x738BD7)
         guild = self.bot.get_guild(182325885867786241)
         if guild is None:
             return
@@ -257,8 +268,10 @@ class Buttons(commands.Cog):
     async def pm(self, ctx, user_id: int, *, content: str):
         user = self.bot.get_user(user_id) or (await self.bot.fetch_user(user_id))
 
-        fmt = content + '\n\n*This is a DM sent because you had previously requested feedback or I found a bug' \
-                        ' in a command you used, I do not monitor this DM.*'
+        fmt = (
+            content + '\n\n*This is a DM sent because you had previously requested feedback or I found a bug'
+            ' in a command you used, I do not monitor this DM.*'
+        )
         try:
             await user.send(fmt)
         except:
@@ -314,7 +327,7 @@ class Buttons(commands.Cog):
             'channel_id': ctx.channel.id,
             'attachments': message.attachments,
             'title': title,
-            'text': text
+            'text': text,
         }
 
         cache = SpoilerCache(to_dict)
@@ -350,7 +363,7 @@ class Buttons(commands.Cog):
             'channel_id': int(data.footer.text),
             'attachments': message.attachments,
             'title': data.title,
-            'text': None if not data.description else data.description
+            'text': None if not data.description else data.description,
         }
         cache = SpoilerCache(to_dict)
         self._spoiler_cache[message_id] = cache
@@ -442,6 +455,7 @@ class Buttons(commands.Cog):
 
         pages = RoboPages(UrbanDictionaryPageSource(data), ctx=ctx)
         await pages.start()
+
 
 async def setup(bot):
     await bot.add_cog(Buttons(bot))

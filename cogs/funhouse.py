@@ -8,6 +8,7 @@ GUILD_ID = 81883016288276480
 VOICE_ROOM_ID = 633466718035116052
 GENERAL_VOICE_ID = 81883016309248000
 
+
 class Funhouse(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -92,6 +93,7 @@ class Funhouse(commands.Cog):
         embed.add_field(name=f'From {src}', value=ret.origin, inline=False)
         embed.add_field(name=f'To {dest}', value=ret.text, inline=False)
         await ctx.send(embed=embed)
+
 
 async def setup(bot):
     await bot.add_cog(Funhouse(bot))

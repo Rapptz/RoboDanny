@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Optional
 import discord
 
+
 async def plonk_iterator(bot, guild, records):
     for record in records:
         entity_id = record[0]
@@ -13,6 +14,7 @@ async def plonk_iterator(bot, guild, records):
         if resolved is None:
             yield f'<Not Found: {entity_id}>'
         yield str(resolved)
+
 
 class PlonkedPageSource(menus.AsyncIteratorPageSource):
     def __init__(self, bot, guild, records):
@@ -27,6 +29,7 @@ class PlonkedPageSource(menus.AsyncIteratorPageSource):
         embed.description = '\n'.join(pages)
         return embed
 
+
 class ChannelOrMember(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -34,12 +37,14 @@ class ChannelOrMember(commands.Converter):
         except commands.BadArgument:
             return await commands.MemberConverter().convert(ctx, argument)
 
+
 class Plonks(db.Table):
     id = db.PrimaryKeyColumn()
     guild_id = db.Column(db.Integer(big=True), index=True)
 
     # this can either be a channel_id or an author_id
     entity_id = db.Column(db.Integer(big=True), index=True, unique=True)
+
 
 class CommandConfig(db.Table, table_name='command_config'):
     id = db.PrimaryKeyColumn()
@@ -57,24 +62,29 @@ class CommandConfig(db.Table, table_name='command_config'):
         sql = "CREATE UNIQUE INDEX IF NOT EXISTS command_config_uniq_idx ON command_config (channel_id, name, whitelist);"
         return statement + '\n' + sql
 
+
 class CommandName(commands.Converter):
     async def convert(self, ctx, argument):
         lowered = argument.lower()
 
+        # fmt: off
         valid_commands = {
             c.qualified_name
             for c in ctx.bot.walk_commands()
             if c.cog_name not in ('Config', 'Admin')
         }
+        # fmt: on
 
         if lowered not in valid_commands:
             raise commands.BadArgument(f'Command {lowered!r} is not valid.')
 
         return lowered
 
+
 class ResolvedCommandPermissions:
     class _Entry:
         __slots__ = ('allow', 'deny')
+
         def __init__(self):
             self.allow = set()
             self.deny = set()
@@ -96,6 +106,7 @@ class ResolvedCommandPermissions:
     def _split(self, obj):
         # "hello there world" -> ["hello", "hello there", "hello there world"]
         from itertools import accumulate
+
         return list(accumulate(obj.split(), lambda x, y: f'{x} {y}'))
 
     def get_blocked_commands(self, channel_id):
@@ -114,7 +125,7 @@ class ResolvedCommandPermissions:
     def _is_command_blocked(self, name, channel_id):
         command_names = self._split(name)
 
-        guild = self._lookup[None] # no special channel_id
+        guild = self._lookup[None]  # no special channel_id
         channel = self._lookup[channel_id]
 
         blocked = None
@@ -161,6 +172,7 @@ class ResolvedCommandPermissions:
             return False
 
         return self._is_command_blocked(ctx.command.qualified_name, ctx.channel.id)
+
 
 class Config(commands.Cog):
     """Handles the bot's configuration system.
@@ -218,8 +230,9 @@ class Config(commands.Cog):
                 return True
 
         # check if we're plonked
-        is_plonked = await self.is_plonked(ctx.guild.id, ctx.author.id, channel=ctx.channel,
-                                                                        connection=ctx.db, check_bypass=False)
+        is_plonked = await self.is_plonked(
+            ctx.guild.id, ctx.author.id, channel=ctx.channel, connection=ctx.db, check_bypass=False
+        )
 
         return not is_plonked
 
@@ -507,7 +520,6 @@ class Config(commands.Cog):
             value = '\n'.join(disabled) or 'None!'
         await ctx.send(f'In {channel.mention} the following commands are disabled:\n{value}')
 
-
     @config.group(name='global')
     @commands.is_owner()
     async def _global(self, ctx):
@@ -525,6 +537,7 @@ class Config(commands.Cog):
         """Unblocks a user or guild globally."""
         await self.bot.remove_from_blacklist(object_id)
         await ctx.send(ctx.tick(True))
+
 
 async def setup(bot):
     await bot.add_cog(Config(bot))

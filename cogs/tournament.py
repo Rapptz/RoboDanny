@@ -14,11 +14,13 @@ import re
 
 from .utils import db, config, time
 
+
 class Players(db.Table):
     id = db.PrimaryKeyColumn()
     discord_id = db.Column(db.Integer(big=True), unique=True, index=True)
     challonge = db.Column(db.String)
     switch = db.Column(db.String, unique=True)
+
 
 class Teams(db.Table):
     id = db.PrimaryKeyColumn()
@@ -26,30 +28,36 @@ class Teams(db.Table):
     challonge = db.Column(db.String, index=True)
     logo = db.Column(db.String)
 
+
 class TeamMembers(db.Table, table_name='team_members'):
     id = db.PrimaryKeyColumn()
     team_id = db.Column(db.ForeignKey('teams', 'id'), index=True)
     player_id = db.Column(db.ForeignKey('players', 'id'), index=True)
     captain = db.Column(db.Boolean, default=False)
 
+
 class ChallongeError(commands.CommandError):
     pass
 
+
 class TournamentState(enum.IntEnum):
-    invalid     = 0
-    pending     = 1
+    invalid = 0
+    pending = 1
     checking_in = 2
-    checked_in  = 3
-    underway    = 4
-    complete    = 5
+    checked_in = 3
+    underway = 4
+    complete = 5
+
 
 class PromptResult(enum.Enum):
-    timeout   = 0
-    error     = 1
+    timeout = 0
+    error = 1
     cannot_dm = 2
-    cancel    = 3
+    cancel = 3
+
 
 # Temporary results that can be rolled back
+
 
 class PromptTransaction:
     def __init__(self, team_page):
@@ -72,7 +80,7 @@ class PromptTransaction:
         self.existing_members.append(player_id)
 
     def add_member(self, discord_id, fc):
-        self.members.append({ 'discord_id': discord_id, 'fc': fc })
+        self.members.append({'discord_id': discord_id, 'fc': fc})
 
     async def execute_sql(self, con):
         # this will be in a transaction that can be rolled back
@@ -133,9 +141,11 @@ class PromptTransaction:
 
         return team_id
 
+
 # Some validators for _prompt
 
 _friend_code = re.compile(r'^(?:(?:SW)[- _]?)?(?P<one>[0-9]{4})[- _]?(?P<two>[0-9]{4})[- _]?(?P<three>[0-9]{4})$')
+
 
 def fc_converter(arg, *, _fc=_friend_code):
     fc = arg.upper().strip('"')
@@ -144,11 +154,13 @@ def fc_converter(arg, *, _fc=_friend_code):
         raise commands.BadArgument('Invalid Switch Friend Code given.')
     return '{one}-{two}-{three}'.format(**m.groupdict())
 
+
 def valid_fc(message):
     try:
         return fc_converter(message.content)
     except:
         return False
+
 
 def yes_no(message):
     l = message.content.lower()
@@ -157,6 +169,7 @@ def yes_no(message):
     elif l in ('n', 'no'):
         return -1
     return False
+
 
 def validate_url(url):
     o = urlparse(url, scheme='http')
@@ -169,6 +182,7 @@ def validate_url(url):
         return False
     return o.geturl()
 
+
 def valid_logo(message):
     if message.content.lower() == 'none':
         return None
@@ -178,6 +192,7 @@ def valid_logo(message):
         url = message.attachments[0].url
     return validate_url(url)
 
+
 BOOYAH_GUILD_ID = 333799317385117699
 TOURNEY_ORG_ROLE = 333812806887538688
 PARTICIPANT_ROLE = 343137581564952587
@@ -186,26 +201,35 @@ ANNOUNCEMENT_CHANNEL = 342925685729263616
 BOT_SPAM_CHANNEL = 343191203686252548
 TOP_PARTICIPANT_ROLE = 353646321028169729
 
+
 def is_to():
     def predicate(ctx):
         return ctx.guild and any(r.id == TOURNEY_ORG_ROLE for r in ctx.author.roles)
+
     return commands.check(predicate)
+
 
 def in_booyah_guild():
     def predicate(ctx):
         return ctx.guild and ctx.guild.id == BOOYAH_GUILD_ID
+
     return commands.check(predicate)
+
 
 ChallongeTeamInfo = namedtuple('ChallongeTeamInfo', 'name members')
 
 # Members is an array of (Member, Switch-Code)
 ParticipantInfo = namedtuple('ParticipantInfo', 'name logo members')
 
+
 class Challonge:
-    _validate = re.compile("""(?:https?\:\/\/)?(?:(?P<subdomain>[A-Za-z]+)\.)?challonge\.com\/    # Main URL
+    _validate = re.compile(
+        """(?:https?\:\/\/)?(?:(?P<subdomain>[A-Za-z]+)\.)?challonge\.com\/    # Main URL
                               (?:(?:de|en|es|fr|hu|it|ja|ko|no|pl|pt|pt_BR|ru|sk|sv|tr|zh_CN)\/)? # Language selection
                               (?:teams\/)?(?P<slug>[^\/]+)                                        # Slug
-                           """, re.VERBOSE)
+                           """,
+        re.VERBOSE,
+    )
 
     BASE_API = 'https://api.challonge.com/v1/tournaments'
 
@@ -264,10 +288,7 @@ class Challonge:
             if members is None or len(members) == 0:
                 raise ChallongeError(f'Could not find team members. Contact Danny. URL: <{url}>')
 
-            members = [
-                member.get('href').replace('/users/', '')
-                for member in members
-            ]
+            members = [member.get('href').replace('/users/', '') for member in members]
 
             return ChallongeTeamInfo(team_name, members)
 
@@ -292,7 +313,7 @@ class Challonge:
         params = {
             'api_key': self.api_key,
             'include_matches': int(include_matches),
-            'include_participants': int(include_participants)
+            'include_participants': int(include_participants),
         }
 
         url = f'{self.BASE_API}/{self.slug}/start.json'
@@ -310,7 +331,7 @@ class Challonge:
         params = {
             'api_key': self.api_key,
             'include_matches': int(include_matches),
-            'include_participants': int(include_participants)
+            'include_participants': int(include_participants),
         }
 
         url = f'{self.BASE_API}/{self.slug}/finalize.json'
@@ -325,9 +346,7 @@ class Challonge:
                 raise ChallongeError(f'Challonge responded with {resp.status} for {url}.')
 
     async def matches(self, *, state=None, participant_id=None):
-        params = {
-            'api_key': self.api_key
-        }
+        params = {'api_key': self.api_key}
         if state:
             params['state'] = state
         if participant_id is not None:
@@ -343,7 +362,7 @@ class Challonge:
         params = {
             'api_key': self.api_key,
             'match[winner_id]': winner_id,
-            'match[scores_csv]': f'{player1_score}-{player2_score}'
+            'match[scores_csv]': f'{player1_score}-{player2_score}',
         }
 
         url = f'{self.BASE_API}/{self.slug}/matches/{match_id}.json'
@@ -358,10 +377,7 @@ class Challonge:
                 raise ChallongeError(f'Challonge responded with {resp.status} for {url}.')
 
     async def add_participant(self, username, *, misc=None):
-        params = {
-            'api_key': self.api_key,
-            'participant[challonge_username]': username
-        }
+        params = {'api_key': self.api_key, 'participant[challonge_username]': username}
 
         if misc is not None:
             params['participant[misc]'] = str(misc)
@@ -378,10 +394,7 @@ class Challonge:
                 raise ChallongeError(f'Challonge responded with {resp.status} for {url}.')
 
     async def get_participant(self, participant_id, *, include_matches=False):
-        params = {
-            'api_key': self.api_key,
-            'include_matches': int(include_matches)
-        }
+        params = {'api_key': self.api_key, 'include_matches': int(include_matches)}
         url = f'{self.BASE_API}/{self.slug}/participants/{participant_id}.json'
         async with self.session.get(url, params=params) as resp:
             if resp.status == 200:
@@ -395,7 +408,7 @@ class Challonge:
 
     async def remove_participant(self, participant_id):
         url = f'{self.BASE_API}/{self.slug}/participants/{participant_id}.json'
-        params = { 'api_key': self.api_key }
+        params = {'api_key': self.api_key}
         async with self.session.delete(url, params=params) as resp:
             if resp.status != 200:
                 js = await resp.json()
@@ -403,9 +416,7 @@ class Challonge:
 
     async def participants(self):
         url = f'{self.BASE_API}/{self.slug}/participants.json'
-        params = {
-            'api_key': self.api_key
-        }
+        params = {'api_key': self.api_key}
 
         async with self.session.get(url, params=params) as resp:
             if resp.status == 200:
@@ -416,6 +427,7 @@ class Challonge:
                 raise ChallongeError('\n'.join(x for x in js.get('errors', [])))
             else:
                 raise ChallongeError(f'Challonge responded with {resp.status} for {url}.')
+
 
 class Tournament(commands.Cog):
     """Tournament specific tools."""
@@ -432,12 +444,12 @@ class Tournament(commands.Cog):
 
     async def log(self, message, ctx=None, *, ping=False, error=False, **fields):
         if error is False:
-            e = discord.Embed(colour=0x59b642, title=message)
+            e = discord.Embed(colour=0x59B642, title=message)
         else:
             if error:
-                e = discord.Embed(colour=0xb64259, title='Error')
+                e = discord.Embed(colour=0xB64259, title='Error')
             else:
-                e = discord.Embed(colour=0xb69f42, title='Warning')
+                e = discord.Embed(colour=0xB69F42, title='Warning')
 
             exc = traceback.format_exc(chain=False, limit=10)
             if exc != 'NoneType: None\n':
@@ -473,7 +485,7 @@ class Tournament(commands.Cog):
     async def tourney(self, ctx):
         """Shows you information about the currently tournament."""
         data = await self.challonge.show()
-        e = discord.Embed(title=data['name'], url=self.challonge.url, colour=0xa83e4b)
+        e = discord.Embed(title=data['name'], url=self.challonge.url, colour=0xA83E4B)
         description = data['description']
         if description:
             e.description = description
@@ -584,14 +596,16 @@ class Tournament(commands.Cog):
         await ctx.send(f'Check-ins are now being processed. When complete and ready, use {ctx.prefix}tourney start')
 
         await not_checked_in.edit(mentionable=True)
-        msg = f"<@&{NOT_CHECKED_IN_ROLE}> check-ins are now being processed. " \
-              f"To check-in please go to <#{BOT_SPAM_CHANNEL}> and use the `?checkin` command."
+        msg = (
+            f"<@&{NOT_CHECKED_IN_ROLE}> check-ins are now being processed. "
+            f"To check-in please go to <#{BOT_SPAM_CHANNEL}> and use the `?checkin` command."
+        )
         await announcement.send(msg)
         await not_checked_in.edit(mentionable=False)
 
     @commands.Cog.listener()
     async def on_tournament_checkin_timer_complete(self, timer):
-        minutes_remaining, = timer.args
+        (minutes_remaining,) = timer.args
 
         guild = self.bot.get_guild(BOOYAH_GUILD_ID)
         if guild is None:
@@ -615,8 +629,10 @@ class Tournament(commands.Cog):
 
         if minutes_remaining != 0:
             # A reminder that they need to check-in
-            msg = f'<@&{role.id}> Reminder: You have **{minutes_remaining} minutes** left to check-in.\n\n' \
-                  f'To check-in please go to <#{BOT_SPAM_CHANNEL}> and use the `?checkin` command.'
+            msg = (
+                f'<@&{role.id}> Reminder: You have **{minutes_remaining} minutes** left to check-in.\n\n'
+                f'To check-in please go to <#{BOT_SPAM_CHANNEL}> and use the `?checkin` command.'
+            )
 
             await role.edit(mentionable=True)
             await announcement.send(msg)
@@ -628,8 +644,10 @@ class Tournament(commands.Cog):
 
         # Remove the role from everyone who did not check in and notify them.
 
-        msg = "Hello. You've been disqualified due to failure to check-in. " \
-              "If you believe this is an error, please contact a TO."
+        msg = (
+            "Hello. You've been disqualified due to failure to check-in. "
+            "If you believe this is an error, please contact a TO."
+        )
 
         for member in role.members:
             try:
@@ -646,7 +664,7 @@ class Tournament(commands.Cog):
                 """
 
         disqualified_teams = await self.bot.pool.fetch(query, has_not_checked_in)
-        disqualified_teams = { str(r[0]) for r in disqualified_teams }
+        disqualified_teams = {str(r[0]) for r in disqualified_teams}
 
         challonge = self.challonge
         tournament = await challonge.show(include_participants=True)
@@ -680,8 +698,10 @@ class Tournament(commands.Cog):
 
         await self.log("Check-In Over", **fields)
 
-        msg = "Check-ins are over! Please wait for a TO to start the tournament. " \
-              "If you failed to check-in you have received a direct message saying so."
+        msg = (
+            "Check-ins are over! Please wait for a TO to start the tournament. "
+            "If you failed to check-in you have received a direct message saying so."
+        )
 
         await announcement.send(msg)
 
@@ -771,7 +791,7 @@ class Tournament(commands.Cog):
             fields = {
                 'Match ID': match['id'],
                 'Player 1 ID': player1_id,
-                'Player 2 ID': player2_id
+                'Player 2 ID': player2_id,
             }
 
             if not (player_one and player_two):
@@ -780,7 +800,7 @@ class Tournament(commands.Cog):
 
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                guild.me: discord.PermissionOverwrite(read_messages=True)
+                guild.me: discord.PermissionOverwrite(read_messages=True),
             }
 
             for member, _ in itertools.chain(player_one.members, player_two.members):
@@ -795,7 +815,7 @@ class Tournament(commands.Cog):
                     str(player1_id): None,
                     str(player2_id): None,
                     'confirmed': False,
-                    'identifier': match['identifier']
+                    'identifier': match['identifier'],
                 }
 
                 await channel.send(embed=embed_for_player(player_one, first=True))
@@ -803,15 +823,16 @@ class Tournament(commands.Cog):
                 await asyncio.sleep(0.5)
 
                 to_beat = (best_of // 2) + 1
-                msg =  "@here Please use this channel to communicate!\n" \
-                       "When your match is complete, **both teams must report their own scores**.\n" \
-                      f"Reporting your score is done via the `?score` command. For example: `?score {to_beat}`\n" \
-                       "**The ?score command can only be done in this channel.**"
+                msg = (
+                    "@here Please use this channel to communicate!\n"
+                    "When your match is complete, **both teams must report their own scores**.\n"
+                    f"Reporting your score is done via the `?score` command. For example: `?score {to_beat}`\n"
+                    "**The ?score command can only be done in this channel.**"
+                )
 
                 await channel.send(msg)
             except:
                 await self.log("Failure when creating channel", error=True, **fields)
-
 
         base = datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
 
@@ -827,16 +848,14 @@ class Tournament(commands.Cog):
 
         times = (
             (base, 0),
-            (base - datetime.timedelta(minutes=15), 15)
+            (base - datetime.timedelta(minutes=15), 15),
         )
 
         reminder = self.bot.get_cog('Reminder')
         for when, remaining in times:
             await reminder.create_timer(when, 'tournament_round', round_num, remaining, connection=ctx.db)
 
-        fields = {
-            'Total Matches': len(matches)
-        }
+        fields = {'Total Matches': len(matches)}
 
         await self.log(f"Round {round_num} Started", **fields)
 
@@ -870,7 +889,7 @@ class Tournament(commands.Cog):
         fields = {
             'Cleaned': cleaned,
             'Failed': failed,
-            'Total Members': total
+            'Total Members': total,
         }
 
         del self._participants
@@ -884,22 +903,14 @@ class Tournament(commands.Cog):
         guild = self.bot.get_guild(BOOYAH_GUILD_ID)
 
         if round_num != self.config.get('round'):
-            fields = {
-                'Expected': round_num,
-                'Actual': self.config.get('round')
-            }
+            fields = {'Expected': round_num, 'Actual': self.config.get('round')}
             return await self.log(f'Round {round_num} Timer Outdated', **fields)
 
         total_matches = self.config.get('total_matches')
-        matches_completed = sum(
-            info.get('confirmed', False)
-            for key, info in self.config.get('round_info', {}).items()
-        )
+        matches_completed = sum(info.get('confirmed', False) for key, info in self.config.get('round_info', {}).items())
 
         if total_matches == matches_completed:
-            fields = {
-                'Total Matches': total_matches
-            }
+            fields = {'Total Matches': total_matches}
             await self.clean_tournament_participants()
             return await self.log(f'Round {round_num} Already Complete', **fields)
 
@@ -925,8 +936,10 @@ class Tournament(commands.Cog):
         if remaining != 0:
             # A reminder that the round is almost over
             await role.edit(mentionable=True)
-            msg = f'<@&{role.id}>, round {round_num} will conclude in {remaining} minutes. ' \
-                   'Please contact a TO if you have any issues.'
+            msg = (
+                f'<@&{role.id}>, round {round_num} will conclude in {remaining} minutes. '
+                'Please contact a TO if you have any issues.'
+            )
             await announcement.send(msg)
             await role.edit(mentionable=False)
             return
@@ -939,21 +952,13 @@ class Tournament(commands.Cog):
 
         await self.config.put('round_complete', True)
 
-        fields = {
-            'Round': round_num,
-            'Total Matches': total_matches,
-            'Matches Completed': matches_completed
-        }
+        fields = {'Round': round_num, 'Total Matches': total_matches, 'Matches Completed': matches_completed}
         await self.log('Round Complete', **fields)
 
     async def start_tournament(self, ctx, best_of):
         tourney = await self.challonge.start()
 
-        matches = [
-            o['match']
-            for o in tourney.get('matches')
-            if o['match']['round'] == 1
-        ]
+        matches = [o['match'] for o in tourney.get('matches') if o['match']['round'] == 1]
 
         await self.make_rooms_for_matches(ctx, matches, round_num=1, best_of=best_of)
 
@@ -964,11 +969,7 @@ class Tournament(commands.Cog):
                 return await ctx.send('Aborting.')
 
         matches = await self.challonge.matches()
-        matches = [
-            o['match']
-            for o in matches
-            if o['match']['round'] == round_num
-        ]
+        matches = [o['match'] for o in matches if o['match']['round'] == round_num]
 
         await self.clean_tournament_participants()
         await self.make_rooms_for_matches(ctx, matches, round_num=round_num, best_of=best_of)
@@ -1027,8 +1028,10 @@ class Tournament(commands.Cog):
         first_score, second_score = info[str(player1_id)], info[str(player2_id)]
 
         round_num = self.config.get('round')
-        msg = f'Are you sure you want to confirm the results of round {round_num} match {info["identifier"]}?\n' \
-              f'{first_team} **{first_score}** - **{second_score}** {second_team}'
+        msg = (
+            f'Are you sure you want to confirm the results of round {round_num} match {info["identifier"]}?\n'
+            f'{first_team} **{first_score}** - **{second_score}** {second_team}'
+        )
 
         confirm = await ctx.prompt(msg, delete_after=False, reacquire=False)
         if not confirm:
@@ -1052,7 +1055,7 @@ class Tournament(commands.Cog):
             'Team B': second_team,
             'Match': f"{round_num}-{info['identifier']}: {info['match_id']}",
             'Team A Score': first_score,
-            'Team B Score': second_score
+            'Team B Score': second_score,
         }
         await self.log("Score Confirmation", ctx, **fields)
         await channel.delete(reason='Score confirmation by TO.')
@@ -1210,15 +1213,17 @@ class Tournament(commands.Cog):
             'Team ID': team_id,
             'Team Name': team.name,
             'Participant ID': participant_id,
-            'Members': '\n'.join(member.mention for member in members)
+            'Members': '\n'.join(member.mention for member in members),
         }
 
-        msg = f"{ctx.author.mention}, you have been successfully invited to the tournament.\n" \
-               "**Please follow these steps in order**\n" \
-               "1. Go to <http://challonge.com/notifications>\n" \
-               "2. Click on the newest \"You have been challonged\" invitation.\n" \
-               "3. Follow the steps in the invitation.\n" \
-              f"4. Reply to this message with: {participant_id}"
+        msg = (
+            f"{ctx.author.mention}, you have been successfully invited to the tournament.\n"
+            "**Please follow these steps in order**\n"
+            "1. Go to <http://challonge.com/notifications>\n"
+            "2. Click on the newest \"You have been challonged\" invitation.\n"
+            "3. Follow the steps in the invitation.\n"
+            f"4. Reply to this message with: {participant_id}"
+        )
 
         await ctx.send(msg)
         await ctx.release()
@@ -1293,9 +1298,11 @@ class Tournament(commands.Cog):
         dm = await ctx.author.create_dm()
         result = PromptTransaction(url.slug)
 
-        msg = "Hello! I'm here to interactively set you up for the first-time registration of Booyah Battle.\n" \
-             f"**If you want to cancel, you can cancel at any time by doing ?cancel**\n\n" \
-              "Let's get us started with a question, **are you the captain of this team?** (say yes or no)"
+        msg = (
+            "Hello! I'm here to interactively set you up for the first-time registration of Booyah Battle.\n"
+            f"**If you want to cancel, you can cancel at any time by doing ?cancel**\n\n"
+            "Let's get us started with a question, **are you the captain of this team?** (say yes or no)"
+        )
 
         await ctx.release()
         reply = await self._prompt(dm, msg, validator=yes_no)
@@ -1321,10 +1328,12 @@ class Tournament(commands.Cog):
         else:
             result.add_pre_existing_captain(record[0])
 
-        logo_msg = "What is your team's logo? You can either do the following:\n" \
-                   "- A URL pointing to the image, which must be a png/jpeg/jpg file.\n" \
-                   "- An image uploaded directly to this channel.\n" \
-                   "- Sending the message `None` to denote no logo."
+        logo_msg = (
+            "What is your team's logo? You can either do the following:\n"
+            "- A URL pointing to the image, which must be a png/jpeg/jpg file.\n"
+            "- An image uploaded directly to this channel.\n"
+            "- Sending the message `None` to denote no logo."
+        )
 
         logo = await self._prompt(dm, logo_msg, validator=valid_logo)
         if logo is not None and not isinstance(logo, str):
@@ -1422,15 +1431,18 @@ class Tournament(commands.Cog):
             participant = await challonge.add_participant(team.name, misc=team_id)
 
             # wait for accepting
-            msg = f"You have been successfully invited to the tournament.\n" \
-                   "**Please follow these steps in order**\n" \
-                   "1. Go to <http://challonge.com/notifications>\n" \
-                   "2. Click on the newest \"You have been challonged\" invitation.\n" \
-                   "3. Follow the steps in the invitation.\n" \
-                  f"4. Reply to this message with: {team_id}"
+            msg = (
+                f"You have been successfully invited to the tournament.\n"
+                "**Please follow these steps in order**\n"
+                "1. Go to <http://challonge.com/notifications>\n"
+                "2. Click on the newest \"You have been challonged\" invitation.\n"
+                "3. Follow the steps in the invitation.\n"
+                f"4. Reply to this message with: {team_id}"
+            )
 
             def verify(m):
                 return m.content == str(team_id)
+
             verified = await self._prompt(dm, msg, validator=verify, timeout=120.0)
         except:
             await transaction.rollback()
@@ -1606,7 +1618,7 @@ class Tournament(commands.Cog):
             'Match ID': ours['match_id'],
             'Reporter Score': None,
             'Enemy Score': their_score,
-            'Round': f'Round {round_num}: Best of {best_of}'
+            'Round': f'Round {round_num}: Best of {best_of}',
         }
 
         changed_score = False
@@ -1661,8 +1673,10 @@ class Tournament(commands.Cog):
         query = """SELECT id FROM players WHERE discord_id = $1;"""
         record = await ctx.db.fetchrow(query, ctx.author.id)
         if record is None:
-            return await ctx.send(f'You have not registered as a player. Try {ctx.prefix}player ' \
-                                   'switch SW-1234-5678-9012 to register yourself as a player.')
+            return await ctx.send(
+                f'You have not registered as a player. Try {ctx.prefix}player '
+                'switch SW-1234-5678-9012 to register yourself as a player.'
+            )
 
         player_id = record['id']
 
@@ -1744,8 +1758,10 @@ class Tournament(commands.Cog):
         record = await ctx.db.fetchrow(query, member.id)
 
         if record is None:
-            await ctx.send('It appears this member has not registered before. ' \
-                          f'Ask them to do so by inputting their switch code via "{ctx.prefix}player switch" command.')
+            await ctx.send(
+                'It appears this member has not registered before. '
+                f'Ask them to do so by inputting their switch code via "{ctx.prefix}player switch" command.'
+            )
             return
 
         player_id = record['id']

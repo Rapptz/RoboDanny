@@ -23,6 +23,7 @@ except ImportError:
 else:
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
+
 class RemoveNoise(logging.Filter):
     def __init__(self):
         super().__init__(name='discord.state')
@@ -32,11 +33,12 @@ class RemoveNoise(logging.Filter):
             return False
         return True
 
+
 @contextlib.contextmanager
 def setup_logging():
     try:
         # __enter__
-        max_bytes = 32 * 1024 * 1024 # 32 MiB
+        max_bytes = 32 * 1024 * 1024  # 32 MiB
         logging.getLogger('discord').setLevel(logging.INFO)
         logging.getLogger('discord.http').setLevel(logging.WARNING)
         logging.getLogger('discord.state').addFilter(RemoveNoise())
@@ -57,6 +59,7 @@ def setup_logging():
             hdlr.close()
             log.removeHandler(hdlr)
 
+
 async def run_bot():
     log = logging.getLogger()
     kwargs = {
@@ -75,6 +78,7 @@ async def run_bot():
     bot.pool = pool
     await bot.start()
 
+
 @click.group(invoke_without_command=True, options_metavar='[options]')
 @click.pass_context
 def main(ctx):
@@ -83,9 +87,11 @@ def main(ctx):
         with setup_logging():
             asyncio.run(run_bot())
 
+
 @main.group(short_help='database stuff', options_metavar='[options]')
 def db():
     pass
+
 
 @db.command(short_help='initialises the databases for the bot', options_metavar='[options]')
 @click.argument('cogs', nargs=-1, metavar='[cogs]')
@@ -122,6 +128,7 @@ def init(cogs, quiet):
                 click.echo(f'[{table.__module__}] Created {table.__tablename__}.')
             else:
                 click.echo(f'[{table.__module__}] No work needed for {table.__tablename__}.')
+
 
 @db.command(short_help='migrates the databases')
 @click.argument('cog', nargs=1, metavar='[cog]')
@@ -160,6 +167,7 @@ def migrate(ctx, cog, quiet):
 
     click.echo(f'Done migrating {cog}.')
 
+
 async def apply_migration(cog, quiet, index, *, downgrade=False):
     try:
         pool = await Table.create_pool(config.postgresql)
@@ -189,6 +197,7 @@ async def apply_migration(cog, quiet, index, *, downgrade=False):
         else:
             await tr.commit()
 
+
 @db.command(short_help='upgrades from a migration')
 @click.argument('cog', nargs=1, metavar='[cog]')
 @click.option('-q', '--quiet', help='less verbose output', is_flag=True)
@@ -198,6 +207,7 @@ def upgrade(cog, quiet, index):
     run = asyncio.get_event_loop().run_until_complete
     run(apply_migration(cog, quiet, index))
 
+
 @db.command(short_help='downgrades from a migration')
 @click.argument('cog', nargs=1, metavar='[cog]')
 @click.option('-q', '--quiet', help='less verbose output', is_flag=True)
@@ -206,6 +216,7 @@ def downgrade(cog, quiet, index):
     """Runs an downgrade from a migration"""
     run = asyncio.get_event_loop().run_until_complete
     run(apply_migration(cog, quiet, index, downgrade=True))
+
 
 async def remove_databases(pool, cog, quiet):
     async with pool.acquire() as con:
@@ -224,8 +235,9 @@ async def remove_databases(pool, cog, quiet):
             await tr.commit()
             click.echo(f'successfully removed {cog} tables.')
 
+
 @db.command(short_help="removes a cog's table", options_metavar='[options]')
-@click.argument('cog',  metavar='<cog>')
+@click.argument('cog', metavar='<cog>')
 @click.option('-q', '--quiet', help='less verbose output', is_flag=True)
 def drop(cog, quiet):
     """This removes a database and all its migrations.
@@ -257,6 +269,7 @@ def drop(cog, quiet):
 
     run(remove_databases(pool, cog, quiet))
 
+
 @main.command(short_help='migrates from JSON files')
 @click.argument('cogs', nargs=-1)
 @click.pass_context
@@ -280,8 +293,11 @@ def convertjson(ctx, cogs):
     run = asyncio.get_event_loop().run_until_complete
 
     if not cogs:
-        to_run = [(getattr(data_migrators, attr), attr.replace('migrate_', ''))
-                  for attr in dir(data_migrators) if attr.startswith('migrate_')]
+        to_run = [
+            (getattr(data_migrators, attr), attr.replace('migrate_', ''))
+            for attr in dir(data_migrators)
+            if attr.startswith('migrate_')
+        ]
     else:
         to_run = []
         for cog in cogs:
@@ -326,6 +342,7 @@ def convertjson(ctx, cogs):
             return
         else:
             click.echo(f'[{migrator.__name__}] completed successfully')
+
 
 if __name__ == '__main__':
     main()

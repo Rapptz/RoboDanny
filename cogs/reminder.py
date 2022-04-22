@@ -6,6 +6,7 @@ import asyncpg
 import datetime
 import textwrap
 
+
 class Reminders(db.Table):
     id = db.PrimaryKeyColumn()
 
@@ -13,6 +14,7 @@ class Reminders(db.Table):
     created = db.Column(db.Datetime, default="now() at time zone 'utc'")
     event = db.Column(db.String)
     extra = db.Column(db.JSON, default="'{}'::jsonb")
+
 
 class Timer:
     __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires')
@@ -31,10 +33,10 @@ class Timer:
     def temporary(cls, *, expires, created, event, args, kwargs):
         pseudo = {
             'id': None,
-            'extra': { 'args': args, 'kwargs': kwargs },
+            'extra': {'args': args, 'kwargs': kwargs},
             'event': event,
             'created': created,
-            'expires': expires
+            'expires': expires,
         }
         return cls(record=pseudo)
 
@@ -59,6 +61,7 @@ class Timer:
 
     def __repr__(self):
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
+
 
 class Reminder(commands.Cog):
     """Reminders to do something."""
@@ -192,11 +195,11 @@ class Reminder(commands.Cog):
                    RETURNING id;
                 """
 
-        row = await connection.fetchrow(query, event, { 'args': args, 'kwargs': kwargs }, when, now)
+        row = await connection.fetchrow(query, event, {'args': args, 'kwargs': kwargs}, when, now)
         timer.id = row[0]
 
         # only set the data check if it can be waited on
-        if delta <= (86400 * 40): # 40 days
+        if delta <= (86400 * 40):  # 40 days
             self._have_data.set()
 
         # check if this timer is earlier than our currently run timer
@@ -222,12 +225,16 @@ class Reminder(commands.Cog):
         Times are in UTC.
         """
 
-        timer = await self.create_timer(when.dt, 'reminder', ctx.author.id,
-                                                             ctx.channel.id,
-                                                             when.arg,
-                                                             connection=ctx.db,
-                                                             created=ctx.message.created_at,
-                                                             message_id=ctx.message.id)
+        timer = await self.create_timer(
+            when.dt,
+            'reminder',
+            ctx.author.id,
+            ctx.channel.id,
+            when.arg,
+            connection=ctx.db,
+            created=ctx.message.created_at,
+            message_id=ctx.message.id,
+        )
         delta = time.human_timedelta(when.dt, source=timer.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, in {delta}: {when.arg}")
 
@@ -342,6 +349,7 @@ class Reminder(commands.Cog):
             await channel.send(msg, view=view)
         except discord.HTTPException:
             return
+
 
 async def setup(bot):
     await bot.add_cog(Reminder(bot))

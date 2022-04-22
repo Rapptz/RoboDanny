@@ -12,13 +12,16 @@ import re
 import heapq
 from difflib import SequenceMatcher
 
+
 def ratio(a, b):
     m = SequenceMatcher(None, a, b)
     return int(round(100 * m.ratio()))
 
+
 def quick_ratio(a, b):
     m = SequenceMatcher(None, a, b)
     return int(round(100 * m.quick_ratio()))
+
 
 def partial_ratio(a, b):
     short, long = (a, b) if len(a) <= len(b) else (b, a)
@@ -39,26 +42,32 @@ def partial_ratio(a, b):
 
     return int(round(100 * max(scores)))
 
+
 _word_regex = re.compile(r'\W', re.IGNORECASE)
+
 
 def _sort_tokens(a):
     a = _word_regex.sub(' ', a).lower().strip()
     return ' '.join(sorted(a.split()))
+
 
 def token_sort_ratio(a, b):
     a = _sort_tokens(a)
     b = _sort_tokens(b)
     return ratio(a, b)
 
+
 def quick_token_sort_ratio(a, b):
     a = _sort_tokens(a)
     b = _sort_tokens(b)
     return quick_ratio(a, b)
 
+
 def partial_token_sort_ratio(a, b):
     a = _sort_tokens(a)
     b = _sort_tokens(b)
     return partial_ratio(a, b)
+
 
 def _extraction_generator(query, choices, scorer=quick_ratio, score_cutoff=0):
     try:
@@ -72,12 +81,14 @@ def _extraction_generator(query, choices, scorer=quick_ratio, score_cutoff=0):
             if score >= score_cutoff:
                 yield (choice, score)
 
+
 def extract(query, choices, *, scorer=quick_ratio, score_cutoff=0, limit=10):
     it = _extraction_generator(query, choices, scorer, score_cutoff)
     key = lambda t: t[1]
     if limit is not None:
         return heapq.nlargest(limit, it, key=key)
     return sorted(it, key=key, reverse=True)
+
 
 def extract_one(query, choices, *, scorer=quick_ratio, score_cutoff=0):
     it = _extraction_generator(query, choices, scorer, score_cutoff)
@@ -87,6 +98,7 @@ def extract_one(query, choices, *, scorer=quick_ratio, score_cutoff=0):
     except:
         # iterator could return nothing
         return None
+
 
 def extract_or_exact(query, choices, *, limit=None, scorer=quick_ratio, score_cutoff=0):
     matches = extract(query, choices, scorer=scorer, score_cutoff=score_cutoff, limit=limit)
@@ -104,6 +116,7 @@ def extract_or_exact(query, choices, *, limit=None, scorer=quick_ratio, score_cu
         return [matches[0]]
 
     return matches
+
 
 def extract_matches(query, choices, *, scorer=quick_ratio, score_cutoff=0):
     matches = extract(query, choices, scorer=scorer, score_cutoff=score_cutoff, limit=None)
@@ -127,6 +140,7 @@ def extract_matches(query, choices, *, scorer=quick_ratio, score_cutoff=0):
         to_return.append(match)
     return to_return
 
+
 def finder(text, collection, *, key=None, lazy=True):
     suggestions = []
     text = str(text)
@@ -148,9 +162,9 @@ def finder(text, collection, *, key=None, lazy=True):
     else:
         return [z for _, _, z in sorted(suggestions, key=sort_key)]
 
+
 def find(text, collection, *, key=None):
     try:
         return finder(text, collection, key=key, lazy=False)[0]
     except IndexError:
         return None
-

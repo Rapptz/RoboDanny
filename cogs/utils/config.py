@@ -3,13 +3,15 @@ import os
 import uuid
 import asyncio
 
+
 def _create_encoder(cls):
     def _default(self, o):
         if isinstance(o, cls):
             return o.to_json()
-        return super().default(o)
+        return json.JSONEncoder.default(self, o)
 
-    return type('_Encoder', (json.JSONEncoder,), { 'default': _default })
+    return type('_Encoder', (json.JSONEncoder,), {'default': _default})
+
 
 class Config:
     """The "database" object. Internally based on ``json``."""

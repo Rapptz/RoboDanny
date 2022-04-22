@@ -17,8 +17,10 @@ import re
 
 log = logging.getLogger(__name__)
 
+
 class StarError(commands.CheckFailure):
     pass
+
 
 def requires_starboard():
     async def predicate(ctx):
@@ -32,13 +34,16 @@ def requires_starboard():
             raise StarError('\N{WARNING SIGN} Starboard channel not found.')
 
         return True
+
     return commands.check(predicate)
+
 
 def MessageID(argument):
     try:
         return int(argument, base=10)
     except ValueError:
         raise StarError(f'"{argument}" is not a valid message ID. Use Developer Mode to get the Copy ID option.')
+
 
 class Starboard(db.Table):
     id = db.Column(db.Integer(big=True), primary_key=True)
@@ -48,6 +53,7 @@ class Starboard(db.Table):
     locked = db.Column(db.Boolean, default=False)
     max_age = db.Column(db.Interval, default="'7 days'::interval", nullable=False)
 
+
 class StarboardEntry(db.Table, table_name='starboard_entries'):
     id = db.PrimaryKeyColumn()
 
@@ -56,6 +62,7 @@ class StarboardEntry(db.Table, table_name='starboard_entries'):
     channel_id = db.Column(db.Integer(big=True))
     author_id = db.Column(db.Integer(big=True))
     guild_id = db.Column(db.ForeignKey('starboard', 'id', sql_type=db.Integer(big=True)), index=True, nullable=False)
+
 
 class Starrers(db.Table):
     id = db.PrimaryKeyColumn()
@@ -67,6 +74,7 @@ class Starrers(db.Table):
         statement = super().create_table(exists_ok=exists_ok)
         sql = "CREATE UNIQUE INDEX IF NOT EXISTS starrers_uniq_idx ON starrers (author_id, entry_id);"
         return statement + '\n' + sql
+
 
 class StarboardConfig:
     __slots__ = ('bot', 'id', 'channel_id', 'threshold', 'locked', 'needs_migration', 'max_age')
@@ -91,6 +99,7 @@ class StarboardConfig:
     def channel(self):
         guild = self.bot.get_guild(self.id)
         return guild and guild.get_channel(self.channel_id)
+
 
 class Stars(commands.Cog):
     """A starboard to upvote posts obviously.
@@ -180,7 +189,6 @@ class Stars(commands.Cog):
             content = f'{emoji} **{stars}** {message.channel.mention} ID: {message.id}'
         else:
             content = f'{emoji} {message.channel.mention} ID: {message.id}'
-
 
         embed = discord.Embed(description=message.content)
         if message.embeds:
@@ -324,7 +332,6 @@ class Stars(commands.Cog):
 
             if bot_message_id is None:
                 return
-
 
             bot_message_id = bot_message_id[0]
             msg = await self.get_message(starboard.channel, bot_message_id)
@@ -598,7 +605,9 @@ class Stars(commands.Cog):
 
         if hasattr(starboard, 'locked'):
             try:
-                confirm = await ctx.prompt('Apparently, a previously configured starboard channel was deleted. Is this true?')
+                confirm = await ctx.prompt(
+                    'Apparently, a previously configured starboard channel was deleted. Is this true?'
+                )
             except RuntimeError as e:
                 await ctx.send(e)
             else:
@@ -613,10 +622,12 @@ class Stars(commands.Cog):
             return await ctx.send('\N{NO ENTRY SIGN} I do not have proper permissions (Manage Roles and Manage Channel)')
 
         overwrites = {
-            ctx.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True,
-                                                embed_links=True, read_message_history=True),
-            ctx.guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False,
-                                                                read_message_history=True)
+            ctx.me: discord.PermissionOverwrite(
+                read_messages=True, send_messages=True, manage_messages=True, embed_links=True, read_message_history=True
+            ),
+            ctx.guild.default_role: discord.PermissionOverwrite(
+                read_messages=True, send_messages=False, read_message_history=True
+            ),
         }
 
         reason = f'{ctx.author} (ID: {ctx.author.id}) has created the starboard channel.'
@@ -898,10 +909,12 @@ class Stars(commands.Cog):
             await ctx.db.execute(query, guild_id)
             self.get_starboard.invalidate(self, guild_id)
 
-            m = await ctx.send(f'{ctx.author.mention}, we are done migrating!\n' \
-                                'The starboard has been unlocked.\n' \
-                               f'Updated {updated}/{fetched} entries to the new format.\n' \
-                               f'Took {delta:.2f}s.')
+            m = await ctx.send(
+                f'{ctx.author.mention}, we are done migrating!\n'
+                'The starboard has been unlocked.\n'
+                f'Updated {updated}/{fetched} entries to the new format.\n'
+                f'Took {delta:.2f}s.'
+            )
 
             e = discord.Embed(title='Starboard Migration', colour=discord.Colour.gold())
             e.add_field(name='Updated', value=updated)
@@ -913,15 +926,13 @@ class Stars(commands.Cog):
             e.timestamp = m.created_at
             await webhook.send(embed=e)
 
-
     def records_to_value(self, records, fmt=None, default='None!'):
         if not records:
             return default
 
-        emoji = 0x1f947 # :first_place:
+        emoji = 0x1F947  # :first_place:
         fmt = fmt or (lambda o: o)
-        return '\n'.join(f'{chr(emoji + i)}: {fmt(r["ID"])} ({plural(r["Stars"]):star})'
-                         for i, r in enumerate(records))
+        return '\n'.join(f'{chr(emoji + i)}: {fmt(r["ID"])} ({plural(r["Stars"]):star})' for i, r in enumerate(records))
 
     async def star_guild_stats(self, ctx):
         e = discord.Embed(title='Server Starboard Stats')
@@ -1263,6 +1274,7 @@ class Stars(commands.Cog):
 
         delta = time.time() - start
         await ctx.send(f'Successfully sent to {success} channels (out of {len(to_send)}) in {delta:.2f}s.')
+
 
 async def setup(bot):
     await bot.add_cog(Stars(bot))

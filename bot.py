@@ -109,7 +109,6 @@ class RoboDanny(commands.AutoShardedBot):
         # Triggering the rate limit 5 times in a row will auto-ban the user from the bot.
         self._auto_spam_count = Counter()
 
-
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
         for extension in initial_extensions:
@@ -326,7 +325,9 @@ class RoboDanny(commands.AutoShardedBot):
         embed.timestamp = discord.utils.utcnow()
         return wh.send(embed=embed)
 
-    async def get_context(self, origin: Union[discord.Interaction, discord.Message], /, *, cls = context.Context) -> context.Context:
+    async def get_context(
+        self, origin: Union[discord.Interaction, discord.Message], /, *, cls=context.Context
+    ) -> context.Context:
         return await super().get_context(origin, cls=cls)
 
     async def process_commands(self, message):

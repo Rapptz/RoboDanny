@@ -11,6 +11,7 @@ SPLATNET_CALLBACK_URL = "https://splatoon.nintendo.net/users/auth/nintendo/callb
 SPLATNET_CLIENT_ID = "12af3d0a3a1f441eb900411bb50a835a"
 SPLATNET_SCHEDULE_URL = "https://splatoon.nintendo.net/schedule"
 
+
 class Rotation(object):
     def __init__(self):
         self.start = None
@@ -37,13 +38,16 @@ class Rotation(object):
         fmt = 'Turf War is {0[0]} and {0[1]}\n{1} is {2[0]} and {2[1]}'
         return prefix + fmt.format(self.turf_maps, self.ranked_mode, self.ranked_maps)
 
+
 # based on https://github.com/Wiwiweb/SakuraiBot/blob/master/src/sakuraibot.py
 async def get_new_splatnet_cookie(session, username, password):
-    parameters = {'client_id': SPLATNET_CLIENT_ID,
-                  'response_type': 'code',
-                  'redirect_uri': SPLATNET_CALLBACK_URL,
-                  'username': username,
-                  'password': password}
+    parameters = {
+        'client_id': SPLATNET_CLIENT_ID,
+        'response_type': 'code',
+        'redirect_uri': SPLATNET_CALLBACK_URL,
+        'username': username,
+        'password': password,
+    }
 
     async with session.post(NINTENDO_LOGIN_PAGE, data=parameters) as response:
         cookie = response.history[-1].cookies.get('_wag_session')
@@ -52,8 +56,9 @@ async def get_new_splatnet_cookie(session, username, password):
         url = response.url
 
     # update our cookies for this session
-    cookies = { '_wag_session': cookie }
+    cookies = {'_wag_session': cookie}
     session.cookie_jar.update_cookies(cookies, response_url=url)
+
 
 def parse_splatnet_time(timestr):
     # time is given as "MM/DD at H:MM [p|a].m. (PDT|PST)"
@@ -80,7 +85,7 @@ def parse_splatnet_time(timestr):
     else:
         raise RuntimeError('Unknown timezone found: {}'.format(tz))
 
-    pm = matches['p'].replace('.', '') # a.m. -> am
+    pm = matches['p'].replace('.', '')  # a.m. -> am
 
     current_time = datetime.datetime.utcnow()
 
@@ -119,13 +124,13 @@ async def get_splatnet_schedule(session):
     """
 
     schedule = []
-    async with session.get(SPLATNET_SCHEDULE_URL, data={'locale':"en"}) as response:
+    async with session.get(SPLATNET_SCHEDULE_URL, data={'locale': "en"}) as response:
         text = await response.text()
         root = etree.fromstring(text, etree.HTMLParser())
         stage_schedule_nodes = root.xpath("//*[@class='stage-schedule']")
         stage_list_nodes = root.xpath("//*[@class='stage-list']")
 
-        if len(stage_schedule_nodes)*2 != len(stage_list_nodes):
+        if len(stage_schedule_nodes) * 2 != len(stage_list_nodes):
             raise RuntimeError("SplatNet changed, need to update the parsing!")
 
         for sched_node in stage_schedule_nodes:

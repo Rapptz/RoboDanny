@@ -4,6 +4,7 @@ import datetime
 class plural:
     def __init__(self, value):
         self.value = value
+
     def __format__(self, format_spec):
         v = self.value
         singular, sep, plural = format_spec.partition('|')
@@ -11,6 +12,7 @@ class plural:
         if abs(v) != 1:
             return f'{v} {plural}'
         return f'{v} {singular}'
+
 
 def human_join(seq, delim=', ', final='or'):
     size = len(seq)
@@ -24,6 +26,7 @@ def human_join(seq, delim=', ', final='or'):
         return f'{seq[0]} {final} {seq[1]}'
 
     return delim.join(seq[:-1]) + f' {final} {seq[-1]}'
+
 
 class TabularData:
     def __init__(self):
@@ -77,6 +80,7 @@ class TabularData:
 
         to_draw.append(sep)
         return '\n'.join(to_draw)
+
 
 def format_dt(dt, style=None):
     if dt.tzinfo is None:

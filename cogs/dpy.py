@@ -25,6 +25,7 @@ GITHUB_DONE_COLUMN = 9341870
 
 TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27}')
 
+
 def validate_token(token):
     try:
         # Just check if the first part validates as a user ID
@@ -35,18 +36,24 @@ def validate_token(token):
     else:
         return True
 
+
 class GithubError(commands.CommandError):
     pass
+
 
 def is_proficient():
     def predicate(ctx):
         return ctx.author._roles.has(DISCORD_PY_PROF_ROLE)
+
     return commands.check(predicate)
+
 
 def is_doc_helper():
     def predicate(ctx):
         return ctx.author._roles.has(714516281293799438)
+
     return commands.check(predicate)
+
 
 class GistContent:
     def __init__(self, argument: str):
@@ -63,6 +70,7 @@ class GistContent:
                 self.language = block[3:]
                 self.source = code.rstrip('`').replace('```', '')
 
+
 def make_field_from_note(data, column_id):
     id = data['id']
     value = data['note']
@@ -76,6 +84,7 @@ def make_field_from_note(data, column_id):
         return (f'TODO: {id}', value)
     else:
         return (f'In Progress: {id}', value)
+
 
 class DPYExclusive(commands.Cog, name='discord.py'):
     def __init__(self, bot):
@@ -93,10 +102,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         await self.bot.wait_until_ready()
         guild = self.bot.get_guild(DISCORD_PY_GUILD_ID)
         invites = await guild.invites()
-        self._invite_cache = {
-            invite.code: invite.uses
-            for invite in invites
-        }
+        self._invite_cache = {invite.code: invite.uses for invite in invites}
 
     def cog_check(self, ctx):
         return ctx.guild and ctx.guild.id == DISCORD_PY_GUILD_ID
@@ -109,7 +115,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         hdrs = {
             'Accept': 'application/vnd.github.inertia-preview+json',
             'User-Agent': 'RoboDanny DPYExclusive Cog',
-            'Authorization': f'token {self.bot.config.github_token}'
+            'Authorization': f'token {self.bot.config.github_token}',
         }
 
         req_url = yarl.URL('https://api.github.com') / url
@@ -146,9 +152,9 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             'public': public,
             'files': {
                 filename: {
-                    'content': content
+                    'content': content,
                 }
-            }
+            },
         }
 
         if description:
@@ -180,7 +186,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         tokens = [token for token in TOKEN_REGEX.findall(message.content) if validate_token(token)]
         if tokens and message.author.id != self.bot.user.id:
-            url =  await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
+            url = await self.create_gist('\n'.join(tokens), description='Discord tokens detected')
             msg = f'{message.author.mention}, I have found tokens and sent them to <{url}> to be invalidated for you.'
             return await message.channel.send(msg)
 
@@ -326,10 +332,10 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         """Creates a todo based on PR number or string content."""
         if isinstance(content, str):
             path = f'projects/columns/{GITHUB_TODO_COLUMN}/cards'
-            payload = { 'note': content }
+            payload = {'note': content}
         else:
             path = f'projects/columns/{GITHUB_PROGRESS_COLUMN}/cards'
-            payload = { 'content_id': content, 'content_type': 'PullRequest' }
+            payload = {'content_id': content, 'content_type': 'PullRequest'}
 
         js = await self.github_request('POST', path, data=payload)
         await ctx.send(f'Created note with ID {js["id"]}')
@@ -382,6 +388,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             url = await self.create_gist(content.source, filename=f'input.{content.language}', public=False)
 
         await ctx.send(f'<{url}>')
+
 
 async def setup(bot):
     await bot.add_cog(DPYExclusive(bot))

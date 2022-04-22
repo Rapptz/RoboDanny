@@ -19,6 +19,7 @@ from typing import Union, Optional
 import datetime
 from collections import Counter
 
+
 class PerformanceMocker:
     """A mock object that can also be used in await expressions."""
 
@@ -62,6 +63,7 @@ class PerformanceMocker:
     def __bool__(self):
         return False
 
+
 class GlobalChannel(commands.Converter):
     async def convert(self, ctx, argument):
         try:
@@ -77,6 +79,7 @@ class GlobalChannel(commands.Converter):
                 if channel is None:
                     raise commands.BadArgument(f'Could not find a channel by ID {argument!r}.')
                 return channel
+
 
 class Admin(commands.Cog):
     """Admin-only commands that make the bot dynamic."""
@@ -228,7 +231,7 @@ class Admin(commands.Cog):
             'author': ctx.author,
             'guild': ctx.guild,
             'message': ctx.message,
-            '_': self._last_result
+            '_': self._last_result,
         }
 
         env.update(globals())
@@ -285,9 +288,7 @@ class Admin(commands.Cog):
         await ctx.send('Enter code to execute or evaluate. `exit()` or `quit` to exit.')
 
         def check(m):
-            return m.author.id == ctx.author.id and \
-                   m.channel.id == ctx.channel.id and \
-                   m.content.startswith('`')
+            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.startswith('`')
 
         while True:
             try:
@@ -352,7 +353,6 @@ class Admin(commands.Cog):
                 pass
             except discord.HTTPException as e:
                 await ctx.send(f'Unexpected error: `{e}`')
-
 
     @commands.command(hidden=True)
     async def sql(self, ctx, *, query: str):
@@ -494,6 +494,7 @@ class Admin(commands.Cog):
             success = True
 
         await ctx.send(f'Status: {ctx.tick(success)} Time: {(end - start) * 1000:.2f}ms')
+
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))

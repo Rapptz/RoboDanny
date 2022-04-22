@@ -10,34 +10,35 @@ import os
 import lxml.etree as etree
 from collections import Counter
 
-DISCORD_API_ID    = 81384788765712384
-DISCORD_BOTS_ID   = 110373943822540800
-USER_BOTS_ROLE    = 178558252869484544
+DISCORD_API_ID = 81384788765712384
+DISCORD_BOTS_ID = 110373943822540800
+USER_BOTS_ROLE = 178558252869484544
 CONTRIBUTORS_ROLE = 111173097888993280
-DISCORD_PY_ID     = 84319995256905728
-DISCORD_PY_GUILD  = 336642139381301249
+DISCORD_PY_ID = 84319995256905728
+DISCORD_PY_GUILD = 336642139381301249
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELPER_ROLE = 558559632637952010
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 738572311107469354, 956435493296414720)
 BOT_LIST_INFO = {
     DISCORD_API_ID: {
-        'channel':580184108794380298,
+        'channel': 580184108794380298,
         'testing': (
-            381896832399310868, #testing
-            381896931724492800, #playground
+            381896832399310868,  # testing
+            381896931724492800,  # playground
         ),
-        'terms': 'By requesting to add your bot, you agree to not spam or do things without user input.'
+        'terms': 'By requesting to add your bot, you agree to not spam or do things without user input.',
     },
     DISCORD_PY_GUILD: {
         'channel': 579998326557114368,
         'testing': (
-            381963689470984203, #testing
-            559455534965850142, #playground
-            568662293190148106, #mod-testing
+            381963689470984203,  # testing
+            559455534965850142,  # playground
+            568662293190148106,  # mod-testing
         ),
-        'terms': 'By requesting to add your bot, you must agree to the guidelines presented in the <#381974649019432981>.'
-    }
+        'terms': 'By requesting to add your bot, you must agree to the guidelines presented in the <#381974649019432981>.',
+    },
 }
+
 
 def in_testing(info=BOT_LIST_INFO):
     def predicate(ctx):
@@ -45,7 +46,9 @@ def in_testing(info=BOT_LIST_INFO):
             return ctx.channel.id in info[ctx.guild.id]['testing']
         except (AttributeError, KeyError):
             return False
+
     return commands.check(predicate)
+
 
 def is_discord_py_helper(member):
     guild_id = member.guild.id
@@ -56,6 +59,7 @@ def is_discord_py_helper(member):
         return False
 
     return member._roles.has(DISCORD_PY_HELPER_ROLE)
+
 
 def can_use_block():
     def predicate(ctx):
@@ -69,7 +73,9 @@ def can_use_block():
             guild_level = ctx.author.guild_permissions
             return guild_level.manage_roles
         return False
+
     return commands.check(predicate)
+
 
 def can_use_tempblock():
     def predicate(ctx):
@@ -82,12 +88,13 @@ def can_use_tempblock():
         elif guild_id == DISCORD_PY_GUILD:
             guild_level = ctx.author.guild_permissions
             return guild_level.manage_roles or (
-                ctx.channel.id in DISCORD_PY_HELP_CHANNELS and
-                (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or
-                 ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
+                ctx.channel.id in DISCORD_PY_HELP_CHANNELS
+                and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
             )
         return False
+
     return commands.check(predicate)
+
 
 def contributor_or_higher():
     def predicate(ctx):
@@ -100,7 +107,9 @@ def contributor_or_higher():
             return False
 
         return ctx.author.top_role >= role
+
     return commands.check(predicate)
+
 
 class Feeds(db.Table):
     id = db.PrimaryKeyColumn()
@@ -108,10 +117,12 @@ class Feeds(db.Table):
     role_id = db.Column(db.Integer(big=True))
     name = db.Column(db.String)
 
+
 class RTFM(db.Table):
     id = db.PrimaryKeyColumn()
     user_id = db.Column(db.Integer(big=True), unique=True, index=True)
     count = db.Column(db.Integer, default=1)
+
 
 class SphinxObjectFileReader:
     # Inspired by Sphinx's InventoryFileReader
@@ -142,8 +153,9 @@ class SphinxObjectFileReader:
             pos = buf.find(b'\n')
             while pos != -1:
                 yield buf[:pos].decode('utf-8')
-                buf = buf[pos + 1:]
+                buf = buf[pos + 1 :]
                 pos = buf.find(b'\n')
+
 
 class BotUser(commands.Converter):
     async def convert(self, ctx, argument):
@@ -159,6 +171,7 @@ class BotUser(commands.Converter):
             if not user.bot:
                 raise commands.BadArgument('This is not a bot.')
             return user
+
 
 class API(commands.Cog):
     """Discord API exclusive things."""
@@ -280,6 +293,7 @@ class API(commands.Cog):
                     break
 
         cache = list(self._rtfm_cache[key].items())
+
         def transform(tup):
             return tup[0]
 
@@ -388,7 +402,7 @@ class API(commands.Cog):
         name = channel.name
         index = name.find('_')
         if index != -1:
-            name = name[index + 1:]
+            name = name[index + 1 :]
         return name.replace('-', '.')
 
     def get_block_channels(self, guild, channel):
@@ -436,7 +450,6 @@ class API(commands.Cog):
         else:
             await ctx.send('\N{THUMBS UP SIGN}')
 
-
     @commands.command()
     @can_use_tempblock()
     async def tempblock(self, ctx, duration: time.FutureTime, *, member: discord.Member):
@@ -461,10 +474,16 @@ class API(commands.Cog):
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
         channels = self.get_block_channels(ctx.guild, ctx.channel)
-        timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id,
-                                                                      ctx.channel.id, member.id,
-                                                                      connection=ctx.db,
-                                                                      created=created_at)
+        timer = await reminder.create_timer(
+            duration.dt,
+            'tempblock',
+            ctx.guild.id,
+            ctx.author.id,
+            ctx.channel.id,
+            member.id,
+            connection=ctx.db,
+            created=created_at,
+        )
 
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
@@ -506,7 +525,6 @@ class API(commands.Cog):
                 moderator = f'{moderator} (ID: {mod_id})'
         else:
             moderator = f'{moderator} (ID: {mod_id})'
-
 
         reason = f'Automatic unblock from timer made on {timer.created_at} by {moderator}.'
 
@@ -660,9 +678,11 @@ class API(commands.Cog):
 
         role = discord.utils.get(ctx.guild.roles, id=feeds[feed])
         if role is None:
-            fmt = 'Uh.. a fatal error occurred here. The role associated with ' \
-                  'this feed has been removed or not found. ' \
-                  'Please recreate the feed.'
+            fmt = (
+                'Uh.. a fatal error occurred here. The role associated with '
+                'this feed has been removed or not found. '
+                'Please recreate the feed.'
+            )
             await ctx.send(fmt)
             return
 
@@ -750,9 +770,11 @@ class API(commands.Cog):
             to_send = f"Your bot, <@{bot_id}>, has been added to {channel.guild.name}."
             colour = discord.Colour.dark_green()
         elif emoji == '\N{NO ENTRY SIGN}':
-            to_send = f"Your bot, <@{bot_id}>, could not be added to {channel.guild.name}.\n" \
-                       "This could be because it was private or required code grant. " \
-                       "Please make your bot public and resubmit your application."
+            to_send = (
+                f"Your bot, <@{bot_id}>, could not be added to {channel.guild.name}.\n"
+                "This could be because it was private or required code grant. "
+                "Please make your bot public and resubmit your application."
+            )
             colour = discord.Colour.orange()
         else:
             to_send = f"Your bot, <@{bot_id}>, has been rejected from {channel.guild.name}."
@@ -781,6 +803,7 @@ class API(commands.Cog):
 
         info = BOT_LIST_INFO[ctx.guild.id]
         confirm = None
+
         def terms_acceptance(msg):
             nonlocal confirm
             if msg.author.id != ctx.author.id:
@@ -795,8 +818,10 @@ class API(commands.Cog):
                 return True
             return False
 
-        msg = f'{info["terms"]}. Moderators reserve the right to kick or reject your bot for any reason.\n\n' \
-               'If you agree, reply to this message with **I agree** within 1 minute. If you do not, reply with **Abort**.'
+        msg = (
+            f'{info["terms"]}. Moderators reserve the right to kick or reject your bot for any reason.\n\n'
+            'If you agree, reply to this message with **I agree** within 1 minute. If you do not, reply with **Abort**.'
+        )
         prompt = await ctx.send(msg)
 
         try:
@@ -835,6 +860,7 @@ class API(commands.Cog):
     async def on_addbot_error(self, ctx, error):
         if isinstance(error, (commands.BadArgument, commands.MissingRequiredArgument)):
             return await ctx.send(error)
+
 
 async def setup(bot):
     await bot.add_cog(API(bot))

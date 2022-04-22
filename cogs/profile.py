@@ -6,6 +6,7 @@ from collections import defaultdict
 import discord
 import re
 
+
 class Profiles(db.Table):
     # this is the user_id
     id = db.Column(db.Integer(big=True), primary_key=True)
@@ -18,6 +19,7 @@ class Profiles(db.Table):
 
     # extra Splatoon data is stored here
     extra = db.Column(db.JSON, default="'{}'::jsonb", nullable=False)
+
 
 class DisambiguateMember(commands.IDConverter):
     async def convert(self, ctx, argument):
@@ -45,16 +47,13 @@ class DisambiguateMember(commands.IDConverter):
         else:
             # disambiguate I guess
             if ctx.guild is None:
-                matches = [
-                    user for user in ctx.bot.users
-                    if user.name == argument
-                ]
+                matches = [user for user in ctx.bot.users if user.name == argument]
                 entry = str
             else:
                 matches = [
-                    member for member in ctx.guild.members
-                    if member.name == argument
-                    or (member.nick and member.nick == argument)
+                    member
+                    for member in ctx.guild.members
+                    if member.name == argument or (member.nick and member.nick == argument)
                 ]
 
                 def to_str(m):
@@ -74,13 +73,16 @@ class DisambiguateMember(commands.IDConverter):
             raise commands.BadArgument("Could not found this member. Note this is case sensitive.")
         return result
 
+
 def valid_nnid(argument):
     arg = argument.strip('"')
     if len(arg) > 16:
         raise commands.BadArgument('An NNID has a maximum of 16 characters.')
     return arg
 
+
 _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
+
 
 def valid_rank(argument, *, _rank=_rank):
     m = _rank.match(argument.strip('"'))
@@ -126,7 +128,8 @@ def valid_rank(argument, *, _rank=_rank):
         if rank == 'S+' and number > 10:
             raise commands.BadArgument('S+10 is the current cap.')
 
-    return mode, { 'rank': rank, 'number': number }
+    return mode, {'rank': rank, 'number': number}
+
 
 def valid_squad(argument):
     arg = argument.strip('"')
@@ -137,7 +140,9 @@ def valid_squad(argument):
         arg = f'<{arg}>'
     return arg
 
+
 _friend_code = re.compile(r'^(?:(?:SW|3DS)[- _]?)?(?P<one>[0-9]{4})[- _]?(?P<two>[0-9]{4})[- _]?(?P<three>[0-9]{4})$')
+
 
 def valid_fc(argument, *, _fc=_friend_code):
     fc = argument.upper().strip('"')
@@ -146,6 +151,7 @@ def valid_fc(argument, *, _fc=_friend_code):
         raise commands.BadArgument('Not a valid friend code!')
 
     return '{one}-{two}-{three}'.format(**m.groupdict())
+
 
 class SplatoonWeapon(commands.Converter):
     async def convert(self, ctx, argument):
@@ -166,8 +172,10 @@ class SplatoonWeapon(commands.Converter):
         else:
             return weapon
 
+
 class Profile(commands.Cog):
     """Manage your Splatoon profile"""
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -197,9 +205,11 @@ class Profile(commands.Cog):
 
         if record is None:
             if member == ctx.author:
-                await ctx.send('You did not set up a profile.' \
-                              f' If you want to input a switch friend code, type {ctx.prefix}profile switch 1234-5678-9012' \
-                              f' or check {ctx.prefix}help profile')
+                await ctx.send(
+                    'You did not set up a profile.'
+                    f' If you want to input a switch friend code, type {ctx.prefix}profile switch 1234-5678-9012'
+                    f' or check {ctx.prefix}help profile'
+                )
             else:
                 await ctx.send('This member did not set up a profile.')
             return
@@ -211,7 +221,7 @@ class Profile(commands.Cog):
         keys = {
             'fc_switch': 'Switch FC',
             'nnid': 'Wii U NNID',
-            'fc_3ds': '3DS FC'
+            'fc_3ds': '3DS FC',
         }
 
         for key, value in keys.items():
@@ -349,8 +359,17 @@ class Profile(commands.Cog):
 
         field = field.lower()
 
-        valid_fields = ( 'nnid', 'switch', '3ds', 'squad', 'weapon', 'rank',
-                         'tower control rank', 'splat zones rank', 'rainmaker rank')
+        valid_fields = (
+            'nnid',
+            'switch',
+            '3ds',
+            'squad',
+            'weapon',
+            'rank',
+            'tower control rank',
+            'splat zones rank',
+            'rainmaker rank',
+        )
 
         if field not in valid_fields:
             return await ctx.send("I don't know what field you want me to delete here bub.")
@@ -360,7 +379,7 @@ class Profile(commands.Cog):
             'nnid': 'nnid',
             'switch': 'fc_switch',
             '3ds': 'fc_3ds',
-            'squad': 'squad'
+            'squad': 'squad',
         }
 
         column = field_to_column.get(field)
@@ -456,8 +475,9 @@ class Profile(commands.Cog):
         e.title = f'Statistics for {plural(total):profile}'
 
         # top 3 weapons
-        value = f'*{total_weapons} players with weapons*\n' + \
-               '\n'.join(f'{r["Weapon"]} ({r["Total"]} players)' for r in weapons[:3])
+        value = f'*{total_weapons} players with weapons*\n' + '\n'.join(
+            f'{r["Weapon"]} ({r["Total"]} players)' for r in weapons[:3]
+        )
         e.add_field(name='Top Splatoon 2 Weapons', value=value, inline=False)
 
         # get ranked data
@@ -473,7 +493,9 @@ class Profile(commands.Cog):
             records = await ctx.db.fetch(query)
             total = sum(r['Total'] for r in records)
 
-            value = f'*{total} players*\n' + '\n'.join(f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records)
+            value = f'*{total} players*\n' + '\n'.join(
+                f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records
+            )
             e.add_field(name=mode, value=value, inline=True)
 
             # add some empty padding so the embed doesn't look ugly
@@ -481,6 +503,7 @@ class Profile(commands.Cog):
                 e.add_field(name='\u200b', value='\u200b', inline=True)
 
         await ctx.send(embed=e)
+
 
 async def setup(bot):
     await bot.add_cog(Profile(bot))
