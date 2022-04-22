@@ -10,11 +10,14 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # This isn't exactly good. It's just good enough for my uses.
 # Also shoddy migration support.
 
+from __future__ import annotations
+
 from collections import OrderedDict
 from pathlib import Path
 import json
 import os
 import pydoc
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Type, Union
 import uuid
 import datetime
 import inspect
@@ -25,22 +28,25 @@ import asyncio
 
 log = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
 
 class SchemaError(Exception):
     pass
 
 
 class SQLType:
-    python = None
+    python: ClassVar[Optional[type[Any]]] = None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         o = self.__dict__.copy()
         cls = self.__class__
         o['__meta__'] = cls.__module__ + '.' + cls.__qualname__
         return o
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         meta = data.pop('__meta__')
         given = cls.__module__ + '.' + cls.__qualname__
         if given != meta:
@@ -48,20 +54,20 @@ class SQLType:
             if cls is None:
                 raise RuntimeError('Could not locate "%s".' % meta)
 
-        self = cls.__new__(cls)
+        self: Self = cls.__new__(cls)  # type: ignore
         self.__dict__.update(data)
         return self
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
-    def to_sql(self):
+    def to_sql(self) -> str:
         raise NotImplementedError()
 
-    def is_real_type(self):
+    def is_real_type(self) -> bool:
         return True
 
 
@@ -305,7 +311,17 @@ class Array(SQLType):
 class Column:
     __slots__ = ('column_type', 'index', 'primary_key', 'nullable', 'default', 'unique', 'name', 'index_name')
 
-    def __init__(self, column_type, *, index=False, primary_key=False, nullable=True, unique=False, default=None, name=None):
+    def __init__(
+        self,
+        column_type: Union[Type[SQLType], SQLType],
+        *,
+        index: bool = False,
+        primary_key: bool = False,
+        nullable: bool = True,
+        unique: bool = False,
+        default: Any = None,
+        name: Optional[str] = None,
+    ):
 
         if inspect.isclass(column_type):
             column_type = column_type()
@@ -313,14 +329,14 @@ class Column:
         if not isinstance(column_type, SQLType):
             raise TypeError('Cannot have a non-SQLType derived column_type')
 
-        self.column_type = column_type
-        self.index = index
-        self.unique = unique
-        self.primary_key = primary_key
-        self.nullable = nullable
-        self.default = default
-        self.name = name
-        self.index_name = None  # to be filled later
+        self.column_type: SQLType = column_type
+        self.index: bool = index
+        self.unique: bool = unique
+        self.primary_key: bool = primary_key
+        self.nullable: bool = nullable
+        self.default: Any = default
+        self.name: Optional[str] = name
+        self.index_name: Optional[str] = None  # to be filled later
 
         if sum(map(bool, (unique, primary_key, default is not None))) > 1:
             raise SchemaError("'unique', 'primary_key', and 'default' are mutually exclusive.")
@@ -505,8 +521,10 @@ class TableMeta(type):
         super().__init__(name, parents, dct)
 
 
-class Table(metaclass=TableMeta):
+class Table(metaclass=TableMeta):  # type: ignore  # Pyright Bug I think
     _pool: asyncpg.Pool
+    __tablename__: str
+    columns: list[Column]
 
     @classmethod
     async def create_pool(cls, uri, **kwargs) -> asyncpg.Pool:
@@ -819,7 +837,7 @@ class Table(metaclass=TableMeta):
         verified = {}
         for column in cls.columns:
             try:
-                value = kwargs[column.name]
+                value = kwargs[column.name]  # type: ignore  # Doesn't understand that None | str is okay
             except KeyError:
                 continue
 
@@ -840,7 +858,7 @@ class Table(metaclass=TableMeta):
             await con.execute(sql, *verified.values())
 
     @classmethod
-    def to_dict(cls):
+    def to_dict(cls) -> dict[str, Any]:
         x = {}
         x['name'] = cls.__tablename__
         x['__meta__'] = cls.__module__ + '.' + cls.__qualname__
@@ -851,7 +869,7 @@ class Table(metaclass=TableMeta):
         return x
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         meta = data['__meta__']
         given = cls.__module__ + '.' + cls.__qualname__
         if given != meta:
@@ -859,7 +877,7 @@ class Table(metaclass=TableMeta):
             if cls is None:
                 raise RuntimeError('Could not locate "%s".' % meta)
 
-        self = cls()
+        self: Self = cls()  # type: ignore
         self.__tablename__ = data['name']
         self.columns = [Column.from_dict(a) for a in data['columns']]
         return self
