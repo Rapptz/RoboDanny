@@ -17,7 +17,7 @@ import config
 import traceback
 
 try:
-    import uvloop
+    import uvloop  # type: ignore
 except ImportError:
     pass
 else:
@@ -36,6 +36,8 @@ class RemoveNoise(logging.Filter):
 
 @contextlib.contextmanager
 def setup_logging():
+    log = logging.getLogger()
+
     try:
         # __enter__
         max_bytes = 32 * 1024 * 1024  # 32 MiB
@@ -43,7 +45,6 @@ def setup_logging():
         logging.getLogger('discord.http').setLevel(logging.WARNING)
         logging.getLogger('discord.state').addFilter(RemoveNoise())
 
-        log = logging.getLogger()
         log.setLevel(logging.INFO)
         handler = RotatingFileHandler(filename='rdanny.log', encoding='utf-8', mode='w', maxBytes=max_bytes, backupCount=5)
         dt_fmt = '%Y-%m-%d %H:%M:%S'
@@ -268,80 +269,6 @@ def drop(cog, quiet):
         return
 
     run(remove_databases(pool, cog, quiet))
-
-
-@main.command(short_help='migrates from JSON files')
-@click.argument('cogs', nargs=-1)
-@click.pass_context
-def convertjson(ctx, cogs):
-    """This migrates our older JSON files to PostgreSQL
-
-    Note, this deletes all previous entries in the table
-    so you can consider this to be a destructive decision.
-
-    Do not pass in cog names with "cogs." as a prefix.
-
-    This also connects us to Discord itself so we can
-    use the cache for our migrations.
-
-    The point of this is just to do some migration of the
-    data from v3 -> v4 once and call it a day.
-    """
-
-    import data_migrators
-
-    run = asyncio.get_event_loop().run_until_complete
-
-    if not cogs:
-        to_run = [
-            (getattr(data_migrators, attr), attr.replace('migrate_', ''))
-            for attr in dir(data_migrators)
-            if attr.startswith('migrate_')
-        ]
-    else:
-        to_run = []
-        for cog in cogs:
-            try:
-                elem = getattr(data_migrators, 'migrate_' + cog)
-            except AttributeError:
-                click.echo(f'invalid cog name given, {cog}.', err=True)
-                return
-
-            to_run.append((elem, cog))
-
-    async def make_pool():
-        return await asyncpg.create_pool(config.postgresql)
-
-    try:
-        pool = run(make_pool())
-    except Exception:
-        click.echo(f'Could not create PostgreSQL connection pool.\n{traceback.format_exc()}', err=True)
-        return
-
-    client = discord.AutoShardedClient()
-
-    @client.event
-    async def on_ready():
-        click.echo(f'successfully booted up bot {client.user} (ID: {client.user.id})')
-        await client.logout()
-
-    try:
-        run(client.login(config.token))
-        run(client.connect(reconnect=False))
-    except:
-        pass
-
-    extensions = ['cogs.' + name for _, name in to_run]
-    ctx.invoke(init, cogs=extensions)
-
-    for migrator, _ in to_run:
-        try:
-            run(migrator(pool, client))
-        except Exception:
-            click.echo(f'[error] {migrator.__name__} has failed, terminating\n{traceback.format_exc()}', err=True)
-            return
-        else:
-            click.echo(f'[{migrator.__name__}] completed successfully')
 
 
 if __name__ == '__main__':
