@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Union, Optional
+from typing import TYPE_CHECKING, Any, Callable, Iterable, TypeVar, Union, Optional, Generator
 from discord.ext import commands
 import asyncio
 import discord
@@ -9,23 +9,28 @@ import io
 
 if TYPE_CHECKING:
     from bot import RoboDanny
+    from aiohttp import ClientSession
+    from asyncpg import Pool, Connection
+
+
+T = TypeVar('T')
 
 
 class _ContextDBAcquire:
     __slots__ = ('ctx', 'timeout')
 
-    def __init__(self, ctx, timeout):
-        self.ctx = ctx
-        self.timeout = timeout
+    def __init__(self, ctx: Context, timeout: Optional[float]):
+        self.ctx: Context = ctx
+        self.timeout: Optional[float] = timeout
 
-    def __await__(self):
+    def __await__(self) -> Generator[Any, None, Connection]:
         return self.ctx._acquire(self.timeout).__await__()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Union[Pool, Connection]:
         await self.ctx._acquire(self.timeout)
         return self.ctx.db
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args) -> None:
         await self.ctx.release()
 
 
@@ -78,9 +83,9 @@ class Context(commands.Context):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.pool = self.bot.pool
-        self._db = None
+        self._db: Optional[Union[Pool, Connection]] = None
 
-    async def entry_to_code(self, entries):
+    async def entry_to_code(self, entries: Iterable[tuple[str, str]]) -> None:
         width = max(len(a) for a, b in entries)
         output = ['```']
         for name, entry in entries:
@@ -88,7 +93,7 @@ class Context(commands.Context):
         output.append('```')
         await self.send('\n'.join(output))
 
-    async def indented_entry_to_code(self, entries):
+    async def indented_entry_to_code(self, entries: Iterable[tuple[str, str]]) -> None:
         width = max(len(a) for a, b in entries)
         output = ['```']
         for name, entry in entries:
@@ -96,22 +101,22 @@ class Context(commands.Context):
         output.append('```')
         await self.send('\n'.join(output))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # we need this for our cache key strategy
         return '<Context>'
 
     @property
-    def session(self):
+    def session(self) -> ClientSession:
         return self.bot.session
 
     @discord.utils.cached_property
-    def replied_reference(self):
+    def replied_reference(self) -> Optional[discord.MessageReference]:
         ref = self.message.reference
         if ref and isinstance(ref.resolved, discord.Message):
             return ref.resolved.to_reference()
         return None
 
-    async def disambiguate(self, matches, entry):
+    async def disambiguate(self, matches: list[T], entry: Callable[[T], Any]) -> T:
         if len(matches) == 0:
             raise ValueError('No results found.')
 
@@ -190,7 +195,7 @@ class Context(commands.Context):
         await view.wait()
         return view.value
 
-    def tick(self, opt, label=None):
+    def tick(self, opt: Optional[bool], label: Optional[str] = None) -> str:
         lookup = {
             True: '<:greenTick:330090705336664065>',
             False: '<:redTick:330090723011592193>',
@@ -202,15 +207,15 @@ class Context(commands.Context):
         return emoji
 
     @property
-    def db(self):
+    def db(self) -> Union[Pool, Connection]:
         return self._db if self._db else self.pool
 
-    async def _acquire(self, timeout):
+    async def _acquire(self, timeout: Optional[float]) -> Connection:
         if self._db is None:
             self._db = await self.pool.acquire(timeout=timeout)
         return self._db
 
-    def acquire(self, *, timeout=300.0):
+    def acquire(self, *, timeout=300.0) -> _ContextDBAcquire:
         """Acquires a database connection from the pool. e.g. ::
 
             async with ctx.acquire():
@@ -226,7 +231,7 @@ class Context(commands.Context):
         """
         return _ContextDBAcquire(self, timeout)
 
-    async def release(self):
+    async def release(self) -> None:
         """Releases the database connection from the pool.
 
         Useful if needed for "long" interactive commands where
@@ -241,7 +246,7 @@ class Context(commands.Context):
             await self.bot.pool.release(self._db)
             self._db = None
 
-    async def show_help(self, command=None):
+    async def show_help(self, command: Any = None) -> None:
         """Shows the help command for the specified command if given.
 
         If no command is given, then it'll show help for the current
@@ -249,9 +254,9 @@ class Context(commands.Context):
         """
         cmd = self.bot.get_command('help')
         command = command or self.command.qualified_name
-        await self.invoke(cmd, command=command)
+        await self.invoke(cmd, command=command)  # type: ignore
 
-    async def safe_send(self, content, *, escape_mentions=True, **kwargs):
+    async def safe_send(self, content: str, *, escape_mentions: bool = True, **kwargs) -> discord.Message:
         """Same as send except with some safe guards.
 
         1) If the message is too long then it sends a file with the results instead.
