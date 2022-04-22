@@ -1,5 +1,5 @@
 from discord.ext import commands, menus
-from .utils import config, checks, maps, fuzzy, time, formats
+from .utils import config, checks, fuzzy, time, formats
 from .utils.formats import plural
 from .utils.paginator import RoboPages, SimplePages, FieldPageSource
 
