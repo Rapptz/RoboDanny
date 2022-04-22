@@ -506,9 +506,11 @@ class TableMeta(type):
 
 
 class Table(metaclass=TableMeta):
+    _pool: asyncpg.Pool
+
     @classmethod
-    async def create_pool(cls, uri, **kwargs):
-        """Sets up and returns the PostgreSQL connection pool that is used.
+    async def create_pool(cls, uri, **kwargs) -> asyncpg.Pool:
+        r"""Sets up and returns the PostgreSQL connection pool that is used.
 
         .. note::
 
@@ -538,8 +540,8 @@ class Table(metaclass=TableMeta):
             if old_init is not None:
                 await old_init(con)
 
-        cls._pool = pool = await asyncpg.create_pool(uri, init=init, **kwargs)
-        return pool
+        cls._pool = pool = await asyncpg.create_pool(uri, init=init, **kwargs)  # type: ignore
+        return pool  # type: ignore
 
     @classmethod
     def acquire_connection(cls, connection):

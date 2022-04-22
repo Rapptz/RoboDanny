@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from discord.ext import commands
 import discord
-from cogs.utils import checks, context, db
 from cogs.utils.config import Config
-import datetime, re
-import json, asyncio
-import copy
+from cogs.utils.context import Context
+import datetime
 import logging
 import traceback
 import aiohttp
 import sys
-from typing import Union
-from collections import Counter, deque, defaultdict
+from typing import AsyncIterator, Iterable, Optional, Union
+from collections import Counter, defaultdict
 
 import config
 import asyncpg
@@ -45,7 +43,7 @@ initial_extensions = (
 )
 
 
-def _prefix_callable(bot, msg):
+def _prefix_callable(bot: RoboDanny, msg: discord.Message):
     user_id = bot.user.id
     base = [f'<@!{user_id}> ', f'<@{user_id}> ']
     if msg.guild is None:
@@ -56,7 +54,16 @@ def _prefix_callable(bot, msg):
     return base
 
 
+class ProxyObject(discord.Object):
+    def __init__(self, guild: discord.abc.Snowflake):
+        super().__init__(id=0)
+        self.guild: discord.abc.Snowflake = guild
+
+
 class RoboDanny(commands.AutoShardedBot):
+    user: discord.ClientUser
+    pool: asyncpg.Pool
+
     def __init__(self):
         allowed_mentions = discord.AllowedMentions(roles=False, everyone=False, users=True)
         intents = discord.Intents(
@@ -81,25 +88,15 @@ class RoboDanny(commands.AutoShardedBot):
             enable_debug_events=True,
         )
 
-        self.client_id = config.client_id
-        self.carbon_key = config.carbon_key
-        self.bots_key = config.bots_key
-        self.challonge_api_key = config.challonge_api_key
-
-        self._prev_events = deque(maxlen=10)
+        self.client_id: str = config.client_id
+        self.carbon_key: str = config.carbon_key
+        self.bots_key: str = config.bots_key
+        self.challonge_api_key: str = config.challonge_api_key
 
         # shard_id: List[datetime.datetime]
         # shows the last attempted IDENTIFYs and RESUMEs
-        self.resumes = defaultdict(list)
-        self.identifies = defaultdict(list)
-
-        # guild_id: list
-        self.prefixes = Config('prefixes.json')
-
-        # guild_id and user_id mapped to True
-        # these are users and guilds globally blacklisted
-        # from using the bot
-        self.blacklist = Config('blacklist.json')
+        self.resumes: defaultdict[int, list[datetime.datetime]] = defaultdict(list)
+        self.identifies: defaultdict[int, list[datetime.datetime]] = defaultdict(list)
 
         # in case of even further spam, add a cooldown mapping
         # for people who excessively spam commands
@@ -111,6 +108,14 @@ class RoboDanny(commands.AutoShardedBot):
 
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
+        # guild_id: list
+        self.prefixes: Config[list[str]] = Config('prefixes.json', loop=self.loop)
+
+        # guild_id and user_id mapped to True
+        # these are users and guilds globally blacklisted
+        # from using the bot
+        self.blacklist: Config[bool] = Config('blacklist.json', loop=self.loop)
+
         for extension in initial_extensions:
             try:
                 await self.load_extension(extension)
@@ -118,7 +123,7 @@ class RoboDanny(commands.AutoShardedBot):
                 print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
 
-    def _clear_gateway_data(self):
+    def _clear_gateway_data(self) -> None:
         one_week_ago = discord.utils.utcnow() - datetime.timedelta(days=7)
         for shard_id, dates in self.identifies.items():
             to_remove = [index for index, dt in enumerate(dates) if dt < one_week_ago]
@@ -130,15 +135,12 @@ class RoboDanny(commands.AutoShardedBot):
             for index in reversed(to_remove):
                 del dates[index]
 
-    async def on_socket_raw_receive(self, msg):
-        self._prev_events.append(msg)
-
-    async def before_identify_hook(self, shard_id, *, initial):
+    async def before_identify_hook(self, shard_id: int, *, initial: bool):
         self._clear_gateway_data()
         self.identifies[shard_id].append(discord.utils.utcnow())
         await super().before_identify_hook(shard_id, initial=initial)
 
-    async def on_command_error(self, ctx, error):
+    async def on_command_error(self, ctx: Context, error: commands.CommandError) -> None:
         if isinstance(error, commands.NoPrivateMessage):
             await ctx.author.send('This command cannot be used in private messages.')
         elif isinstance(error, commands.DisabledCommand):
@@ -150,17 +152,16 @@ class RoboDanny(commands.AutoShardedBot):
                 traceback.print_tb(original.__traceback__)
                 print(f'{original.__class__.__name__}: {original}', file=sys.stderr)
         elif isinstance(error, commands.ArgumentParsingError):
-            await ctx.send(error)
+            await ctx.send(str(error))
 
-    def get_guild_prefixes(self, guild, *, local_inject=_prefix_callable):
-        proxy_msg = discord.Object(id=0)
-        proxy_msg.guild = guild
-        return local_inject(self, proxy_msg)
+    def get_guild_prefixes(self, guild: discord.abc.Snowflake, *, local_inject=_prefix_callable) -> list[str]:
+        proxy_msg = ProxyObject(guild)
+        return local_inject(self, proxy_msg)  # type: ignore  # lying
 
-    def get_raw_guild_prefixes(self, guild_id):
+    def get_raw_guild_prefixes(self, guild_id: int) -> list[str]:
         return self.prefixes.get(guild_id, ['?', '!'])
 
-    async def set_guild_prefixes(self, guild, prefixes):
+    async def set_guild_prefixes(self, guild: discord.abc.Snowflake, prefixes: list[str]) -> None:
         if len(prefixes) == 0:
             await self.prefixes.put(guild.id, [])
         elif len(prefixes) > 10:
@@ -168,16 +169,18 @@ class RoboDanny(commands.AutoShardedBot):
         else:
             await self.prefixes.put(guild.id, sorted(set(prefixes), reverse=True))
 
-    async def add_to_blacklist(self, object_id):
+    async def add_to_blacklist(self, object_id: int):
         await self.blacklist.put(object_id, True)
 
-    async def remove_from_blacklist(self, object_id):
+    async def remove_from_blacklist(self, object_id: int):
         try:
             await self.blacklist.remove(object_id)
         except KeyError:
             pass
 
-    async def query_member_named(self, guild, argument, *, cache=False):
+    async def query_member_named(
+        self, guild: discord.Guild, argument: str, *, cache: bool = False
+    ) -> Optional[discord.Member]:
         """Queries a member by their name, name + discrim, or nickname.
 
         Parameters
@@ -202,7 +205,7 @@ class RoboDanny(commands.AutoShardedBot):
             members = await guild.query_members(argument, limit=100, cache=cache)
             return discord.utils.find(lambda m: m.name == argument or m.nick == argument, members)
 
-    async def get_or_fetch_member(self, guild, member_id):
+    async def get_or_fetch_member(self, guild: discord.Guild, member_id: int) -> Optional[discord.Member]:
         """Looks up a member in cache or fetches if not found.
 
         Parameters
@@ -222,7 +225,7 @@ class RoboDanny(commands.AutoShardedBot):
         if member is not None:
             return member
 
-        shard = self.get_shard(guild.shard_id)
+        shard: discord.ShardInfo = self.get_shard(guild.shard_id)  # type: ignore  # will never be None
         if shard.is_ws_ratelimited():
             try:
                 member = await guild.fetch_member(member_id)
@@ -236,7 +239,7 @@ class RoboDanny(commands.AutoShardedBot):
             return None
         return members[0]
 
-    async def resolve_member_ids(self, guild, member_ids):
+    async def resolve_member_ids(self, guild: discord.Guild, member_ids: Iterable[int]) -> AsyncIterator[discord.Member]:
         """Bulk resolves member IDs to member instances, if possible.
 
         Members that can't be resolved are discarded from the list.
@@ -268,7 +271,7 @@ class RoboDanny(commands.AutoShardedBot):
 
         total_need_resolution = len(needs_resolution)
         if total_need_resolution == 1:
-            shard = self.get_shard(guild.shard_id)
+            shard: discord.ShardInfo = self.get_shard(guild.shard_id)  # type: ignore  # will never be None
             if shard.is_ws_ratelimited():
                 try:
                     member = await guild.fetch_member(needs_resolution[0])
@@ -299,17 +302,17 @@ class RoboDanny(commands.AutoShardedBot):
 
         print(f'Ready: {self.user} (ID: {self.user.id})')
 
-    async def on_shard_resumed(self, shard_id):
+    async def on_shard_resumed(self, shard_id: int):
         print(f'Shard ID {shard_id} has resumed...')
         self.resumes[shard_id].append(discord.utils.utcnow())
 
     @discord.utils.cached_property
-    def stats_webhook(self):
+    def stats_webhook(self) -> discord.Webhook:
         wh_id, wh_token = self.config.stat_webhook
         hook = discord.Webhook.partial(id=wh_id, token=wh_token, session=self.session)
         return hook
 
-    def log_spammer(self, ctx, message, retry_after, *, autoblock=False):
+    async def log_spammer(self, ctx: Context, message: discord.Message, retry_after: float, *, autoblock: bool = False):
         guild_name = getattr(ctx.guild, 'name', 'No Guild (DMs)')
         guild_id = getattr(ctx.guild, 'id', None)
         fmt = 'User %s (ID %s) in guild %r (ID %s) spamming, retry_after: %.2fs'
@@ -323,14 +326,12 @@ class RoboDanny(commands.AutoShardedBot):
         embed.add_field(name='Guild Info', value=f'{guild_name} (ID: {guild_id})', inline=False)
         embed.add_field(name='Channel Info', value=f'{message.channel} (ID: {message.channel.id}', inline=False)
         embed.timestamp = discord.utils.utcnow()
-        return wh.send(embed=embed)
+        return await wh.send(embed=embed)
 
-    async def get_context(
-        self, origin: Union[discord.Interaction, discord.Message], /, *, cls=context.Context
-    ) -> context.Context:
+    async def get_context(self, origin: Union[discord.Interaction, discord.Message], /, *, cls=Context) -> Context:
         return await super().get_context(origin, cls=cls)
 
-    async def process_commands(self, message):
+    async def process_commands(self, message: discord.Message):
         ctx = await self.get_context(message)
 
         if ctx.command is None:
@@ -353,7 +354,7 @@ class RoboDanny(commands.AutoShardedBot):
                 del self._auto_spam_count[author_id]
                 await self.log_spammer(ctx, message, retry_after, autoblock=True)
             else:
-                self.log_spammer(ctx, message, retry_after)
+                await self.log_spammer(ctx, message, retry_after)
             return
         else:
             self._auto_spam_count.pop(author_id, None)
@@ -364,31 +365,21 @@ class RoboDanny(commands.AutoShardedBot):
             # Just in case we have any outstanding DB connections
             await ctx.release()
 
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
             return
         await self.process_commands(message)
 
-    async def on_guild_join(self, guild):
+    async def on_guild_join(self, guild: discord.Guild) -> None:
         if guild.id in self.blacklist:
             await guild.leave()
 
-    async def close(self):
+    async def close(self) -> None:
         await super().close()
         await self.session.close()
 
     async def start(self) -> None:
-        try:
-            await super().start(config.token, reconnect=True)
-        finally:
-            with open('prev_events.log', 'w', encoding='utf-8') as fp:
-                for data in self._prev_events:
-                    try:
-                        x = json.dumps(json.loads(data), ensure_ascii=True, indent=4)
-                    except:
-                        fp.write(f'{data}\n')
-                    else:
-                        fp.write(f'{x}\n')
+        await super().start(config.token, reconnect=True)
 
     @property
     def config(self):

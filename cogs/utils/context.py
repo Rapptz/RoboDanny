@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Union, Optional
 from discord.ext import commands
 import asyncio
 import discord
 import io
+
+
+if TYPE_CHECKING:
+    from bot import RoboDanny
 
 
 class _ContextDBAcquire:
@@ -66,6 +70,11 @@ class ConfirmationView(discord.ui.View):
 
 
 class Context(commands.Context):
+    channel: Union[discord.VoiceChannel, discord.TextChannel, discord.Thread, discord.DMChannel]
+    prefix: str
+    command: commands.Command[Any, ..., Any]
+    bot: RoboDanny
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.pool = self.bot.pool
@@ -257,3 +266,11 @@ class Context(commands.Context):
             return await self.send(file=discord.File(fp, filename='message_too_long.txt'), **kwargs)
         else:
             return await self.send(content)
+
+
+class GuildContext(Context):
+    author: discord.Member
+    guild: discord.Guild
+    channel: Union[discord.VoiceChannel, discord.TextChannel, discord.Thread]
+    me: discord.Member
+    prefix: str
