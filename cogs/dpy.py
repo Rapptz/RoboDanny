@@ -383,5 +383,5 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         await ctx.send(f'<{url}>')
 
-def setup(bot):
-    bot.add_cog(DPYExclusive(bot))
+async def setup(bot):
+    await bot.add_cog(DPYExclusive(bot))

@@ -258,5 +258,5 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
             e.add_field(name='See More', value=f'[`{discord.utils.escape_markdown(query)}` results]({resp.url})')
             await ctx.send(embed=e)
 
-def setup(bot):
-    bot.add_cog(Lounge(bot))
+async def setup(bot):
+    await bot.add_cog(Lounge(bot))

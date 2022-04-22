@@ -93,5 +93,5 @@ class Funhouse(commands.Cog):
         embed.add_field(name=f'To {dest}', value=ret.text, inline=False)
         await ctx.send(embed=embed)
 
-def setup(bot):
-    bot.add_cog(Funhouse(bot))
+async def setup(bot):
+    await bot.add_cog(Funhouse(bot))

@@ -115,8 +115,7 @@ class BannedMember(commands.Converter):
             except discord.NotFound:
                 raise commands.BadArgument('This member has not been banned before.') from None
 
-        ban_list = await ctx.guild.bans()
-        entity = discord.utils.find(lambda u: str(u.user) == argument, ban_list)
+        entity = await discord.utils.find(lambda u: str(u.user) == argument, ctx.guild.bans(limit=None))
 
         if entity is None:
             raise commands.BadArgument('This member has not been banned before.')
@@ -1839,5 +1838,5 @@ class Mod(commands.Cog):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send('Missing a duration to selfmute for.')
 
-def setup(bot):
-    bot.add_cog(Mod(bot))
+async def setup(bot):
+    await bot.add_cog(Mod(bot))

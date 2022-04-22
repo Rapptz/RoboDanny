@@ -1089,7 +1089,7 @@ async def on_error(self, event, *args, **kwargs):
     except:
         pass
 
-def setup(bot):
+async def setup(bot):
     if not hasattr(bot, 'command_stats'):
         bot.command_stats = Counter()
 
@@ -1097,12 +1097,12 @@ def setup(bot):
         bot.socket_stats = Counter()
 
     cog = Stats(bot)
-    bot.add_cog(cog)
+    await bot.add_cog(cog)
     bot._stats_cog_gateway_handler = handler = GatewayHandler(cog)
     logging.getLogger().addHandler(handler)
     commands.AutoShardedBot.on_error = on_error
 
-def teardown(bot):
+async def teardown(bot):
     commands.AutoShardedBot.on_error = old_on_error
     logging.getLogger().removeHandler(bot._stats_cog_gateway_handler)
     del bot._stats_cog_gateway_handler

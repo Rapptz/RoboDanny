@@ -310,7 +310,7 @@ class API(commands.Cog):
     async def rtfm(self, ctx, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity.
 
-        Events, objects, and functions are all supported through 
+        Events, objects, and functions are all supported through
         a cruddy fuzzy algorithm.
         """
         key = self.transform_rtfm_language_key(ctx, 'stable')
@@ -836,5 +836,5 @@ class API(commands.Cog):
         if isinstance(error, (commands.BadArgument, commands.MissingRequiredArgument)):
             return await ctx.send(error)
 
-def setup(bot):
-    bot.add_cog(API(bot))
+async def setup(bot):
+    await bot.add_cog(API(bot))

@@ -1981,5 +1981,5 @@ class Tournament(commands.Cog):
             await ctx.send('Updated switch code.')
 
 
-def setup(bot):
-    bot.add_cog(Tournament(bot))
+async def setup(bot):
+    await bot.add_cog(Tournament(bot))

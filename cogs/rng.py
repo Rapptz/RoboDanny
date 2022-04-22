@@ -183,5 +183,5 @@ class RNG(commands.Cog):
 
         await ctx.send('\n'.join(builder))
 
-def setup(bot):
-    bot.add_cog(RNG(bot))
+async def setup(bot):
+    await bot.add_cog(RNG(bot))

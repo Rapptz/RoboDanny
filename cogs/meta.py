@@ -715,5 +715,5 @@ class Meta(commands.Cog):
         await ctx.send('go')
 
 
-def setup(bot):
-    bot.add_cog(Meta(bot))
+async def setup(bot):
+    await bot.add_cog(Meta(bot))

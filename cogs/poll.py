@@ -86,5 +86,5 @@ class Polls(commands.Cog):
         for emoji, _ in choices:
             await poll.add_reaction(emoji)
 
-def setup(bot):
-    bot.add_cog(Polls(bot))
+async def setup(bot):
+    await bot.add_cog(Polls(bot))

@@ -454,5 +454,5 @@ class Emoji(commands.Cog):
                 else:
                     return await ctx.send(f'Created {created}')
 
-def setup(bot):
-    bot.add_cog(Emoji(bot))
+async def setup(bot):
+    await bot.add_cog(Emoji(bot))

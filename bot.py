@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from discord.ext import commands
 import discord
 from cogs.utils import checks, context, db
@@ -9,6 +11,7 @@ import logging
 import traceback
 import aiohttp
 import sys
+from typing import Union
 from collections import Counter, deque, defaultdict
 
 import config
@@ -64,6 +67,7 @@ class RoboDanny(commands.AutoShardedBot):
             voice_states=True,
             messages=True,
             reactions=True,
+            message_content=True,
         )
         super().__init__(
             command_prefix=_prefix_callable,
@@ -81,7 +85,6 @@ class RoboDanny(commands.AutoShardedBot):
         self.carbon_key = config.carbon_key
         self.bots_key = config.bots_key
         self.challonge_api_key = config.challonge_api_key
-        self.session = aiohttp.ClientSession(loop=self.loop)
 
         self._prev_events = deque(maxlen=10)
 
@@ -106,9 +109,12 @@ class RoboDanny(commands.AutoShardedBot):
         # Triggering the rate limit 5 times in a row will auto-ban the user from the bot.
         self._auto_spam_count = Counter()
 
+
+    async def setup_hook(self) -> None:
+        self.session = aiohttp.ClientSession()
         for extension in initial_extensions:
             try:
-                self.load_extension(extension)
+                await self.load_extension(extension)
             except Exception as e:
                 print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
@@ -320,8 +326,11 @@ class RoboDanny(commands.AutoShardedBot):
         embed.timestamp = discord.utils.utcnow()
         return wh.send(embed=embed)
 
+    async def get_context(self, origin: Union[discord.Interaction, discord.Message], /, *, cls = context.Context) -> context.Context:
+        return await super().get_context(origin, cls=cls)
+
     async def process_commands(self, message):
-        ctx = await self.get_context(message, cls=context.Context)
+        ctx = await self.get_context(message)
 
         if ctx.command is None:
             return
@@ -367,9 +376,9 @@ class RoboDanny(commands.AutoShardedBot):
         await super().close()
         await self.session.close()
 
-    def run(self):
+    async def start(self) -> None:
         try:
-            super().run(config.token, reconnect=True)
+            await super().start(config.token, reconnect=True)
         finally:
             with open('prev_events.log', 'w', encoding='utf-8') as fp:
                 for data in self._prev_events:

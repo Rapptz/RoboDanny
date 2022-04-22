@@ -278,7 +278,7 @@ class GearPageSource(menus.ListPageSource):
                     break
         elif isinstance(merch, Gear):
             price, gear, skill = merch.price, merch, merch.main
-            description = discord.Embed.Empty
+            description = None
 
         e = discord.Embed(colour=0x19D719, title=gear.name, description=description)
 
@@ -1228,5 +1228,5 @@ class Splatoon(commands.Cog):
         await self.splat2_data.put('maps', entry)
         await ctx.send('\N{OK HAND SIGN}')
 
-def setup(bot):
-    bot.add_cog(Splatoon(bot))
+async def setup(bot):
+    await bot.add_cog(Splatoon(bot))

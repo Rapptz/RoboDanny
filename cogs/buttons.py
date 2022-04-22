@@ -443,5 +443,5 @@ class Buttons(commands.Cog):
         pages = RoboPages(UrbanDictionaryPageSource(data), ctx=ctx)
         await pages.start()
 
-def setup(bot):
-    bot.add_cog(Buttons(bot))
+async def setup(bot):
+    await bot.add_cog(Buttons(bot))

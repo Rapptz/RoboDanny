@@ -49,5 +49,5 @@ class Carbonitex(commands.Cog):
     async def on_ready(self):
         await self.update()
 
-def setup(bot):
-    bot.add_cog(Carbonitex(bot))
+async def setup(bot):
+    await bot.add_cog(Carbonitex(bot))
