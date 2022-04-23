@@ -1,29 +1,27 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from discord.ext import commands
-import aiohttp
+import discord
 import json
 import logging
 
+if TYPE_CHECKING:
+    from bot import RoboDanny
+
 log = logging.getLogger(__name__)
 
-CARBONITEX_API_BOTDATA = 'https://www.carbonitex.net/discord/data/botdata.php'
 DISCORD_BOTS_API = 'https://discord.bots.gg/api/v1'
 
 
-class Carbonitex(commands.Cog):
-    """Cog for updating carbonitex.net and bots.discord.pw bot information."""
+class DiscordBots(commands.Cog):
+    """Cog for updating bots.discord.pw bot information."""
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
 
-    async def update(self):
+    async def update(self) -> None:
         guild_count = len(self.bot.guilds)
-        carbon_payload = {
-            'key': self.bot.carbon_key,
-            'servercount': guild_count,
-        }
-
-        async with self.bot.session.post(CARBONITEX_API_BOTDATA, data=carbon_payload) as resp:
-            log.info(f'Carbon statistics returned {resp.status} for {carbon_payload}')
 
         payload = json.dumps(
             {
@@ -42,17 +40,17 @@ class Carbonitex(commands.Cog):
             log.info(f'DBots statistics returned {resp.status} for {payload}')
 
     @commands.Cog.listener()
-    async def on_guild_join(self, guild):
+    async def on_guild_join(self, guild: discord.Guild) -> None:
         await self.update()
 
     @commands.Cog.listener()
-    async def on_guild_remove(self, guild):
+    async def on_guild_remove(self, guild: discord.Guild) -> None:
         await self.update()
 
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         await self.update()
 
 
-async def setup(bot):
-    await bot.add_cog(Carbonitex(bot))
+async def setup(bot: RoboDanny):
+    await bot.add_cog(DiscordBots(bot))
