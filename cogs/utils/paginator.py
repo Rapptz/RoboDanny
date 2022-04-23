@@ -128,7 +128,7 @@ class RoboPages(discord.ui.View):
         else:
             await interaction.response.send_message('An unknown error occurred, sorry', ephemeral=True)
 
-    async def start(self) -> None:
+    async def start(self, *, content: Optional[str] = None) -> None:
         if self.check_embeds and not self.ctx.channel.permissions_for(self.ctx.me).embed_links:  # type: ignore
             await self.ctx.send('Bot does not have embed links permission in this channel.')
             return
@@ -136,6 +136,9 @@ class RoboPages(discord.ui.View):
         await self.source._prepare_once()
         page = await self.source.get_page(0)
         kwargs = await self._get_kwargs_from_page(page)
+        if content:
+            kwargs.setdefault('content', content)
+
         self._update_labels(0)
         self.message = await self.ctx.send(**kwargs, view=self)
 
