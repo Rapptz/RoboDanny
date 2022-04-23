@@ -111,20 +111,7 @@ class FriendlyTimeResult:
             self.arg = remaining
 
 
-class UFTMeta(type):
-    def __getitem__(cls, args: tuple[Any, ...]) -> type[FriendlyTimeResult]:
-        if len(args) == 0:
-            converter, default = None, None
-        elif len(args) == 1:
-            converter, default = args[0], None
-        else:
-            converter, default = args
-
-        # This is lying to the type checker
-        return cls(converter, default=default)
-
-
-class UserFriendlyTime(commands.Converter, metaclass=UFTMeta):
+class UserFriendlyTime(commands.Converter):
     """That way quotes aren't absolutely necessary."""
 
     def __init__(

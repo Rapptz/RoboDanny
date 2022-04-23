@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing_extensions import Annotated
 
 from .utils import checks, db, time, formats
 from discord.ext import commands
@@ -233,7 +234,7 @@ class Reminder(commands.Cog):
         self,
         ctx: Context,
         *,
-        when: time.UserFriendlyTime[commands.clean_content, '...'],
+        when: Annotated[time.FriendlyTimeResult, time.UserFriendlyTime(commands.clean_content, default='…')],
     ):
         """Reminds you of something after a certain amount of time.
 
