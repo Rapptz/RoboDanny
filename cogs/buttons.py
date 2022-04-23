@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING, Any, MutableMapping, Optional, TypedDict
+from typing_extensions import Self
 from discord.ext import commands, menus
 import discord
 from .utils.paginator import RoboPages
-from lxml import etree
 import random
 import logging
-from urllib.parse import quote as uriquote
 from lru import LRU
 import yarl
 import io
@@ -13,9 +15,14 @@ import re
 
 log = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from .utils.context import GuildContext, Context
+    from .utils.paginator import RoboPages
+    from bot import RoboDanny
+
 
 def can_use_spoiler():
-    def predicate(ctx):
+    def predicate(ctx: GuildContext) -> bool:
         if ctx.guild is None:
             raise commands.BadArgument('Cannot be used in private messages.')
 
@@ -36,10 +43,10 @@ SPOILER_EMOJI_ID = 430469957042831371
 class UrbanDictionaryPageSource(menus.ListPageSource):
     BRACKETED = re.compile(r'(\[(.+?)\])')
 
-    def __init__(self, data):
+    def __init__(self, data: list[dict[str, Any]]):
         super().__init__(entries=data, per_page=1)
 
-    def cleanup_definition(self, definition, *, regex=BRACKETED):
+    def cleanup_definition(self, definition: str, *, regex=BRACKETED) -> str:
         def repl(m):
             word = m.group(2)
             return f'[{word}](http://{word.replace(" ", "-")}.urbanup.com)'
@@ -49,7 +56,7 @@ class UrbanDictionaryPageSource(menus.ListPageSource):
             return ret[0:2000] + ' [...]'
         return ret
 
-    async def format_page(self, menu, entry):
+    async def format_page(self, menu: RoboPages, entry: dict[str, Any]):
         maximum = self.get_max_pages()
         title = f'{entry["word"]}: {menu.current_page + 1} out of {maximum}' if maximum else entry['word']
         embed = discord.Embed(title=title, colour=0xE86222, url=entry['permalink'])
@@ -74,12 +81,12 @@ class UrbanDictionaryPageSource(menus.ListPageSource):
 
 
 class RedditMediaURL:
-    def __init__(self, url):
-        self.url = url
-        self.filename = url.parts[1] + '.mp4'
+    def __init__(self, url: yarl.URL):
+        self.url: yarl.URL = url
+        self.filename: str = url.parts[1] + '.mp4'
 
     @classmethod
-    async def convert(cls, ctx, argument):
+    async def convert(cls, ctx: Context, argument: str) -> Self:
         try:
             url = yarl.URL(argument)
         except Exception as e:
@@ -127,20 +134,28 @@ class RedditMediaURL:
             return cls(fallback_url)
 
 
+class SpoilerCacheData(TypedDict):
+    author_id: int
+    channel_id: int
+    title: str
+    text: Optional[str]
+    attachments: list[discord.Attachment]
+
+
 class SpoilerCache:
     __slots__ = ('author_id', 'channel_id', 'title', 'text', 'attachments')
 
-    def __init__(self, data):
-        self.author_id = data['author_id']
-        self.channel_id = data['channel_id']
-        self.title = data['title']
-        self.text = data['text']
-        self.attachments = data['attachments']
+    def __init__(self, data: SpoilerCacheData):
+        self.author_id: int = data['author_id']
+        self.channel_id: int = data['channel_id']
+        self.title: str = data['title']
+        self.text: Optional[str] = data['text']
+        self.attachments: list[discord.Attachment] = data['attachments']
 
-    def has_single_image(self):
-        return self.attachments and self.attachments[0].filename.lower().endswith(('.gif', '.png', '.jpg', '.jpeg'))
+    def has_single_image(self) -> bool:
+        return bool(self.attachments) and self.attachments[0].filename.lower().endswith(('.gif', '.png', '.jpg', '.jpeg'))
 
-    def to_embed(self, bot):
+    def to_embed(self, bot: RoboDanny) -> discord.Embed:
         embed = discord.Embed(title=f'{self.title} Spoiler', colour=0x01AEEE)
         if self.text:
             embed.description = self.text
@@ -163,7 +178,7 @@ class SpoilerCache:
 
         return embed
 
-    def to_spoiler_embed(self, ctx, storage_message):
+    def to_spoiler_embed(self, ctx: Context, storage_message: discord.abc.Snowflake) -> discord.Embed:
         description = 'React with <:spoiler:430469957042831371> to reveal the spoiler.'
         embed = discord.Embed(title=f'{self.title} Spoiler', description=description)
         if self.has_single_image() and self.text is None:
@@ -179,38 +194,55 @@ class SpoilerCooldown(commands.CooldownMapping):
     def __init__(self):
         super().__init__(commands.Cooldown(1, 10.0), commands.BucketType.user)
 
-    def _bucket_key(self, tup):
+    def _bucket_key(self, tup: tuple[int, int]) -> tuple[int, int]:
         return tup
 
-    def is_rate_limited(self, message_id, user_id):
-        bucket = self.get_bucket((message_id, user_id))
+    def is_rate_limited(self, message_id: int, user_id: int) -> bool:
+        # This is a lie but it should just work as-is
+        bucket = self.get_bucket((message_id, user_id))  # type: ignore
         return bucket.update_rate_limit() is not None
 
 
 class Buttons(commands.Cog):
     """Buttons that make you feel."""
 
-    def __init__(self, bot):
-        self.bot = bot
-        self._spoiler_cache = LRU(128)
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
+        self._spoiler_cache: MutableMapping[int, SpoilerCache] = LRU(128)
         self._spoiler_cooldown = SpoilerCooldown()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='\N{RADIO BUTTON}')
 
+    @property
+    def feedback_channel(self) -> Optional[discord.TextChannel]:
+        guild = self.bot.get_guild(182325885867786241)
+        if guild is None:
+            return None
+
+        return guild.get_channel(263814407191134218)  # type: ignore
+
+    @property
+    def storage_channel(self) -> Optional[discord.TextChannel]:
+        guild = self.bot.get_guild(182325885867786241)
+        if guild is None:
+            return None
+
+        return guild.get_channel(430229522340773899)  # type: ignore
+
     @commands.command(hidden=True)
-    async def feelgood(self, ctx):
+    async def feelgood(self, ctx: Context):
         """press"""
         await ctx.send('*pressed*')
 
     @commands.command(hidden=True)
-    async def feelbad(self, ctx):
+    async def feelbad(self, ctx: Context):
         """depress"""
         await ctx.send('*depressed*')
 
     @commands.command()
-    async def love(self, ctx):
+    async def love(self, ctx: Context):
         """What is love?"""
         responses = [
             'https://www.youtube.com/watch?v=HEXWRTEbj1I',
@@ -223,13 +255,13 @@ class Buttons(commands.Cog):
         await ctx.send(response)
 
     @commands.command(hidden=True)
-    async def bored(self, ctx):
+    async def bored(self, ctx: Context):
         """boredom looms"""
         await ctx.send('http://i.imgur.com/BuTKSzf.png')
 
     @commands.command()
     @commands.cooldown(rate=1, per=60.0, type=commands.BucketType.user)
-    async def feedback(self, ctx, *, content: str):
+    async def feedback(self, ctx: Context, *, content: str):
         """Gives feedback about the bot.
 
         This is a quick way to request features or bug fixes
@@ -242,11 +274,8 @@ class Buttons(commands.Cog):
         """
 
         e = discord.Embed(title='Feedback', colour=0x738BD7)
-        guild = self.bot.get_guild(182325885867786241)
-        if guild is None:
-            return
 
-        channel = guild.get_channel(263814407191134218)
+        channel = self.feedback_channel
         if channel is None:
             return
 
@@ -265,7 +294,7 @@ class Buttons(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def pm(self, ctx, user_id: int, *, content: str):
+    async def pm(self, ctx: Context, user_id: int, *, content: str):
         user = self.bot.get_user(user_id) or (await self.bot.fetch_user(user_id))
 
         fmt = (
@@ -279,8 +308,10 @@ class Buttons(commands.Cog):
         else:
             await ctx.send('PM successfully sent.')
 
-    async def redirect_post(self, ctx, title, text):
-        storage = self.bot.get_guild(182325885867786241).get_channel(430229522340773899)
+    async def redirect_post(self, ctx: Context, title, text):
+        storage = self.storage_channel
+        if storage is None:
+            raise RuntimeError('Spoiler storage was not found')
 
         supported_attachments = ('.png', '.jpg', '.jpeg', '.webm', '.gif', '.mp4', '.txt')
         if not all(attach.filename.lower().endswith(supported_attachments) for attach in ctx.message.attachments):
@@ -294,7 +325,7 @@ class Buttons(commands.Cog):
                 if resp.status != 200:
                     continue
 
-                content_length = int(resp.headers.get('Content-Length'))
+                content_length = int(resp.headers['Content-Length'])
 
                 # file too big, skip it
                 if (total_bytes + content_length) > eight_mib:
@@ -322,7 +353,7 @@ class Buttons(commands.Cog):
         except discord.HTTPException as e:
             raise RuntimeError(f'Sorry. Could not store message due to {e.__class__.__name__}: {e}.') from e
 
-        to_dict = {
+        to_dict: SpoilerCacheData = {
             'author_id': ctx.author.id,
             'channel_id': ctx.channel.id,
             'attachments': message.attachments,
@@ -333,34 +364,36 @@ class Buttons(commands.Cog):
         cache = SpoilerCache(to_dict)
         return message, cache
 
-    async def get_spoiler_cache(self, channel_id, message_id):
+    async def get_spoiler_cache(self, channel_id: int, message_id: int) -> Optional[SpoilerCache]:
         try:
             return self._spoiler_cache[message_id]
         except KeyError:
             pass
 
-        storage = self.bot.get_guild(182325885867786241).get_channel(430229522340773899)
+        storage = self.storage_channel
+        if storage is None:
+            return None
 
         # slow path requires 2 lookups
         # first is looking up the message_id of the original post
         # to get the embed footer information which points to the storage message ID
         # the second is getting the storage message ID and extracting the information from it
-        channel = self.bot.get_channel(channel_id)
+        channel: Optional[discord.abc.Messageable] = self.bot.get_channel(channel_id)  # type: ignore
         if not channel:
             return None
 
         try:
             original_message = await channel.fetch_message(message_id)
-            storage_message_id = int(original_message.embeds[0].footer.text)
+            storage_message_id = int(original_message.embeds[0].footer.text)  # type: ignore  # Guarded by exception
             message = await storage.fetch_message(storage_message_id)
         except:
             # this message is probably not the proper format or the storage died
             return None
 
         data = message.embeds[0]
-        to_dict = {
-            'author_id': int(data.author.name),
-            'channel_id': int(data.footer.text),
+        to_dict: SpoilerCacheData = {
+            'author_id': int(data.author.name),  # type: ignore
+            'channel_id': int(data.footer.text),  # type: ignore
             'attachments': message.attachments,
             'title': data.title,
             'text': None if not data.description else data.description,
@@ -370,7 +403,7 @@ class Buttons(commands.Cog):
         return cache
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.emoji.id != SPOILER_EMOJI_ID:
             return
 
@@ -382,12 +415,14 @@ class Buttons(commands.Cog):
             return
 
         cache = await self.get_spoiler_cache(payload.channel_id, payload.message_id)
-        embed = cache.to_embed(self.bot)
-        await user.send(embed=embed)
+
+        if cache is not None:
+            embed = cache.to_embed(self.bot)
+            await user.send(embed=embed)
 
     @commands.command()
     @can_use_spoiler()
-    async def spoiler(self, ctx, title, *, text=None):
+    async def spoiler(self, ctx: Context, title: str, *, text: Optional[str] = None):
         """Marks your post a spoiler with a title.
 
         Once your post is marked as a spoiler it will be
@@ -417,7 +452,7 @@ class Buttons(commands.Cog):
 
     @commands.command(usage='<url>')
     @commands.cooldown(1, 5.0, commands.BucketType.member)
-    async def vreddit(self, ctx, *, reddit: RedditMediaURL):
+    async def vreddit(self, ctx: Context, *, reddit: RedditMediaURL):
         """Downloads a v.redd.it submission.
 
         Regular reddit URLs or v.redd.it URLs are supported.
@@ -435,12 +470,12 @@ class Buttons(commands.Cog):
             await ctx.send(file=discord.File(io.BytesIO(data), filename=reddit.filename))
 
     @vreddit.error
-    async def on_vreddit_error(self, ctx, error):
+    async def on_vreddit_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
-            await ctx.send(error)
+            await ctx.send(str(error))
 
     @commands.command(name='urban')
-    async def _urban(self, ctx, *, word):
+    async def _urban(self, ctx: Context, *, word: str):
         """Searches urban dictionary."""
 
         url = 'http://api.urbandictionary.com/v0/define'
@@ -457,5 +492,5 @@ class Buttons(commands.Cog):
         await pages.start()
 
 
-async def setup(bot):
+async def setup(bot: RoboDanny):
     await bot.add_cog(Buttons(bot))

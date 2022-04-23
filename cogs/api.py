@@ -910,5 +910,5 @@ class API(commands.Cog):
             return await ctx.send(str(error))
 
 
-async def setup(bot):
+async def setup(bot: RoboDanny):
     await bot.add_cog(API(bot))
