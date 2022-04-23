@@ -9,7 +9,7 @@ import logging
 import traceback
 import aiohttp
 import sys
-from typing import TYPE_CHECKING, AsyncIterator, Iterable, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable, Optional, Union
 from collections import Counter, defaultdict
 
 import config
@@ -67,6 +67,10 @@ class ProxyObject(discord.Object):
 class RoboDanny(commands.AutoShardedBot):
     user: discord.ClientUser
     pool: asyncpg.Pool
+    command_stats: Counter[str]
+    socket_stats: Counter[str]
+    gateway_handler: Any
+    bot_app_info: discord.AppInfo
 
     def __init__(self):
         allowed_mentions = discord.AllowedMentions(roles=False, everyone=False, users=True)
@@ -120,12 +124,19 @@ class RoboDanny(commands.AutoShardedBot):
         # from using the bot
         self.blacklist: Config[bool] = Config('blacklist.json', loop=self.loop)
 
+        self.bot_app_info = await self.application_info()
+        self.owner_id = self.bot_app_info.owner.id
+
         for extension in initial_extensions:
             try:
                 await self.load_extension(extension)
             except Exception as e:
                 print(f'Failed to load extension {extension}.', file=sys.stderr)
                 traceback.print_exc()
+
+    @property
+    def owner(self) -> discord.User:
+        return self.bot_app_info.owner
 
     def _clear_gateway_data(self) -> None:
         one_week_ago = discord.utils.utcnow() - datetime.timedelta(days=7)
