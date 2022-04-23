@@ -1,8 +1,16 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from discord.ext import commands
+import discord
 import asyncio
 
+if TYPE_CHECKING:
+    from bot import RoboDanny
+    from .utils.context import GuildContext
 
-def to_emoji(c):
+
+def to_emoji(c: int) -> str:
     base = 0x1F1E6
     return chr(base + c)
 
@@ -10,22 +18,22 @@ def to_emoji(c):
 class Polls(commands.Cog):
     """Poll voting system."""
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
 
     @commands.command()
     @commands.guild_only()
-    async def poll(self, ctx, *, question):
+    async def poll(self, ctx: GuildContext, *, question: str):
         """Interactively creates a poll with the following question.
 
         To vote, use reactions!
         """
 
         # a list of messages to delete when we're all done
-        messages = [ctx.message]
+        messages: list[discord.Message] = [ctx.message]
         answers = []
 
-        def check(m):
+        def check(m: discord.Message):
             return m.author == ctx.author and m.channel == ctx.channel and len(m.content) <= 100
 
         for i in range(20):
@@ -54,13 +62,13 @@ class Polls(commands.Cog):
             await actual_poll.add_reaction(emoji)
 
     @poll.error
-    async def poll_error(self, ctx, error):
+    async def poll_error(self, ctx: GuildContext, error: commands.CommandError):
         if isinstance(error, commands.MissingRequiredArgument):
             return await ctx.send('Missing the question.')
 
     @commands.command()
     @commands.guild_only()
-    async def quickpoll(self, ctx, *questions_and_choices: str):
+    async def quickpoll(self, ctx: GuildContext, *questions_and_choices: str):
         """Makes a poll quickly.
 
         The first argument is the question and the rest are the choices.
@@ -89,5 +97,5 @@ class Polls(commands.Cog):
             await poll.add_reaction(emoji)
 
 
-async def setup(bot):
+async def setup(bot: RoboDanny):
     await bot.add_cog(Polls(bot))
