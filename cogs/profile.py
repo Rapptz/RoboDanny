@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, Optional, Union
+from typing_extensions import Annotated
+
 from discord.ext import commands
 from .utils import db
 from .utils.formats import plural
@@ -5,6 +9,11 @@ from collections import defaultdict
 
 import discord
 import re
+
+if TYPE_CHECKING:
+    from bot import RoboDanny
+    from .utils.context import GuildContext, Context
+    from cogs.splatoon import Splatoon
 
 
 class Profiles(db.Table):
@@ -22,7 +31,7 @@ class Profiles(db.Table):
 
 
 class DisambiguateMember(commands.IDConverter):
-    async def convert(self, ctx, argument):
+    async def convert(self, ctx: GuildContext, argument: str) -> discord.abc.User:
         # check if it's a user ID or mention
         match = self._get_id_match(argument) or re.match(r'<@!?([0-9]+)>$', argument)
 
@@ -74,7 +83,7 @@ class DisambiguateMember(commands.IDConverter):
         return result
 
 
-def valid_nnid(argument):
+def valid_nnid(argument: str) -> str:
     arg = argument.strip('"')
     if len(arg) > 16:
         raise commands.BadArgument('An NNID has a maximum of 16 characters.')
@@ -84,54 +93,64 @@ def valid_nnid(argument):
 _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
 
 
-def valid_rank(argument, *, _rank=_rank):
-    m = _rank.match(argument.strip('"'))
-    if m is None:
-        raise commands.BadArgument('Could not figure out mode or rank.')
+class SplatoonRank:
+    mode: str
+    rank: str
+    number: int
 
-    mode = m.group('mode')
-    valid = {
-        'zones': 'Splat Zones',
-        'splat zones': 'Splat Zones',
-        'sz': 'Splat Zones',
-        'zone': 'Splat Zones',
-        'splat': 'Splat Zones',
-        'tower': 'Tower Control',
-        'control': 'Tower Control',
-        'tc': 'Tower Control',
-        'tower control': 'Tower Control',
-        'rain': 'Rainmaker',
-        'rainmaker': 'Rainmaker',
-        'rain maker': 'Rainmaker',
-        'rm': 'Rainmaker',
-        'clam blitz': 'Clam Blitz',
-        'clam': 'Clam Blitz',
-        'blitz': 'Clam Blitz',
-        'cb': 'Clam Blitz',
-    }
+    def __init__(self, argument: str, *, _rank=_rank):
+        m = _rank.match(argument.strip('"'))
+        if m is None:
+            raise commands.BadArgument('Could not figure out mode or rank.')
 
-    try:
-        mode = valid[mode.lower()]
-    except KeyError:
-        raise commands.BadArgument(f'Unknown Splatoon 2 mode: {mode}') from None
+        mode = m.group('mode')
+        valid = {
+            'zones': 'Splat Zones',
+            'splat zones': 'Splat Zones',
+            'sz': 'Splat Zones',
+            'zone': 'Splat Zones',
+            'splat': 'Splat Zones',
+            'tower': 'Tower Control',
+            'control': 'Tower Control',
+            'tc': 'Tower Control',
+            'tower control': 'Tower Control',
+            'rain': 'Rainmaker',
+            'rainmaker': 'Rainmaker',
+            'rain maker': 'Rainmaker',
+            'rm': 'Rainmaker',
+            'clam blitz': 'Clam Blitz',
+            'clam': 'Clam Blitz',
+            'blitz': 'Clam Blitz',
+            'cb': 'Clam Blitz',
+        }
 
-    rank = m.group('rank').upper()
-    if rank == 'S-':
-        rank = 'S'
+        try:
+            mode = valid[mode.lower()]
+        except KeyError:
+            raise commands.BadArgument(f'Unknown Splatoon 2 mode: {mode}') from None
 
-    number = m.group('number')
-    if number:
-        number = int(number)
+        rank = m.group('rank').upper()
+        if rank == 'S-':
+            rank = 'S'
 
-        if number and rank not in ('S+', 'X'):
-            raise commands.BadArgument('Only S+ or X can input numbers.')
-        if rank == 'S+' and number > 10:
-            raise commands.BadArgument('S+10 is the current cap.')
+        number = m.group('number')
+        if number is not None:
+            number = int(number)
 
-    return mode, {'rank': rank, 'number': number}
+            if number and rank not in ('S+', 'X'):
+                raise commands.BadArgument('Only S+ or X can input numbers.')
+            if rank == 'S+' and number > 10:
+                raise commands.BadArgument('S+10 is the current cap.')
+
+        self.mode = mode
+        self.rank = rank
+        self.number = number or 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {self.mode: {'rank': self.rank, 'number': self.number}}
 
 
-def valid_squad(argument):
+def valid_squad(argument: str) -> str:
     arg = argument.strip('"')
     if len(arg) > 100:
         raise commands.BadArgument('Squad name way too long. Keep it less than 100 characters.')
@@ -144,7 +163,7 @@ def valid_squad(argument):
 _friend_code = re.compile(r'^(?:(?:SW|3DS)[- _]?)?(?P<one>[0-9]{4})[- _]?(?P<two>[0-9]{4})[- _]?(?P<three>[0-9]{4})$')
 
 
-def valid_fc(argument, *, _fc=_friend_code):
+def valid_fc(argument: str, *, _fc=_friend_code) -> str:
     fc = argument.upper().strip('"')
     m = _fc.match(fc)
     if m is None:
@@ -154,8 +173,8 @@ def valid_fc(argument, *, _fc=_friend_code):
 
 
 class SplatoonWeapon(commands.Converter):
-    async def convert(self, ctx, argument):
-        cog = ctx.bot.get_cog('Splatoon')
+    async def convert(self, ctx: Context, argument: str):
+        cog: Optional[Splatoon] = ctx.bot.get_cog('Splatoon')  # type: ignore
         if cog is None:
             raise commands.BadArgument('Splatoon related commands seemingly disabled.')
 
@@ -176,19 +195,21 @@ class SplatoonWeapon(commands.Converter):
 class Profile(commands.Cog):
     """Manage your Splatoon profile"""
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='\N{ADULT}')
 
-    async def cog_command_error(self, ctx, error):
+    async def cog_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
-            await ctx.send(error)
+            await ctx.send(str(error))
 
     @commands.group(invoke_without_command=True)
-    async def profile(self, ctx, *, member: DisambiguateMember = None):
+    async def profile(
+        self, ctx: Context, *, member: Annotated[Union[discord.Member, discord.User], DisambiguateMember] = None
+    ):
         """Manages your profile.
 
         If you don't pass in a subcommand, it will do a lookup based on
@@ -245,7 +266,7 @@ class Profile(commands.Cog):
         e.add_field(name='Squad', value=record['squad'] or 'N/A')
         await ctx.send(embed=e)
 
-    async def edit_fields(self, ctx, **fields):
+    async def edit_fields(self, ctx: Context, **fields: str):
         keys = ', '.join(fields)
         values = ', '.join(f'${2 + i}' for i in range(len(fields)))
 
@@ -259,31 +280,31 @@ class Profile(commands.Cog):
         await ctx.db.execute(query, ctx.author.id, *fields.values())
 
     @profile.command()
-    async def nnid(self, ctx, *, NNID: valid_nnid):
+    async def nnid(self, ctx: Context, *, NNID: Annotated[str, valid_nnid]):
         """Sets the NNID portion of your profile."""
         await self.edit_fields(ctx, nnid=NNID)
         await ctx.send('Updated NNID.')
 
     @profile.command()
-    async def squad(self, ctx, *, squad: valid_squad):
+    async def squad(self, ctx: Context, *, squad: Annotated[str, valid_squad]):
         """Sets the Splatoon 2 squad part of your profile."""
         await self.edit_fields(ctx, squad=squad)
         await ctx.send('Updated squad.')
 
     @profile.command(name='3ds')
-    async def profile_3ds(self, ctx, *, fc: valid_fc):
+    async def profile_3ds(self, ctx: Context, *, fc: Annotated[str, valid_fc]):
         """Sets the 3DS friend code of your profile."""
         await self.edit_fields(ctx, fc_3ds=fc)
         await ctx.send('Updated 3DS friend code.')
 
     @profile.command()
-    async def switch(self, ctx, *, fc: valid_fc):
+    async def switch(self, ctx: Context, *, fc: Annotated[str, valid_fc]):
         """Sets the Switch friend code of your profile."""
         await self.edit_fields(ctx, fc_switch=fc)
         await ctx.send('Updated Switch friend code.')
 
     @profile.command()
-    async def weapon(self, ctx, *, weapon: SplatoonWeapon):
+    async def weapon(self, ctx: Context, *, weapon: Annotated[dict[str, str], SplatoonWeapon]):
         """Sets the Splatoon 2 weapon part of your profile.
 
         If you don't have a profile set up then it'll create one for you.
@@ -301,7 +322,7 @@ class Profile(commands.Cog):
         await ctx.send(f'Successfully set weapon to {weapon["name"]}.')
 
     @profile.command(usage='<mode> <rank>')
-    async def rank(self, ctx, *, argument: valid_rank):
+    async def rank(self, ctx: Context, *, ranking: SplatoonRank):
         """Sets the Splatoon 2 rank part of your profile.
 
         You set the rank on a per mode basis, such as
@@ -323,12 +344,11 @@ class Profile(commands.Cog):
                        END
                 """
 
-        mode, data = argument
-        await ctx.db.execute(query, ctx.author.id, {mode: data})
-        await ctx.send(f'Successfully set {mode} rank to {data["rank"]}{data["number"]}.')
+        await ctx.db.execute(query, ctx.author.id, ranking.to_dict())
+        await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.rank}{ranking.number}.')
 
     @profile.command()
-    async def delete(self, ctx, *, field=None):
+    async def delete(self, ctx: Context, *, field: Optional[str] = None):
         """Deletes a field from your profile.
 
         The valid fields that could be deleted are:
@@ -403,7 +423,7 @@ class Profile(commands.Cog):
         await ctx.send(f'Successfully deleted {mode} ranking.')
 
     @profile.command()
-    async def search(self, ctx, *, query):
+    async def search(self, ctx: Context, *, query: str):
         """Searches profiles via either friend code, NNID, or Squad.
 
         The query must be at least 3 characters long.
@@ -451,13 +471,13 @@ class Profile(commands.Cog):
         await ctx.send(embed=e)
 
     @profile.command()
-    async def stats(self, ctx):
+    async def stats(self, ctx: Context):
         """Retrieves some statistics on the profile database."""
 
         query = "SELECT COUNT(*) FROM profiles;"
 
-        total = await ctx.db.fetchrow(query)
-        total = total[0]
+        row: tuple[int] = await ctx.db.fetchrow(query)  # type: ignore
+        total = row[0]
 
         # top weapons used
         query = """SELECT extra #> '{sp2_weapon,name}' AS "Weapon",
@@ -505,5 +525,5 @@ class Profile(commands.Cog):
         await ctx.send(embed=e)
 
 
-async def setup(bot):
+async def setup(bot: RoboDanny):
     await bot.add_cog(Profile(bot))
