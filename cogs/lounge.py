@@ -1,10 +1,17 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING, Optional
+from typing_extensions import TypeAlias
+
 from discord.ext import commands
 from .utils import checks
-import aiohttp
 import asyncio
 import json
 import discord
 from lxml import etree
+
+if TYPE_CHECKING:
+    from bot import RoboDanny
+    from .utils.context import GuildContext
 
 LOUNGE_GUILD_ID = 145079846832308224
 META_CHANNEL_ID = 335119551702499328
@@ -13,7 +20,7 @@ META_CHANNEL_ID = 335119551702499328
 class CodeBlock:
     missing_error = 'Missing code block. Please use the following markdown\n\\`\\`\\`language\ncode here\n\\`\\`\\`'
 
-    def __init__(self, argument):
+    def __init__(self, argument: str):
         try:
             block, code = argument.split('\n', 1)
         except ValueError:
@@ -26,7 +33,7 @@ class CodeBlock:
         self.command = self.get_command_from_language(language.lower())
         self.source = code.rstrip('`').replace('```', '')
 
-    def get_command_from_language(self, language):
+    def get_command_from_language(self, language: str):
         cmds = {
             'cpp': 'g++ -std=c++1z -O2 -Wall -Wextra -pedantic -pthread main.cpp -lstdc++fs && ./a.out',
             'c': 'mv main.cpp main.c && gcc -std=c11 -O2 -Wall -Wextra -pedantic main.c && ./a.out',
@@ -51,24 +58,27 @@ class CodeBlock:
 class ChannelSnapshot:
     __slots__ = ('name', 'bucket', 'position', 'id')
 
-    def __init__(self, channel):
-        self.name = channel.name
-        self.bucket = channel._sorting_bucket
-        self.position = channel.position
-        self.id = channel.id
+    def __init__(self, channel: discord.abc.GuildChannel):
+        self.name: str = channel.name
+        self.bucket: int = channel._sorting_bucket
+        self.position: int = channel.position
+        self.id: int = channel.id
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> bool:
         return isinstance(other, ChannelSnapshot) and (self.bucket, self.position, self.id) < (
             other.bucket,
             other.position,
             other.id,
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, ChannelSnapshot) and self.id == other.id
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'<#{self.id}>'
+
+
+Snapshot: TypeAlias = 'dict[tuple[int, int], list[ChannelSnapshot]]'
 
 
 class Lounge(commands.Cog, name='Lounge<C++>'):
@@ -77,25 +87,27 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
     Don't abuse these.
     """
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
         self._lock = asyncio.Lock()
         # (position, category_id): [(name, bucket, position, id)]
-        self._channel_snapshot = {}
+        self._channel_snapshot: Snapshot = {}
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='cplusplus', id=813908027182678046)
 
-    def make_snapshot(self, before=None):
-        before = before or discord.Object(id=0)
-        ret = {}
+    def make_snapshot(self, before: Optional[discord.abc.GuildChannel] = None) -> Snapshot:
+        ret: Snapshot = {}
         guild = self.bot.get_guild(LOUNGE_GUILD_ID)
+        if guild is None:
+            return ret
+
         for category, channels in guild.by_category():
             key = (-1, -1) if category is None else (category.position, category.id)
             snap = ret[key] = []
             for channel in channels:
-                if channel.id == before.id:
+                if before is not None and channel.id == before.id:
                     channel = before
 
                 snap.append(ChannelSnapshot(channel))
@@ -103,12 +115,15 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
         return ret
 
     @staticmethod
-    def logically_sorted_snapshot(snapshot):
+    def logically_sorted_snapshot(snapshot: Snapshot) -> dict[int, list[ChannelSnapshot]]:
         as_list = sorted(snapshot.items(), key=lambda t: t[0])
         return {category: sorted(channels) for ((_, category), channels) in as_list}
 
-    async def display_snapshot(self):
+    async def display_snapshot(self) -> None:
         guild = self.bot.get_guild(LOUNGE_GUILD_ID)
+        if guild is None:
+            return
+
         current = self.logically_sorted_snapshot(self.make_snapshot())
         before = self.logically_sorted_snapshot(self._channel_snapshot)
 
@@ -128,7 +143,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
                 embed.add_field(name='After', value=f'**{category}**\n{after_str}', inline=True)
                 embed.add_field(name='\u200b', value='\u200b', inline=True)
 
-        channel = guild.get_channel(META_CHANNEL_ID)
+        channel: Optional[discord.TextChannel] = guild.get_channel(META_CHANNEL_ID)  # type: ignore
         if channel is None:
             return
 
@@ -138,7 +153,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
         await channel.send(embed=embed)
 
     @commands.Cog.listener()
-    async def on_guild_channel_update(self, before, after):
+    async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
         if self._lock.locked():
             return
 
@@ -152,7 +167,7 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
 
     @commands.command()
     @checks.is_lounge_cpp()
-    async def coliru(self, ctx, *, code: CodeBlock):
+    async def coliru(self, ctx: GuildContext, *, code: CodeBlock):
         """Compiles code via Coliru.
 
         You have to pass in a code block with the language syntax
@@ -198,14 +213,14 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
                         await ctx.send(f'Output too big. Coliru link: http://coliru.stacked-crooked.com/a/{shared_id}')
 
     @coliru.error
-    async def coliru_error(self, ctx, error):
+    async def coliru_error(self, ctx: GuildContext, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
-            await ctx.send(error)
+            await ctx.send(str(error))
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(CodeBlock.missing_error)
 
     @commands.command()
-    async def cpp(self, ctx, *, query: str):
+    async def cpp(self, ctx: GuildContext, *, query: str):
         """Search something on cppreference"""
 
         url = 'https://en.cppreference.com/mwiki/index.php'
@@ -263,5 +278,5 @@ class Lounge(commands.Cog, name='Lounge<C++>'):
             await ctx.send(embed=e)
 
 
-async def setup(bot):
+async def setup(bot: RoboDanny):
     await bot.add_cog(Lounge(bot))
