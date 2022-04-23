@@ -59,9 +59,9 @@ def _prefix_callable(bot: RoboDanny, msg: discord.Message):
 
 
 class ProxyObject(discord.Object):
-    def __init__(self, guild: discord.abc.Snowflake):
+    def __init__(self, guild: Optional[discord.abc.Snowflake]):
         super().__init__(id=0)
-        self.guild: discord.abc.Snowflake = guild
+        self.guild: Optional[discord.abc.Snowflake] = guild
 
 
 class RoboDanny(commands.AutoShardedBot):
@@ -158,7 +158,7 @@ class RoboDanny(commands.AutoShardedBot):
         elif isinstance(error, commands.ArgumentParsingError):
             await ctx.send(str(error))
 
-    def get_guild_prefixes(self, guild: discord.abc.Snowflake, *, local_inject=_prefix_callable) -> list[str]:
+    def get_guild_prefixes(self, guild: Optional[discord.abc.Snowflake], *, local_inject=_prefix_callable) -> list[str]:
         proxy_msg = ProxyObject(guild)
         return local_inject(self, proxy_msg)  # type: ignore  # lying
 
