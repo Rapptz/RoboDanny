@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands
@@ -304,7 +304,7 @@ class Profile(commands.Cog):
         await ctx.send('Updated Switch friend code.')
 
     @profile.command()
-    async def weapon(self, ctx: Context, *, weapon: Annotated[dict[str, str], SplatoonWeapon]):
+    async def weapon(self, ctx: Context, *, weapon: Annotated[Dict[str, str], SplatoonWeapon]):
         """Sets the Splatoon 2 weapon part of your profile.
 
         If you don't have a profile set up then it'll create one for you.

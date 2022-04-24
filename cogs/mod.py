@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional, List
 from typing_extensions import Annotated
 
 from discord.ext import commands, tasks
@@ -818,7 +818,7 @@ class Mod(commands.Cog):
     async def multiban(
         self,
         ctx: GuildContext,
-        members: Annotated[list[discord.abc.Snowflake], commands.Greedy[MemberID]],
+        members: Annotated[List[discord.abc.Snowflake], commands.Greedy[MemberID]],
         *,
         reason: Annotated[Optional[str], ActionReason] = None,
     ):
