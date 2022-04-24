@@ -258,7 +258,7 @@ class Admin(commands.Cog):
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
-    @commands.command(pass_context=True, hidden=True)
+    @commands.command(hidden=True)
     async def repl(self, ctx: Context):
         """Launches an interactive REPL session."""
         variables = {

@@ -842,7 +842,7 @@ class Tags(commands.Cog):
         else:
             await self._send_tag_info(ctx, record)
 
-    @tag.command(pass_context=True)
+    @tag.command()
     @suggest_box()
     async def raw(self, ctx: GuildContext, *, name: Annotated[str, TagName(lower=True)]):
         """Gets the raw content of the tag.
