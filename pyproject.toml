@@ -1,0 +1,24 @@
+[tool.black]
+line-length = 125
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+combine_as_imports = true
+combine_star = true
+line_length = 125
+
+[tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "warning"
+pythonVersion = "3.8"
+typeCheckingMode = "basic"
+strictParameterNoneValue = false
+include = [
+    "cogs",
+    "cogs/utils"
+]
+exclude = [
+    "**/__pycache__",
+    "build",
+    "dist"
+]

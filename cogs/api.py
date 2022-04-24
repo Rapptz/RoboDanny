@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypedDict, Union
+from typing_extensions import Annotated
+
 from discord.ext import commands
 from .utils import checks, db, fuzzy, cache, time
 import asyncio
@@ -10,44 +14,62 @@ import os
 import lxml.etree as etree
 from collections import Counter
 
-DISCORD_API_ID    = 81384788765712384
-DISCORD_BOTS_ID   = 110373943822540800
-USER_BOTS_ROLE    = 178558252869484544
+if TYPE_CHECKING:
+    from .utils.context import Context, GuildContext
+    from bot import RoboDanny
+    from asyncpg import Record, Connection
+    from cogs.reminder import Timer
+
+
+DISCORD_API_ID = 81384788765712384
+DISCORD_BOTS_ID = 110373943822540800
+USER_BOTS_ROLE = 178558252869484544
 CONTRIBUTORS_ROLE = 111173097888993280
-DISCORD_PY_ID     = 84319995256905728
-DISCORD_PY_GUILD  = 336642139381301249
+DISCORD_PY_ID = 84319995256905728
+DISCORD_PY_GUILD = 336642139381301249
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELPER_ROLE = 558559632637952010
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 738572311107469354, 956435493296414720)
-BOT_LIST_INFO = {
+
+
+class BotInfo(TypedDict):
+    channel: int
+    testing: tuple[int, ...]
+    terms: str
+
+
+BOT_LIST_INFO: dict[int, BotInfo] = {
     DISCORD_API_ID: {
-        'channel':580184108794380298,
+        'channel': 580184108794380298,
         'testing': (
-            381896832399310868, #testing
-            381896931724492800, #playground
+            381896832399310868,  # testing
+            381896931724492800,  # playground
         ),
-        'terms': 'By requesting to add your bot, you agree to not spam or do things without user input.'
+        'terms': 'By requesting to add your bot, you agree to not spam or do things without user input.',
     },
     DISCORD_PY_GUILD: {
         'channel': 579998326557114368,
         'testing': (
-            381963689470984203, #testing
-            559455534965850142, #playground
-            568662293190148106, #mod-testing
+            381963689470984203,  # testing
+            559455534965850142,  # playground
+            568662293190148106,  # mod-testing
         ),
-        'terms': 'By requesting to add your bot, you must agree to the guidelines presented in the <#381974649019432981>.'
-    }
+        'terms': 'By requesting to add your bot, you must agree to the guidelines presented in the <#381974649019432981>.',
+    },
 }
 
-def in_testing(info=BOT_LIST_INFO):
-    def predicate(ctx):
+
+def in_testing(info: dict[int, BotInfo] = BOT_LIST_INFO):
+    def predicate(ctx: GuildContext) -> bool:
         try:
             return ctx.channel.id in info[ctx.guild.id]['testing']
         except (AttributeError, KeyError):
             return False
+
     return commands.check(predicate)
 
-def is_discord_py_helper(member):
+
+def is_discord_py_helper(member: discord.Member) -> bool:
     guild_id = member.guild.id
     if guild_id != DISCORD_PY_GUILD:
         return False
@@ -57,10 +79,14 @@ def is_discord_py_helper(member):
 
     return member._roles.has(DISCORD_PY_HELPER_ROLE)
 
+
 def can_use_block():
-    def predicate(ctx):
+    def predicate(ctx: GuildContext) -> bool:
         if ctx.guild is None:
             return False
+
+        if isinstance(ctx.channel, discord.Thread):
+            return ctx.author.id == ctx.channel.owner_id or ctx.channel.permissions_for(ctx.author).manage_threads
 
         guild_id = ctx.guild.id
         if guild_id == DISCORD_API_ID:
@@ -69,11 +95,16 @@ def can_use_block():
             guild_level = ctx.author.guild_permissions
             return guild_level.manage_roles
         return False
+
     return commands.check(predicate)
 
+
 def can_use_tempblock():
-    def predicate(ctx):
+    def predicate(ctx: GuildContext) -> bool:
         if ctx.guild is None:
+            return False
+
+        if isinstance(ctx.channel, discord.Thread):
             return False
 
         guild_id = ctx.guild.id
@@ -82,15 +113,16 @@ def can_use_tempblock():
         elif guild_id == DISCORD_PY_GUILD:
             guild_level = ctx.author.guild_permissions
             return guild_level.manage_roles or (
-                ctx.channel.id in DISCORD_PY_HELP_CHANNELS and
-                (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or
-                 ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
+                ctx.channel.id in DISCORD_PY_HELP_CHANNELS
+                and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
             )
         return False
+
     return commands.check(predicate)
 
+
 def contributor_or_higher():
-    def predicate(ctx):
+    def predicate(ctx: GuildContext) -> bool:
         guild = ctx.guild
         if guild is None:
             return False
@@ -100,7 +132,9 @@ def contributor_or_higher():
             return False
 
         return ctx.author.top_role >= role
+
     return commands.check(predicate)
+
 
 class Feeds(db.Table):
     id = db.PrimaryKeyColumn()
@@ -108,10 +142,12 @@ class Feeds(db.Table):
     role_id = db.Column(db.Integer(big=True))
     name = db.Column(db.String)
 
+
 class RTFM(db.Table):
     id = db.PrimaryKeyColumn()
     user_id = db.Column(db.Integer(big=True), unique=True, index=True)
     count = db.Column(db.Integer, default=1)
+
 
 class SphinxObjectFileReader:
     # Inspired by Sphinx's InventoryFileReader
@@ -142,15 +178,16 @@ class SphinxObjectFileReader:
             pos = buf.find(b'\n')
             while pos != -1:
                 yield buf[:pos].decode('utf-8')
-                buf = buf[pos + 1:]
+                buf = buf[pos + 1 :]
                 pos = buf.find(b'\n')
 
+
 class BotUser(commands.Converter):
-    async def convert(self, ctx, argument):
+    async def convert(self, ctx: GuildContext, argument: str):
         if not argument.isdigit():
             raise commands.BadArgument('Not a valid bot user ID.')
         try:
-            user = await ctx.bot.fetch_user(argument)
+            user = await ctx.bot.fetch_user(int(argument))
         except discord.NotFound:
             raise commands.BadArgument('Bot user not found (404).')
         except discord.HTTPException as e:
@@ -160,20 +197,22 @@ class BotUser(commands.Converter):
                 raise commands.BadArgument('This is not a bot.')
             return user
 
+
 class API(commands.Cog):
     """Discord API exclusive things."""
 
-    def __init__(self, bot):
-        self.bot = bot
+    faq_entries: dict[str, str]
+
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
-        self._recently_blocked = set()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='\N{PERSONAL COMPUTER}')
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
+    async def on_member_join(self, member: discord.Member):
         if member.guild.id != DISCORD_API_ID:
             return
 
@@ -249,10 +288,10 @@ class API(commands.Cog):
 
         self._rtfm_cache = cache
 
-    async def do_rtfm(self, ctx, key, obj):
+    async def do_rtfm(self, ctx: Context, key: str, obj: Optional[str]):
         page_types = {
             'stable': 'https://discordpy.readthedocs.io/en/stable',
-            'stable-jp': 'https://discordpy.readthedocs.io/ja/latest',
+            'stable-jp': 'https://discordpy.readthedocs.io/ja/stable',
             'latest': 'https://discordpy.readthedocs.io/en/latest',
             'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
             'python': 'https://docs.python.org/3',
@@ -280,6 +319,7 @@ class API(commands.Cog):
                     break
 
         cache = list(self._rtfm_cache[key].items())
+
         def transform(tup):
             return tup[0]
 
@@ -296,10 +336,10 @@ class API(commands.Cog):
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
 
-    def transform_rtfm_language_key(self, ctx, prefix):
+    def transform_rtfm_language_key(self, ctx: Context, prefix: str):
         if ctx.guild is not None:
             #                             日本語 category
-            if ctx.channel.category_id == 490287576670928914:
+            if ctx.channel.category_id == 490287576670928914:  # type: ignore  # category_id is safe to access
                 return prefix + '-jp'
             #                    d.py unofficial JP   Discord Bot Portal JP
             elif ctx.guild.id in (463986890190749698, 494911447420108820):
@@ -307,37 +347,37 @@ class API(commands.Cog):
         return prefix
 
     @commands.group(aliases=['rtfd'], invoke_without_command=True)
-    async def rtfm(self, ctx, *, obj: str = None):
+    async def rtfm(self, ctx: Context, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity.
 
-        Events, objects, and functions are all supported through 
+        Events, objects, and functions are all supported through
         a cruddy fuzzy algorithm.
         """
         key = self.transform_rtfm_language_key(ctx, 'stable')
         await self.do_rtfm(ctx, key, obj)
 
     @rtfm.command(name='jp')
-    async def rtfm_jp(self, ctx, *, obj: str = None):
+    async def rtfm_jp(self, ctx: Context, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity (Japanese)."""
         await self.do_rtfm(ctx, 'latest-jp', obj)
 
     @rtfm.command(name='python', aliases=['py'])
-    async def rtfm_python(self, ctx, *, obj: str = None):
+    async def rtfm_python(self, ctx: Context, *, obj: str = None):
         """Gives you a documentation link for a Python entity."""
         key = self.transform_rtfm_language_key(ctx, 'python')
         await self.do_rtfm(ctx, key, obj)
 
     @rtfm.command(name='py-jp', aliases=['py-ja'])
-    async def rtfm_python_jp(self, ctx, *, obj: str = None):
+    async def rtfm_python_jp(self, ctx: Context, *, obj: str = None):
         """Gives you a documentation link for a Python entity (Japanese)."""
         await self.do_rtfm(ctx, 'python-jp', obj)
 
     @rtfm.command(name='master', aliases=['2.0', 'latest'])
-    async def rtfm_master(self, ctx, *, obj: str = None):
+    async def rtfm_master(self, ctx: Context, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity (master branch)"""
         await self.do_rtfm(ctx, 'latest', obj)
 
-    async def _member_stats(self, ctx, member, total_uses):
+    async def _member_stats(self, ctx: Context, member: discord.Member, total_uses: int):
         e = discord.Embed(title='RTFM Stats')
         e.set_author(name=str(member), icon_url=member.display_avatar.url)
 
@@ -355,17 +395,17 @@ class API(commands.Cog):
         await ctx.send(embed=e)
 
     @rtfm.command()
-    async def stats(self, ctx, *, member: discord.Member = None):
+    async def stats(self, ctx: Context, *, member: discord.Member = None):
         """Tells you stats about the ?rtfm command."""
         query = 'SELECT SUM(count) AS total_uses FROM rtfm;'
-        record = await ctx.db.fetchrow(query)
-        total_uses = record['total_uses']
+        record: Record = await ctx.db.fetchrow(query)
+        total_uses: int = record['total_uses']
 
         if member is not None:
             return await self._member_stats(ctx, member, total_uses)
 
         query = 'SELECT user_id, count FROM rtfm ORDER BY count DESC LIMIT 10;'
-        records = await ctx.db.fetch(query)
+        records: list[Record] = await ctx.db.fetch(query)
 
         output = []
         output.append(f'**Total uses**: {total_uses}')
@@ -383,28 +423,38 @@ class API(commands.Cog):
 
         await ctx.send('\n'.join(output))
 
-    def library_name(self, channel):
+    def library_name(self, channel: Union[discord.abc.GuildChannel, discord.Thread]) -> str:
         # language_<name>
         name = channel.name
         index = name.find('_')
         if index != -1:
-            name = name[index + 1:]
+            name = name[index + 1 :]
         return name.replace('-', '.')
 
-    def get_block_channels(self, guild, channel):
+    def get_block_channels(self, guild: discord.Guild, channel: discord.abc.GuildChannel) -> list[discord.abc.GuildChannel]:
         if guild.id == DISCORD_PY_GUILD and channel.id in DISCORD_PY_HELP_CHANNELS:
-            return [guild.get_channel(x) for x in DISCORD_PY_HELP_CHANNELS]
+            return [guild.get_channel(x) for x in DISCORD_PY_HELP_CHANNELS]  # type: ignore  # Not None
         return [channel]
 
     @commands.command()
     @can_use_block()
-    async def block(self, ctx, *, member: discord.Member):
+    async def block(self, ctx: GuildContext, *, member: discord.Member):
         """Blocks a user from your channel."""
 
         if member.top_role >= ctx.author.top_role:
             return
 
         reason = f'Block by {ctx.author} (ID: {ctx.author.id})'
+
+        if isinstance(ctx.channel, discord.Thread):
+            try:
+                await ctx.channel.remove_user(member)
+            except:
+                await ctx.send('\N{THUMBS DOWN SIGN}')
+            else:
+                await ctx.send('\N{THUMBS UP SIGN}')
+
+            return
 
         channels = self.get_block_channels(ctx.guild, ctx.channel)
 
@@ -418,13 +468,16 @@ class API(commands.Cog):
 
     @commands.command()
     @can_use_block()
-    async def unblock(self, ctx, *, member: discord.Member):
+    async def unblock(self, ctx: GuildContext, *, member: discord.Member):
         """Unblocks a user from your channel."""
 
         if member.top_role >= ctx.author.top_role:
             return
 
         reason = f'Unblock by {ctx.author} (ID: {ctx.author.id})'
+
+        if isinstance(ctx.channel, discord.Thread):
+            return await ctx.send('\N{THUMBS DOWN SIGN} Unblocking does not make sense for threads')
 
         channels = self.get_block_channels(ctx.guild, ctx.channel)
 
@@ -436,10 +489,9 @@ class API(commands.Cog):
         else:
             await ctx.send('\N{THUMBS UP SIGN}')
 
-
     @commands.command()
     @can_use_tempblock()
-    async def tempblock(self, ctx, duration: time.FutureTime, *, member: discord.Member):
+    async def tempblock(self, ctx: GuildContext, duration: time.FutureTime, *, member: discord.Member):
         """Temporarily blocks a user from your channel.
 
         The duration can be a a short time form, e.g. 30d or a more human
@@ -456,15 +508,21 @@ class API(commands.Cog):
         if is_discord_py_helper(ctx.author) and duration.dt > (created_at + datetime.timedelta(minutes=60)):
             return await ctx.send('Helpers can only block for up to an hour.')
 
-        reminder = self.bot.get_cog('Reminder')
+        reminder = self.bot.reminder
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
-        channels = self.get_block_channels(ctx.guild, ctx.channel)
-        timer = await reminder.create_timer(duration.dt, 'tempblock', ctx.guild.id, ctx.author.id,
-                                                                      ctx.channel.id, member.id,
-                                                                      connection=ctx.db,
-                                                                      created=created_at)
+        channels = self.get_block_channels(ctx.guild, ctx.channel)  # type: ignore  # Threads are disallowed
+        timer = await reminder.create_timer(
+            duration.dt,
+            'tempblock',
+            ctx.guild.id,
+            ctx.author.id,
+            ctx.channel.id,
+            member.id,
+            connection=ctx.db,
+            created=created_at,
+        )
 
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
@@ -477,7 +535,7 @@ class API(commands.Cog):
             await ctx.send(f'Blocked {member} for {time.format_relative(duration.dt)}.')
 
     @commands.Cog.listener()
-    async def on_tempblock_timer_complete(self, timer):
+    async def on_tempblock_timer_complete(self, timer: Timer):
         guild_id, mod_id, channel_id, member_id = timer.args
 
         guild = self.bot.get_guild(guild_id)
@@ -507,7 +565,6 @@ class API(commands.Cog):
         else:
             moderator = f'{moderator} (ID: {mod_id})'
 
-
         reason = f'Automatic unblock from timer made on {timer.created_at} by {moderator}.'
 
         for ch in self.get_block_channels(guild, channel):
@@ -517,7 +574,7 @@ class API(commands.Cog):
                 pass
 
     @cache.cache()
-    async def get_feeds(self, channel_id, *, connection=None):
+    async def get_feeds(self, channel_id: int, *, connection: Optional[Connection] = None) -> dict[str, int]:
         con = connection or self.bot.pool
         query = 'SELECT name, role_id FROM feeds WHERE channel_id=$1;'
         feeds = await con.fetch(query, channel_id)
@@ -525,7 +582,7 @@ class API(commands.Cog):
 
     @commands.group(name='feeds', invoke_without_command=True)
     @commands.guild_only()
-    async def _feeds(self, ctx):
+    async def _feeds(self, ctx: GuildContext):
         """Shows the list of feeds that the channel has.
 
         A feed is something that users can opt-in to
@@ -546,7 +603,7 @@ class API(commands.Cog):
     @_feeds.command(name='create')
     @commands.has_permissions(manage_roles=True)
     @commands.guild_only()
-    async def feeds_create(self, ctx, *, name: str):
+    async def feeds_create(self, ctx: GuildContext, *, name: str):
         """Creates a feed with the specified name.
 
         You need Manage Roles permissions to create a feed.
@@ -579,7 +636,7 @@ class API(commands.Cog):
     @_feeds.command(name='delete', aliases=['remove'])
     @commands.has_permissions(manage_roles=True)
     @commands.guild_only()
-    async def feeds_delete(self, ctx, *, feed: str):
+    async def feeds_delete(self, ctx: GuildContext, *, feed: str):
         """Removes a feed from the channel.
 
         This will also delete the associated role so this
@@ -603,7 +660,7 @@ class API(commands.Cog):
 
         await ctx.send(f'{ctx.tick(True)} Removed feed.')
 
-    async def do_subscription(self, ctx, feed, action):
+    async def do_subscription(self, ctx: GuildContext, feed: str, action: Callable[[discord.Role], Awaitable[Any]]):
         feeds = await self.get_feeds(ctx.channel.id)
         if len(feeds) == 0:
             await ctx.send('This channel has no feeds set up.')
@@ -623,7 +680,7 @@ class API(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    async def sub(self, ctx, *, feed: str):
+    async def sub(self, ctx: GuildContext, *, feed: str):
         """Subscribes to the publication of a feed.
 
         This will allow you to receive updates from the channel
@@ -633,7 +690,7 @@ class API(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    async def unsub(self, ctx, *, feed: str):
+    async def unsub(self, ctx: GuildContext, *, feed: str):
         """Unsubscribe to the publication of a feed.
 
         This will remove you from notifications of a feed you
@@ -645,7 +702,7 @@ class API(commands.Cog):
     @commands.command()
     @commands.has_permissions(manage_roles=True)
     @commands.guild_only()
-    async def publish(self, ctx, feed: str, *, content: str):
+    async def publish(self, ctx: GuildContext, feed: str, *, content: str):
         """Publishes content to a feed.
 
         Everyone who is subscribed to the feed will be notified
@@ -660,9 +717,11 @@ class API(commands.Cog):
 
         role = discord.utils.get(ctx.guild.roles, id=feeds[feed])
         if role is None:
-            fmt = 'Uh.. a fatal error occurred here. The role associated with ' \
-                  'this feed has been removed or not found. ' \
-                  'Please recreate the feed.'
+            fmt = (
+                'Uh.. a fatal error occurred here. The role associated with '
+                'this feed has been removed or not found. '
+                'Please recreate the feed.'
+            )
             await ctx.send(fmt)
             return
 
@@ -694,7 +753,7 @@ class API(commands.Cog):
                 self.faq_entries[''.join(node.itertext()).strip()] = base_url + node.get('href').strip()
 
     @commands.command()
-    async def faq(self, ctx, *, query: str = None):
+    async def faq(self, ctx: Context, *, query: str = None):
         """Shows an FAQ entry from the discord.py documentation"""
         if not hasattr(self, 'faq_entries'):
             await self.refresh_faq_cache()
@@ -713,20 +772,28 @@ class API(commands.Cog):
         await ctx.send(page, reference=ctx.replied_reference)
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.guild_id not in BOT_LIST_INFO.keys():
             return
 
+        guild_id: int = payload.guild_id  # type: ignore  # It didn't understand the above narrowing
         emoji = str(payload.emoji)
         if emoji not in ('\N{WHITE HEAVY CHECK MARK}', '\N{CROSS MARK}', '\N{NO ENTRY SIGN}'):
             return
 
-        channel_id = BOT_LIST_INFO[payload.guild_id]['channel']
+        channel_id = BOT_LIST_INFO[guild_id]['channel']
         if payload.channel_id != channel_id:
             return
 
-        guild = self.bot.get_guild(payload.guild_id)
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return
+
         channel = guild.get_channel(payload.channel_id)
+
+        if not isinstance(channel, (discord.Thread, discord.TextChannel, discord.VoiceChannel)):
+            return
+
         try:
             message = await channel.fetch_message(payload.message_id)
         except (AttributeError, discord.HTTPException):
@@ -744,33 +811,36 @@ class API(commands.Cog):
         if user is None or user.bot:
             return
 
-        author_id = int(embed.footer.text)
+        author_id = int(embed.footer.text or '')
         bot_id = embed.author.name
         if emoji == '\N{WHITE HEAVY CHECK MARK}':
-            to_send = f"Your bot, <@{bot_id}>, has been added to {channel.guild.name}."
+            to_send = f"Your bot, <@{bot_id}>, has been added to {guild.name}."
             colour = discord.Colour.dark_green()
         elif emoji == '\N{NO ENTRY SIGN}':
-            to_send = f"Your bot, <@{bot_id}>, could not be added to {channel.guild.name}.\n" \
-                       "This could be because it was private or required code grant. " \
-                       "Please make your bot public and resubmit your application."
+            to_send = (
+                f"Your bot, <@{bot_id}>, could not be added to {guild.name}.\n"
+                "This could be because it was private or required code grant. "
+                "Please make your bot public and resubmit your application."
+            )
             colour = discord.Colour.orange()
         else:
-            to_send = f"Your bot, <@{bot_id}>, has been rejected from {channel.guild.name}."
+            to_send = f"Your bot, <@{bot_id}>, has been rejected from {guild.name}."
             colour = discord.Colour.dark_magenta()
 
         member = await self.bot.get_or_fetch_member(guild, author_id)
         try:
-            await member.send(to_send)
+            await member.send(to_send)  # type: ignore
         except (AttributeError, discord.HTTPException):
             colour = discord.Colour.gold()
 
         embed.add_field(name='Responsible Moderator', value=f'{user} (ID: {user.id})', inline=False)
         embed.colour = colour
-        await self.bot.http.edit_message(payload.channel_id, payload.message_id, embed=embed.to_dict())
+        message = channel.get_partial_message(payload.message_id)
+        await message.edit(embed=embed)
 
     @commands.command()
     @in_testing()
-    async def addbot(self, ctx, user: BotUser, *, reason: str):
+    async def addbot(self, ctx: GuildContext, user: Annotated[discord.User, BotUser], *, reason: str):
         """Requests your bot to be added to the server.
 
         To request your bot you must pass your bot's user ID and a reason
@@ -781,6 +851,7 @@ class API(commands.Cog):
 
         info = BOT_LIST_INFO[ctx.guild.id]
         confirm = None
+
         def terms_acceptance(msg):
             nonlocal confirm
             if msg.author.id != ctx.author.id:
@@ -795,8 +866,10 @@ class API(commands.Cog):
                 return True
             return False
 
-        msg = f'{info["terms"]}. Moderators reserve the right to kick or reject your bot for any reason.\n\n' \
-               'If you agree, reply to this message with **I agree** within 1 minute. If you do not, reply with **Abort**.'
+        msg = (
+            f'{info["terms"]}. Moderators reserve the right to kick or reject your bot for any reason.\n\n'
+            'If you agree, reply to this message with **I agree** within 1 minute. If you do not, reply with **Abort**.'
+        )
         prompt = await ctx.send(msg)
 
         try:
@@ -820,7 +893,7 @@ class API(commands.Cog):
         embed.set_footer(text=ctx.author.id)
         embed.set_author(name=user.id, icon_url=user.display_avatar.url)
 
-        channel = ctx.guild.get_channel(info['channel'])
+        channel: discord.abc.Messageable = ctx.guild.get_channel(info['channel'])  # type: ignore
         try:
             msg = await channel.send(embed=embed)
             await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
@@ -832,9 +905,10 @@ class API(commands.Cog):
         await ctx.send('Your bot has been requested to the moderators. I will DM you the status of your request.')
 
     @addbot.error
-    async def on_addbot_error(self, ctx, error):
+    async def on_addbot_error(self, ctx: GuildContext, error: commands.CommandError):
         if isinstance(error, (commands.BadArgument, commands.MissingRequiredArgument)):
-            return await ctx.send(error)
+            return await ctx.send(str(error))
 
-def setup(bot):
-    bot.add_cog(API(bot))
+
+async def setup(bot: RoboDanny):
+    await bot.add_cog(API(bot))

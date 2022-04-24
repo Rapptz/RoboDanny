@@ -1,21 +1,26 @@
 from __future__ import annotations
+from typing_extensions import Annotated
+from typing import Any, Optional, Union, TYPE_CHECKING
 
 from discord.ext import commands, menus
 from .utils import checks, formats, time
 from .utils.paginator import RoboPages
 import discord
-from collections import OrderedDict, deque, Counter
-import os, datetime
+from collections import Counter
+import os
 import asyncio
-import copy
 import unicodedata
 import inspect
 import itertools
-from typing import Any, Dict, List, Optional, Union
+
+if TYPE_CHECKING:
+    from bot import RoboDanny
+    from .utils.context import GuildContext, Context
+    import datetime
 
 
 class Prefix(commands.Converter):
-    async def convert(self, ctx, argument):
+    async def convert(self, ctx: GuildContext, argument: str) -> str:
         user_id = ctx.bot.user.id
         if argument.startswith((f'<@{user_id}>', f'<@!{user_id}>')):
             raise commands.BadArgument('That is a reserved prefix already in use.')
@@ -23,14 +28,14 @@ class Prefix(commands.Converter):
 
 
 class GroupHelpPageSource(menus.ListPageSource):
-    def __init__(self, group: Union[commands.Group, commands.Cog], commands: List[commands.Command], *, prefix: str):
+    def __init__(self, group: Union[commands.Group, commands.Cog], commands: list[commands.Command], *, prefix: str):
         super().__init__(entries=commands, per_page=6)
-        self.group = group
-        self.prefix = prefix
-        self.title = f'{self.group.qualified_name} Commands'
-        self.description = self.group.description
+        self.group: Union[commands.Group, commands.Cog] = group
+        self.prefix: str = prefix
+        self.title: str = f'{self.group.qualified_name} Commands'
+        self.description: str = self.group.description
 
-    async def format_page(self, menu, commands):
+    async def format_page(self, menu: RoboPages, commands: list[commands.Command]):
         embed = discord.Embed(title=self.title, description=self.description, colour=discord.Colour(0xA8B9CD))
 
         for command in commands:
@@ -46,15 +51,15 @@ class GroupHelpPageSource(menus.ListPageSource):
 
 
 class HelpSelectMenu(discord.ui.Select['HelpMenu']):
-    def __init__(self, commands: Dict[commands.Cog, List[commands.Command]], bot: commands.AutoShardedBot):
+    def __init__(self, commands: dict[commands.Cog, list[commands.Command]], bot: RoboDanny):
         super().__init__(
             placeholder='Select a category...',
             min_values=1,
             max_values=1,
             row=0,
         )
-        self.commands = commands
-        self.bot = bot
+        self.commands: dict[commands.Cog, list[commands.Command]] = commands
+        self.bot: RoboDanny = bot
         self.__fill_options()
 
     def __fill_options(self) -> None:
@@ -106,7 +111,7 @@ class FrontPageSource(menus.PageSource):
         self.index = page_number
         return self
 
-    def format_page(self, menu: HelpMenu, page):
+    def format_page(self, menu: HelpMenu, page: Any):
         embed = discord.Embed(title='Bot Help', colour=discord.Colour(0xA8B9CD))
         embed.description = inspect.cleandoc(
             f"""
@@ -158,10 +163,10 @@ class FrontPageSource(menus.PageSource):
 
 
 class HelpMenu(RoboPages):
-    def __init__(self, source: menus.PageSource, ctx: commands.Context):
+    def __init__(self, source: menus.PageSource, ctx: Context):
         super().__init__(source, ctx=ctx, compact=True)
 
-    def add_categories(self, commands: Dict[commands.Cog, List[commands.Command]]) -> None:
+    def add_categories(self, commands: dict[commands.Cog, list[commands.Command]]) -> None:
         self.clear_items()
         self.add_item(HelpSelectMenu(commands, self.ctx.bot))
         self.fill_items()
@@ -178,6 +183,8 @@ class HelpMenu(RoboPages):
 
 
 class PaginatedHelpCommand(commands.HelpCommand):
+    context: Context
+
     def __init__(self):
         super().__init__(
             command_attrs={
@@ -186,7 +193,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
             }
         )
 
-    async def on_help_command_error(self, ctx, error):
+    async def on_help_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.CommandInvokeError):
             # Ignore missing permission errors
             if isinstance(error.original, discord.HTTPException) and error.original.code == 50013:
@@ -194,7 +201,7 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
             await ctx.send(str(error.original))
 
-    def get_command_signature(self, command):
+    def get_command_signature(self, command: commands.Command) -> str:
         parent = command.full_parent_name
         if len(command.aliases) > 0:
             aliases = '|'.join(command.aliases)
@@ -213,14 +220,15 @@ class PaginatedHelpCommand(commands.HelpCommand):
             cog = command.cog
             return cog.qualified_name if cog else '\U0010ffff'
 
-        entries: List[commands.Command] = await self.filter_commands(bot.commands, sort=True, key=key)
+        entries: list[commands.Command] = await self.filter_commands(bot.commands, sort=True, key=key)
 
-        all_commands: Dict[commands.Cog, List[commands.Command]] = {}
+        all_commands: dict[commands.Cog, list[commands.Command]] = {}
         for name, children in itertools.groupby(entries, key=key):
             if name == '\U0010ffff':
                 continue
 
             cog = bot.get_cog(name)
+            assert cog is not None
             all_commands[cog] = sorted(children, key=lambda c: c.qualified_name)
 
         menu = HelpMenu(FrontPageSource(), ctx=self.context)
@@ -266,9 +274,9 @@ class PaginatedHelpCommand(commands.HelpCommand):
 class Meta(commands.Cog):
     """Commands for utilities related to Discord or the Bot itself."""
 
-    def __init__(self, bot):
-        self.bot = bot
-        self.old_help_command = bot.help_command
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
+        self.old_help_command: Optional[commands.HelpCommand] = bot.help_command
         bot.help_command = PaginatedHelpCommand()
         bot.help_command.cog = self
 
@@ -279,17 +287,17 @@ class Meta(commands.Cog):
     def cog_unload(self):
         self.bot.help_command = self.old_help_command
 
-    async def cog_command_error(self, ctx, error):
+    async def cog_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
-            await ctx.send(error)
+            await ctx.send(str(error))
 
     @commands.command(hidden=True)
-    async def hello(self, ctx):
+    async def hello(self, ctx: Context):
         """Displays my intro message."""
         await ctx.send('Hello! I\'m a robot! Danny#0007 made me.')
 
     @commands.command()
-    async def charinfo(self, ctx, *, characters: str):
+    async def charinfo(self, ctx: Context, *, characters: str):
         """Shows you information about a number of characters.
 
         Only up to 25 characters at a time.
@@ -306,7 +314,7 @@ class Meta(commands.Cog):
         await ctx.send(msg)
 
     @commands.group(name='prefix', invoke_without_command=True)
-    async def prefix(self, ctx):
+    async def prefix(self, ctx: Context):
         """Manages the server's custom prefixes.
 
         If called without a subcommand, this will list the currently set
@@ -327,7 +335,7 @@ class Meta(commands.Cog):
 
     @prefix.command(name='add', ignore_extra=False)
     @checks.is_mod()
-    async def prefix_add(self, ctx, prefix: Prefix):
+    async def prefix_add(self, ctx: GuildContext, prefix: Annotated[str, Prefix]):
         """Appends a prefix to the list of custom prefixes.
 
         Previously set prefixes are not overridden.
@@ -352,13 +360,13 @@ class Meta(commands.Cog):
             await ctx.send(ctx.tick(True))
 
     @prefix_add.error
-    async def prefix_add_error(self, ctx, error):
+    async def prefix_add_error(self, ctx: GuildContext, error: commands.CommandError):
         if isinstance(error, commands.TooManyArguments):
             await ctx.send("You've given too many prefixes. Either quote it or only do it one by one.")
 
     @prefix.command(name='remove', aliases=['delete'], ignore_extra=False)
     @checks.is_mod()
-    async def prefix_remove(self, ctx, prefix: Prefix):
+    async def prefix_remove(self, ctx: GuildContext, prefix: Annotated[str, Prefix]):
         """Removes a prefix from the list of custom prefixes.
 
         This is the inverse of the 'prefix add' command. You can
@@ -383,7 +391,7 @@ class Meta(commands.Cog):
 
     @prefix.command(name='clear')
     @checks.is_mod()
-    async def prefix_clear(self, ctx):
+    async def prefix_clear(self, ctx: GuildContext):
         """Removes all custom prefixes.
 
         After this, the bot will listen to only mention prefixes.
@@ -395,7 +403,7 @@ class Meta(commands.Cog):
         await ctx.send(ctx.tick(True))
 
     @commands.command()
-    async def source(self, ctx, *, command: str = None):
+    async def source(self, ctx: Context, *, command: str = None):
         """Displays my full source code or for a specific command.
 
         To display the source code of a subcommand you can separate it by
@@ -425,6 +433,9 @@ class Meta(commands.Cog):
         lines, firstlineno = inspect.getsourcelines(src)
         if not module.startswith('discord'):
             # not a built-in command
+            if filename is None:
+                return await ctx.send('Could not find source for command.')
+
             location = os.path.relpath(filename).replace('\\', '/')
         else:
             location = module.replace('.', '/') + '.py'
@@ -436,12 +447,12 @@ class Meta(commands.Cog):
 
     @commands.command(name='quit', hidden=True)
     @commands.is_owner()
-    async def _quit(self, ctx):
+    async def _quit(self, ctx: Context):
         """Quits the bot."""
-        await self.bot.logout()
+        await self.bot.close()
 
     @commands.command()
-    async def avatar(self, ctx, *, user: Union[discord.Member, discord.User] = None):
+    async def avatar(self, ctx: Context, *, user: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed()
         user = user or ctx.author
@@ -451,7 +462,7 @@ class Meta(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def info(self, ctx, *, user: Union[discord.Member, discord.User] = None):
+    async def info(self, ctx: Context, *, user: Union[discord.Member, discord.User] = None):
         """Shows info about a user."""
 
         user = user or ctx.author
@@ -459,7 +470,7 @@ class Meta(commands.Cog):
         roles = [role.name.replace('@', '@\u200b') for role in getattr(user, 'roles', [])]
         e.set_author(name=str(user))
 
-        def format_date(dt):
+        def format_date(dt: datetime.datetime):
             if dt is None:
                 return 'N/A'
             return f'{time.format_dt(dt, "F")} ({time.format_relative(dt)})'
@@ -491,7 +502,7 @@ class Meta(commands.Cog):
 
     @commands.command(aliases=['guildinfo'], usage='')
     @commands.guild_only()
-    async def serverinfo(self, ctx, *, guild_id: int = None):
+    async def serverinfo(self, ctx: GuildContext, *, guild_id: int = None):
         """Shows info about the current server."""
 
         if guild_id is not None and await self.bot.is_owner(ctx.author):
@@ -607,7 +618,9 @@ class Meta(commands.Cog):
         e.set_footer(text='Created').timestamp = guild.created_at
         await ctx.send(embed=e)
 
-    async def say_permissions(self, ctx, member, channel):
+    async def say_permissions(
+        self, ctx: Context, member: discord.Member, channel: Union[discord.abc.GuildChannel, discord.Thread]
+    ):
         permissions = channel.permissions_for(member)
         e = discord.Embed(colour=member.colour)
         avatar = member.display_avatar.with_static_format('png')
@@ -626,7 +639,12 @@ class Meta(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    async def permissions(self, ctx, member: discord.Member = None, channel: discord.TextChannel = None):
+    async def permissions(
+        self,
+        ctx: GuildContext,
+        member: discord.Member = None,
+        channel: Union[discord.abc.GuildChannel, discord.Thread] = None,
+    ):
         """Shows a member's permissions in a specific channel.
 
         If no channel is given then it uses the current one.
@@ -643,7 +661,7 @@ class Meta(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_roles=True)
-    async def botpermissions(self, ctx, *, channel: discord.TextChannel = None):
+    async def botpermissions(self, ctx: GuildContext, *, channel: Union[discord.abc.GuildChannel, discord.Thread] = None):
         """Shows the bot's permissions in a specific channel.
 
         If no channel is given then it uses the current one.
@@ -660,7 +678,7 @@ class Meta(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def debugpermissions(self, ctx, guild_id: int, channel_id: int, author_id: int = None):
+    async def debugpermissions(self, ctx: Context, guild_id: int, channel_id: int, author_id: int = None):
         """Shows permission resolution for a channel and an optional author."""
 
         guild = self.bot.get_guild(guild_id)
@@ -682,7 +700,7 @@ class Meta(commands.Cog):
         await self.say_permissions(ctx, member, channel)
 
     @commands.command(aliases=['invite'])
-    async def join(self, ctx):
+    async def join(self, ctx: Context):
         """Joins a server."""
         perms = discord.Permissions.none()
         perms.read_messages = True
@@ -701,19 +719,19 @@ class Meta(commands.Cog):
 
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()
-    async def echo(self, ctx, *, content):
+    async def echo(self, ctx: Context, *, content: str):
         await ctx.send(content)
 
     @commands.command(hidden=True)
-    async def cud(self, ctx):
+    async def cud(self, ctx: Context):
         """pls no spam"""
 
         for i in range(3):
-            await ctx.send(3 - i)
+            await ctx.send(str(3 - i))
             await asyncio.sleep(1)
 
         await ctx.send('go')
 
 
-def setup(bot):
-    bot.add_cog(Meta(bot))
+async def setup(bot: RoboDanny):
+    await bot.add_cog(Meta(bot))

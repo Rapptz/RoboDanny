@@ -1,34 +1,45 @@
+from __future__ import annotations
+from typing_extensions import Annotated
+from typing import TYPE_CHECKING, Optional
+
 from discord.ext import commands
-from .utils import checks
 import discord
 import googletrans
 import io
+
+if TYPE_CHECKING:
+    from bot import RoboDanny
+    from .utils.context import Context
 
 GUILD_ID = 81883016288276480
 VOICE_ROOM_ID = 633466718035116052
 GENERAL_VOICE_ID = 81883016309248000
 
+
 class Funhouse(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
         self.trans = googletrans.Translator()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='\N{MAPLE LEAF}')
 
-    def is_outside_voice(self, state):
+    def is_outside_voice(self, state: discord.VoiceState) -> bool:
         return state.channel is None or state.channel.id != GENERAL_VOICE_ID
 
-    def is_inside_voice(self, state):
+    def is_inside_voice(self, state: discord.VoiceState) -> bool:
         return state.channel is not None and state.channel.id == GENERAL_VOICE_ID
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if member.guild.id != GUILD_ID:
             return
 
-        voice_room = member.guild.get_channel(VOICE_ROOM_ID)
+        voice_room: Optional[discord.TextChannel] = member.guild.get_channel(VOICE_ROOM_ID)  # type: ignore
+        if voice_room is None:
+            return
+
         if self.is_outside_voice(before) and self.is_inside_voice(after):
             # joined a channel
             await voice_room.set_permissions(member, read_messages=True)
@@ -37,7 +48,7 @@ class Funhouse(commands.Cog):
             await voice_room.set_permissions(member, read_messages=None)
 
     @commands.command(hidden=True)
-    async def cat(self, ctx):
+    async def cat(self, ctx: Context):
         """Gives you a random cat."""
         async with ctx.session.get('https://api.thecatapi.com/v1/images/search') as resp:
             if resp.status != 200:
@@ -46,7 +57,7 @@ class Funhouse(commands.Cog):
             await ctx.send(embed=discord.Embed(title='Random Cat').set_image(url=js[0]['url']))
 
     @commands.command(hidden=True)
-    async def dog(self, ctx):
+    async def dog(self, ctx: Context):
         """Gives you a random dog."""
         async with ctx.session.get('https://random.dog/woof') as resp:
             if resp.status != 200:
@@ -70,7 +81,7 @@ class Funhouse(commands.Cog):
                 await ctx.send(embed=discord.Embed(title='Random Dog').set_image(url=url))
 
     @commands.command(hidden=True)
-    async def translate(self, ctx, *, message: commands.clean_content = None):
+    async def translate(self, ctx: Context, *, message: Annotated[Optional[str], commands.clean_content] = None):
         """Translates a message to English using Google translate."""
 
         loop = self.bot.loop
@@ -93,5 +104,6 @@ class Funhouse(commands.Cog):
         embed.add_field(name=f'To {dest}', value=ret.text, inline=False)
         await ctx.send(embed=embed)
 
-def setup(bot):
-    bot.add_cog(Funhouse(bot))
+
+async def setup(bot: RoboDanny):
+    await bot.add_cog(Funhouse(bot))

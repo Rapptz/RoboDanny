@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from discord.ext import commands
 import asyncio
 import traceback
@@ -13,19 +15,26 @@ import sys
 import copy
 import time
 import subprocess
-from typing import Union, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Union, Optional
 
 # to expose to the eval command
 import datetime
 from collections import Counter
 
+if TYPE_CHECKING:
+    from typing_extensions import Self
+    from asyncpg import Record
+    from .utils.context import Context, GuildContext
+    from bot import RoboDanny
+
+
 class PerformanceMocker:
     """A mock object that can also be used in await expressions."""
 
     def __init__(self):
-        self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.get_running_loop()
 
-    def permissions_for(self, obj):
+    def permissions_for(self, obj: Any) -> discord.Permissions:
         # Lie and say we don't have permissions to embed
         # This makes it so pagination sessions just abruptly end on __init__
         # Most checks based on permission have a bypass for the owner anyway
@@ -36,61 +45,46 @@ class PerformanceMocker:
         perms.add_reactions = False
         return perms
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Self:
         return self
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Self:
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<PerformanceMocker>'
 
     def __await__(self):
-        future = self.loop.create_future()
+        future: asyncio.Future[Self] = self.loop.create_future()
         future.set_result(self)
         return future.__await__()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: Any) -> Self:
         return self
 
-    def __len__(self):
+    def __len__(self) -> int:
         return 0
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return False
 
-class GlobalChannel(commands.Converter):
-    async def convert(self, ctx, argument):
-        try:
-            return await commands.TextChannelConverter().convert(ctx, argument)
-        except commands.BadArgument:
-            # Not found... so fall back to ID + global lookup
-            try:
-                channel_id = int(argument, base=10)
-            except ValueError:
-                raise commands.BadArgument(f'Could not find a channel by ID {argument!r}.')
-            else:
-                channel = ctx.bot.get_channel(channel_id)
-                if channel is None:
-                    raise commands.BadArgument(f'Could not find a channel by ID {argument!r}.')
-                return channel
 
 class Admin(commands.Cog):
     """Admin-only commands that make the bot dynamic."""
 
-    def __init__(self, bot):
-        self.bot = bot
-        self._last_result = None
-        self.sessions = set()
+    def __init__(self, bot: RoboDanny):
+        self.bot: RoboDanny = bot
+        self._last_result: Optional[Any] = None
+        self.sessions: set[int] = set()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='stafftools', id=314348604095594498)
 
-    async def run_process(self, command):
+    async def run_process(self, command: str) -> list[str]:
         try:
             process = await asyncio.create_subprocess_shell(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             result = await process.communicate()
@@ -100,7 +94,7 @@ class Admin(commands.Cog):
 
         return [output.decode() for output in result]
 
-    def cleanup_code(self, content):
+    def cleanup_code(self, content: str) -> str:
         """Automatically removes code blocks from the code."""
         # remove ```py\n```
         if content.startswith('```') and content.endswith('```'):
@@ -109,39 +103,39 @@ class Admin(commands.Cog):
         # remove `foo`
         return content.strip('` \n')
 
-    async def cog_check(self, ctx):
+    async def cog_check(self, ctx: Context) -> bool:
         return await self.bot.is_owner(ctx.author)
 
-    def get_syntax_error(self, e):
+    def get_syntax_error(self, e: SyntaxError) -> str:
         if e.text is None:
             return f'```py\n{e.__class__.__name__}: {e}\n```'
         return f'```py\n{e.text}{"^":>{e.offset}}\n{e.__class__.__name__}: {e}```'
 
     @commands.command(hidden=True)
-    async def load(self, ctx, *, module):
+    async def load(self, ctx: Context, *, module: str):
         """Loads a module."""
         try:
-            self.bot.load_extension(module)
+            await self.bot.load_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
-    async def unload(self, ctx, *, module):
+    async def unload(self, ctx: Context, *, module: str):
         """Unloads a module."""
         try:
-            self.bot.unload_extension(module)
+            await self.bot.unload_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
             await ctx.send('\N{OK HAND SIGN}')
 
     @commands.group(name='reload', hidden=True, invoke_without_command=True)
-    async def _reload(self, ctx, *, module):
+    async def _reload(self, ctx: Context, *, module: str):
         """Reloads a module."""
         try:
-            self.bot.reload_extension(module)
+            await self.bot.reload_extension(module)
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
@@ -149,9 +143,9 @@ class Admin(commands.Cog):
 
     _GIT_PULL_REGEX = re.compile(r'\s*(?P<filename>.+?)\s*\|\s*[0-9]+\s*[+-]+')
 
-    def find_modules_from_git(self, output):
+    def find_modules_from_git(self, output: str) -> list[tuple[int, str]]:
         files = self._GIT_PULL_REGEX.findall(output)
-        ret = []
+        ret: list[tuple[int, str]] = []
         for file in files:
             root, ext = os.path.splitext(file)
             if ext != '.py':
@@ -166,14 +160,14 @@ class Admin(commands.Cog):
         ret.sort(reverse=True)
         return ret
 
-    def reload_or_load_extension(self, module):
+    async def reload_or_load_extension(self, module: str) -> None:
         try:
-            self.bot.reload_extension(module)
+            await self.bot.reload_extension(module)
         except commands.ExtensionNotLoaded:
-            self.bot.load_extension(module)
+            await self.bot.load_extension(module)
 
     @_reload.command(name='all', hidden=True)
-    async def _reload_all(self, ctx):
+    async def _reload_all(self, ctx: Context):
         """Reloads all modules, while pulling from git."""
 
         async with ctx.typing():
@@ -209,7 +203,7 @@ class Admin(commands.Cog):
                         statuses.append((ctx.tick(True), module))
             else:
                 try:
-                    self.reload_or_load_extension(module)
+                    await self.reload_or_load_extension(module)
                 except commands.ExtensionError:
                     statuses.append((ctx.tick(False), module))
                 else:
@@ -217,8 +211,8 @@ class Admin(commands.Cog):
 
         await ctx.send('\n'.join(f'{status}: `{module}`' for status, module in statuses))
 
-    @commands.command(pass_context=True, hidden=True, name='eval')
-    async def _eval(self, ctx, *, body: str):
+    @commands.command(hidden=True, name='eval')
+    async def _eval(self, ctx: Context, *, body: str):
         """Evaluates a code"""
 
         env = {
@@ -228,7 +222,7 @@ class Admin(commands.Cog):
             'author': ctx.author,
             'guild': ctx.guild,
             'message': ctx.message,
-            '_': self._last_result
+            '_': self._last_result,
         }
 
         env.update(globals())
@@ -264,8 +258,8 @@ class Admin(commands.Cog):
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
-    @commands.command(pass_context=True, hidden=True)
-    async def repl(self, ctx):
+    @commands.command(hidden=True)
+    async def repl(self, ctx: Context):
         """Launches an interactive REPL session."""
         variables = {
             'ctx': ctx,
@@ -285,9 +279,7 @@ class Admin(commands.Cog):
         await ctx.send('Enter code to execute or evaluate. `exit()` or `quit` to exit.')
 
         def check(m):
-            return m.author.id == ctx.author.id and \
-                   m.channel.id == ctx.channel.id and \
-                   m.content.startswith('`')
+            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.startswith('`')
 
         while True:
             try:
@@ -325,6 +317,7 @@ class Admin(commands.Cog):
 
             fmt = None
             stdout = io.StringIO()
+            code = ''
 
             try:
                 with redirect_stdout(stdout):
@@ -353,9 +346,8 @@ class Admin(commands.Cog):
             except discord.HTTPException as e:
                 await ctx.send(f'Unexpected error: `{e}`')
 
-
     @commands.command(hidden=True)
-    async def sql(self, ctx, *, query: str):
+    async def sql(self, ctx: Context, *, query: str):
         """Run some SQL."""
         # the imports are here because I imagine some people would want to use
         # this cog as a base for their other cog, and since this one is kinda
@@ -367,6 +359,7 @@ class Admin(commands.Cog):
         query = self.cleanup_code(query)
 
         is_multistatement = query.count(';') > 1
+        strategy: Callable[[str], Union[Awaitable[list[Record]], Awaitable[str]]]
         if is_multistatement:
             # fetch does not support multiple statements
             strategy = ctx.db.execute
@@ -381,7 +374,7 @@ class Admin(commands.Cog):
             return await ctx.send(f'```py\n{traceback.format_exc()}\n```')
 
         rows = len(results)
-        if is_multistatement or rows == 0:
+        if isinstance(results, str) or rows == 0:
             return await ctx.send(f'`{dt:.2f}ms: {results}`')
 
         headers = list(results[0].keys())
@@ -398,7 +391,7 @@ class Admin(commands.Cog):
             await ctx.send(fmt)
 
     @commands.command(hidden=True)
-    async def sql_table(self, ctx, *, table_name: str):
+    async def sql_table(self, ctx: Context, *, table_name: str):
         """Runs a query describing the table schema."""
         from .utils.formats import TabularData
 
@@ -407,7 +400,7 @@ class Admin(commands.Cog):
                    WHERE table_name = $1
                 """
 
-        results = await ctx.db.fetch(query, table_name)
+        results: list[Record] = await ctx.db.fetch(query, table_name)
 
         headers = list(results[0].keys())
         table = TabularData()
@@ -423,11 +416,18 @@ class Admin(commands.Cog):
             await ctx.send(fmt)
 
     @commands.command(hidden=True)
-    async def sudo(self, ctx, channel: Optional[GlobalChannel], who: Union[discord.Member, discord.User], *, command: str):
+    async def sudo(
+        self,
+        ctx: Context,
+        channel: Optional[discord.TextChannel],
+        who: Union[discord.Member, discord.User],
+        *,
+        command: str,
+    ):
         """Run a command as another user optionally in another channel."""
         msg = copy.copy(ctx.message)
-        channel = channel or ctx.channel
-        msg.channel = channel
+        new_channel = channel or ctx.channel
+        msg.channel = new_channel
         msg.author = who
         msg.content = ctx.prefix + command
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
@@ -435,7 +435,7 @@ class Admin(commands.Cog):
         await self.bot.invoke(new_ctx)
 
     @commands.command(hidden=True)
-    async def do(self, ctx, times: int, *, command):
+    async def do(self, ctx: Context, times: int, *, command: str):
         """Repeats a command a specified number of times."""
         msg = copy.copy(ctx.message)
         msg.content = ctx.prefix + command
@@ -447,7 +447,7 @@ class Admin(commands.Cog):
             await new_ctx.reinvoke()
 
     @commands.command(hidden=True)
-    async def sh(self, ctx, *, command):
+    async def sh(self, ctx: Context, *, command: str):
         """Runs a shell command."""
         from cogs.utils.paginator import TextPageSource, RoboPages
 
@@ -463,18 +463,18 @@ class Admin(commands.Cog):
         await pages.start()
 
     @commands.command(hidden=True)
-    async def perf(self, ctx, *, command):
+    async def perf(self, ctx: Context, *, command: str):
         """Checks the timing of a command, attempting to suppress HTTP and DB calls."""
 
         msg = copy.copy(ctx.message)
         msg.content = ctx.prefix + command
 
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-        new_ctx._db = PerformanceMocker()
+        new_ctx._db = PerformanceMocker()  # type: ignore
 
         # Intercepts the Messageable interface a bit
-        new_ctx._state = PerformanceMocker()
-        new_ctx.channel = PerformanceMocker()
+        new_ctx._state = PerformanceMocker()  # type: ignore
+        new_ctx.channel = PerformanceMocker()  # type: ignore
 
         if new_ctx.command is None:
             return await ctx.send('No command found')
@@ -495,5 +495,6 @@ class Admin(commands.Cog):
 
         await ctx.send(f'Status: {ctx.tick(success)} Time: {(end - start) * 1000:.2f}ms')
 
-def setup(bot):
-    bot.add_cog(Admin(bot))
+
+async def setup(bot):
+    await bot.add_cog(Admin(bot))
