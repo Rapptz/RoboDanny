@@ -191,6 +191,7 @@ class SpamChecker:
     2) It checks if the content has been spammed 15 times in 17 seconds.
     3) It checks if new users have spammed 30 times in 35 seconds.
     4) It checks if "fast joiners" have spammed 10 times in 12 seconds.
+    5) It checks if a member spammed `config.mention_count * 2` mentions in 12 seconds.
 
     The second case is meant to catch alternating spam bots while the first one
     just catches regular singular spam bots.
@@ -203,10 +204,19 @@ class SpamChecker:
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join: Optional[datetime.datetime] = None
         self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
+        self._by_mentions: Optional[commands.CooldownMapping] = None
+        self._by_mentions_rate: Optional[int] = None
 
         # user_id flag mapping (for about 30 minutes)
         self.fast_joiners: MutableMapping[int, bool] = cache.ExpiringCache(seconds=1800.0)
         self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
+
+    def by_mentions(self, config: ModConfig) -> commands.CooldownMapping:
+        mention_threshold = config.mention_count * 2
+        if self._by_mentions_rate != mention_threshold:
+            self._by_mentions = commands.CooldownMapping.from_cooldown(mention_threshold, 12, commands.BucketType.member)
+            self._by_mentions_rate = mention_threshold
+        return self._by_mentions
 
     def is_new(self, member: discord.Member) -> bool:
         now = discord.utils.utcnow()
@@ -214,7 +224,7 @@ class SpamChecker:
         ninety_days_ago = now - datetime.timedelta(days=90)
         return member.created_at > ninety_days_ago and member.joined_at is not None and member.joined_at > seven_days_ago
 
-    def is_spamming(self, message: discord.Message) -> bool:
+    def is_spamming(self, message: discord.Message, config: ModConfig) -> bool:
         if message.guild is None:
             return False
 
@@ -238,6 +248,9 @@ class SpamChecker:
         if content_bucket.update_rate_limit(current):
             return True
 
+        if self.is_mention_spam(message, config, current):
+            return True
+
         return False
 
     def is_fast_join(self, member: discord.Member) -> bool:
@@ -250,6 +263,13 @@ class SpamChecker:
         if is_fast:
             self.fast_joiners[member.id] = True
         return is_fast
+
+    def is_mention_spam(self, message: discord.Message, config: ModConfig, current: float) -> bool:
+        if not config.mention_count:
+            return False
+        mention_bucket = self.by_mentions(config).get_bucket(message, current)
+        mention_count = sum(not m.bot and m.id != message.author.id for m in message.mentions)
+        return mention_bucket.update_rate_limit(current, tokens=mention_count)
 
 
 ## Checks
@@ -403,7 +423,7 @@ class Mod(commands.Cog):
             return
 
         checker = self._spam_check[guild_id]
-        if not checker.is_spamming(message):
+        if not checker.is_spamming(message, config):
             return
 
         try:
@@ -606,8 +626,8 @@ class Mod(commands.Cog):
     async def raid_on(self, ctx: GuildContext, *, channel: discord.TextChannel = None):
         """Enables basic raid mode on the server.
 
-        When enabled, server verification level is set to table flip
-        levels and allows the bot to broadcast new members joining
+        When enabled, server verification level is set to high
+        and allows the bot to broadcast new members joining
         to a specified channel.
 
         If no channel is given, then the bot will broadcast join
