@@ -17,6 +17,7 @@ import asyncpg
 
 if TYPE_CHECKING:
     from cogs.reminder import Reminder
+    from cogs.config import Config as ConfigCog
 
 
 description = """
@@ -403,3 +404,7 @@ class RoboDanny(commands.AutoShardedBot):
     @property
     def reminder(self) -> Optional[Reminder]:
         return self.get_cog('Reminder')  # type: ignore
+
+    @property
+    def config_cog(self) -> Optional[ConfigCog]:
+        return self.get_cog('Config')  # type: ignore
