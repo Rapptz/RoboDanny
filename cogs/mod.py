@@ -271,6 +271,7 @@ class SpamChecker:
         mention_count = sum(not m.bot and m.id != message.author.id for m in message.mentions)
         return mention_bucket.update_rate_limit(current, tokens=mention_count)
 
+
 ## Checks
 
 
