@@ -252,7 +252,7 @@ class API(commands.Cog):
     async def do_rtfm(self, ctx, key, obj):
         page_types = {
             'stable': 'https://discordpy.readthedocs.io/en/stable',
-            'stable-jp': 'https://discordpy.readthedocs.io/ja/latest',
+            'stable-jp': 'https://discordpy.readthedocs.io/ja/stable',
             'latest': 'https://discordpy.readthedocs.io/en/latest',
             'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
             'python': 'https://docs.python.org/3',
