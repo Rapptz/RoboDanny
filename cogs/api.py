@@ -31,6 +31,15 @@ DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELPER_ROLE = 558559632637952010
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 738572311107469354, 956435493296414720)
 
+RTFM_PAGE_TYPES = {
+    'stable': 'https://discordpy.readthedocs.io/en/stable',
+    'stable-jp': 'https://discordpy.readthedocs.io/ja/stable',
+    'latest': 'https://discordpy.readthedocs.io/en/latest',
+    'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
+    'python': 'https://docs.python.org/3',
+    'python-jp': 'https://docs.python.org/ja/3',
+}
+
 
 class BotInfo(TypedDict):
     channel: int
@@ -275,10 +284,10 @@ class API(commands.Cog):
 
         return result
 
-    async def build_rtfm_lookup_table(self, page_types):
+    async def build_rtfm_lookup_table(self):
         cache = {}
-        for key, page in page_types.items():
-            sub = cache[key] = {}
+        for key, page in RTFM_PAGE_TYPES.items():
+            cache[key] = {}
             async with self.bot.session.get(page + '/objects.inv') as resp:
                 if resp.status != 200:
                     raise RuntimeError('Cannot build rtfm lookup table, try again later.')
@@ -289,22 +298,13 @@ class API(commands.Cog):
         self._rtfm_cache = cache
 
     async def do_rtfm(self, ctx: Context, key: str, obj: Optional[str]):
-        page_types = {
-            'stable': 'https://discordpy.readthedocs.io/en/stable',
-            'stable-jp': 'https://discordpy.readthedocs.io/ja/stable',
-            'latest': 'https://discordpy.readthedocs.io/en/latest',
-            'latest-jp': 'https://discordpy.readthedocs.io/ja/latest',
-            'python': 'https://docs.python.org/3',
-            'python-jp': 'https://docs.python.org/ja/3',
-        }
-
         if obj is None:
-            await ctx.send(page_types[key])
+            await ctx.send(RTFM_PAGE_TYPES[key])
             return
 
         if not hasattr(self, '_rtfm_cache'):
             await ctx.trigger_typing()
-            await self.build_rtfm_lookup_table(page_types)
+            await self.build_rtfm_lookup_table()
 
         obj = re.sub(r'^(?:discord\.(?:ext\.)?)?(?:commands\.)?(.+)', r'\1', obj)
 
@@ -372,6 +372,17 @@ class API(commands.Cog):
     async def rtfm_master(self, ctx: Context, *, obj: str = None):
         """Gives you a documentation link for a discord.py entity (master branch)"""
         await self.do_rtfm(ctx, 'latest', obj)
+
+    @rtfm.command(name='refresh')
+    @commands.is_owner()
+    async def rtfm_refresh(self, ctx: Context):
+        """Refreshes the RTFM and FAQ cache"""
+
+        async with ctx.typing():
+            await self.build_rtfm_lookup_table()
+            await self.refresh_faq_cache()
+
+        await ctx.send('\N{THUMBS UP SIGN}')
 
     async def _member_stats(self, ctx: Context, member: discord.Member, total_uses: int):
         e = discord.Embed(title='RTFM Stats')
