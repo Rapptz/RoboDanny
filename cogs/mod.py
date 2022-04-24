@@ -211,7 +211,10 @@ class SpamChecker:
         self.fast_joiners: MutableMapping[int, bool] = cache.ExpiringCache(seconds=1800.0)
         self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
 
-    def by_mentions(self, config: ModConfig) -> commands.CooldownMapping:
+    def by_mentions(self, config: ModConfig) -> Optional[commands.CooldownMapping]:
+        if not config.mention_count:
+            return None
+
         mention_threshold = config.mention_count * 2
         if self._by_mentions_rate != mention_threshold:
             self._by_mentions = commands.CooldownMapping.from_cooldown(mention_threshold, 12, commands.BucketType.member)
@@ -265,11 +268,12 @@ class SpamChecker:
         return is_fast
 
     def is_mention_spam(self, message: discord.Message, config: ModConfig, current: float) -> bool:
-        if not config.mention_count:
+        mapping = self.by_mentions(config)
+        if mapping is None:
             return False
-        mention_bucket = self.by_mentions(config).get_bucket(message, current)
+        mention_bucket = mapping.get_bucket(message, current)
         mention_count = sum(not m.bot and m.id != message.author.id for m in message.mentions)
-        return mention_bucket.update_rate_limit(current, tokens=mention_count)
+        return mention_bucket.update_rate_limit(current, tokens=mention_count) is not None
 
 
 ## Checks
