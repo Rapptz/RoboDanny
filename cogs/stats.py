@@ -712,14 +712,7 @@ class Stats(commands.Cog):
             embed.colour = WARNING
             total_warnings += 1
 
-        try:
-            task_retriever = asyncio.Task.all_tasks
-        except AttributeError:
-            # future proofing for 3.9 I guess
-            task_retriever = asyncio.all_tasks
-
-        all_tasks = task_retriever(loop=self.bot.loop)
-
+        all_tasks = asyncio.all_tasks(loop=self.bot.loop)
         event_tasks = [t for t in all_tasks if 'Client._run_event' in repr(t) and not t.done()]
 
         cogs_directory = os.path.dirname(__file__)
