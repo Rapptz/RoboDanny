@@ -197,7 +197,7 @@ class Tags(commands.Cog):
         guild_id: Optional[int],
         name: str,
         *,
-        connection: Optional[asyncpg.Pool | asyncpg.Connection] = None,
+        pool: Optional[asyncpg.Pool] = None,
     ) -> TagEntry:
         def disambiguate(rows, query):
             if rows is None or len(rows) == 0:
@@ -206,7 +206,7 @@ class Tags(commands.Cog):
             names = '\n'.join(r['name'] for r in rows)
             raise RuntimeError(f'Tag not found. Did you mean...\n{names}')
 
-        con = connection or self.bot.pool
+        pool = pool or self.bot.pool
 
         query = """SELECT tags.name, tags.content
                    FROM tag_lookup
@@ -214,7 +214,7 @@ class Tags(commands.Cog):
                    WHERE tag_lookup.location_id=$1 AND LOWER(tag_lookup.name)=$2;
                 """
 
-        row = await con.fetchrow(query, guild_id, name)
+        row = await pool.fetchrow(query, guild_id, name)
         if row is None:
             query = """SELECT     tag_lookup.name
                        FROM       tag_lookup
@@ -223,7 +223,7 @@ class Tags(commands.Cog):
                        LIMIT 3;
                     """
 
-            return disambiguate(await con.fetch(query, guild_id, name), name)
+            return disambiguate(await pool.fetch(query, guild_id, name), name)
         else:
             return row
 
@@ -243,12 +243,12 @@ class Tags(commands.Cog):
         # since I'm checking for the exception type and acting on it, I need
         # to use the manual transaction blocks
 
-        async with ctx.acquire():
-            tr = ctx.db.transaction()  # type: ignore
+        async with ctx.db.acquire() as connection:
+            tr = connection.transaction()
             await tr.start()
 
             try:
-                await ctx.db.execute(query, name, content, ctx.author.id, ctx.guild.id)
+                await connection.execute(query, name, content, ctx.author.id, ctx.guild.id)
             except asyncpg.UniqueViolationError:
                 await tr.rollback()
                 await ctx.send('This tag already exists.')
@@ -291,7 +291,7 @@ class Tags(commands.Cog):
         """
 
         try:
-            tag = await self.get_tag(ctx.guild.id, name, connection=ctx.db)
+            tag = await self.get_tag(ctx.guild.id, name, pool=ctx.pool)
         except RuntimeError as e:
             return await ctx.send(str(e))
 
@@ -370,9 +370,6 @@ class Tags(commands.Cog):
         def check(msg):
             return msg.author == ctx.author and ctx.channel == msg.channel
 
-        # release the connection back to the pool to wait for our user
-        await ctx.release()
-
         try:
             name = await self.bot.wait_for('message', timeout=30.0, check=check)
         except asyncio.TimeoutError:
@@ -391,9 +388,6 @@ class Tags(commands.Cog):
                 'Sorry. This tag is currently being made by someone. ' f'Redo the command "{ctx.prefix}tag make" to retry.'
             )
 
-        # reacquire our connection since we need the query
-        await ctx.acquire()
-
         # it's technically kind of expensive to do two queries like this
         # i.e. one to check if it exists and then another that does the insert
         # while also checking if it exists due to the constraints,
@@ -411,9 +405,6 @@ class Tags(commands.Cog):
             f'Neat. So the name is {name}. What about the tag\'s content? '
             f'**You can type {ctx.prefix}abort to abort the tag make process.**'
         )
-
-        # release while we wait for response
-        await ctx.release()
 
         try:
             msg = await self.bot.wait_for('message', check=check, timeout=300.0)
@@ -795,7 +786,7 @@ class Tags(commands.Cog):
         """
 
         try:
-            tag = await self.get_tag(ctx.guild.id, name, connection=ctx.db)
+            tag = await self.get_tag(ctx.guild.id, name, pool=ctx.pool)
         except RuntimeError as e:
             return await ctx.send(str(e))
 
@@ -814,7 +805,6 @@ class Tags(commands.Cog):
                 """
 
         rows = await ctx.db.fetch(query, ctx.guild.id, member.id)
-        await ctx.release()
 
         if rows:
             p = TagPages(entries=rows, ctx=ctx)
@@ -887,7 +877,6 @@ class Tags(commands.Cog):
                 """
 
         rows = await ctx.db.fetch(query, ctx.guild.id)
-        await ctx.release()
 
         if rows:
             # PSQL orders this oddly for some reason
@@ -945,7 +934,6 @@ class Tags(commands.Cog):
 
         if results:
             p = TagPages(entries=results, per_page=20, ctx=ctx)
-            await ctx.release()
             await p.start()
         else:
             await ctx.send('No tags found.')
@@ -974,13 +962,13 @@ class Tags(commands.Cog):
         if member is not None:
             return await ctx.send('Tag owner is still in server.')
 
-        async with ctx.acquire():
-            async with ctx.db.transaction():  # type: ignore
+        async with ctx.db.acquire() as conn:
+            async with conn.transaction():
                 if not alias:
                     query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
-                    await ctx.db.execute(query, ctx.author.id, row[0])
+                    await conn.execute(query, ctx.author.id, row[0])
                 query = "UPDATE tag_lookup SET owner_id=$1 WHERE tag_id=$2;"
-                await ctx.db.execute(query, ctx.author.id, row[0])
+                await conn.execute(query, ctx.author.id, row[0])
 
             await ctx.send('Successfully transferred tag ownership to you.')
 
@@ -994,17 +982,19 @@ class Tags(commands.Cog):
 
         if member.bot:
             return await ctx.send('You cannot transfer a tag to a bot.')
+
         query = "SELECT id FROM tags WHERE location_id=$1 AND LOWER(name)=$2 AND owner_id=$3;"
+
         row = await ctx.db.fetchrow(query, ctx.guild.id, tag.lower(), ctx.author.id)
         if row is None:
             return await ctx.send(f'A tag with the name of "{tag}" does not exist or is not owned by you.')
 
-        async with ctx.acquire():
-            async with ctx.db.transaction():  # type: ignore
+        async with ctx.db.acquire() as conn:
+            async with conn.transaction():
                 query = "UPDATE tags SET owner_id=$1 WHERE id=$2;"
-                await ctx.db.execute(query, member.id, row[0])
+                await conn.execute(query, member.id, row[0])
                 query = "UPDATE tag_lookup SET owner_id=$1 WHERE tag_id=$2;"
-                await ctx.db.execute(query, member.id, row[0])
+                await conn.execute(query, member.id, row[0])
 
         await ctx.send(f'Successfully transferred tag ownership to {member}.')
 
@@ -1055,7 +1045,6 @@ class Tags(commands.Cog):
         """
 
         query = "SELECT name, content FROM tags WHERE LOWER(name)=$1 AND location_id IS NULL;"
-
         tag = await ctx.db.fetchrow(query, name)
 
         if tag is None:
@@ -1168,8 +1157,6 @@ class Tags(commands.Cog):
         if len(data) == 0:
             return await ctx.send('No tags found.')
 
-        await ctx.release()
-
         data = [r[0] for r in data]
         data.sort()
 
@@ -1244,7 +1231,6 @@ class Tags(commands.Cog):
                 """
 
         rows = await ctx.db.fetch(query, user.id)
-        await ctx.release()
 
         if rows:
             entries = [f'{name} ({uses} uses)' for name, uses in rows]

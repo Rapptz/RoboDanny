@@ -227,7 +227,7 @@ class Config(commands.Cog):
 
         # check if we're plonked
         is_plonked = await self.is_plonked(
-            ctx.guild.id, ctx.author.id, channel=ctx.channel, connection=ctx.db, check_bypass=False
+            ctx.guild.id, ctx.author.id, channel=ctx.channel, check_bypass=False
         )
 
         return not is_plonked
@@ -250,14 +250,14 @@ class Config(commands.Cog):
         if is_owner:
             return True
 
-        resolved = await self.get_command_permissions(ctx.guild.id, connection=ctx.db)
+        resolved = await self.get_command_permissions(ctx.guild.id)
         return not resolved.is_blocked(ctx)
 
     async def _bulk_ignore_entries(self, ctx: GuildContext, entries: Iterable[discord.abc.Snowflake]) -> None:
-        async with ctx.acquire():
-            async with ctx.db.transaction():  # type: ignore  # Pyright doesn't think this exists
+        async with ctx.db.acquire() as con:
+            async with con.transaction():
                 query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
-                records = await ctx.db.fetch(query, ctx.guild.id)
+                records = await con.fetch(query, ctx.guild.id)
 
                 # we do not want to insert duplicates
                 current_plonks = {r[0] for r in records}
@@ -265,7 +265,7 @@ class Config(commands.Cog):
                 to_insert = [(guild_id, e.id) for e in entries if e.id not in current_plonks]
 
                 # do a bulk COPY
-                await ctx.db.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
+                await con.copy_records_to_table('plonks', columns=('guild_id', 'entity_id'), records=to_insert)
 
                 # invalidate the cache for this guild
                 self.is_plonked.invalidate_containing(f'{ctx.guild.id!r}:')
@@ -321,8 +321,6 @@ class Config(commands.Cog):
 
         if len(records) == 0:
             return await ctx.send('I am not ignoring anything here.')
-
-        await ctx.release()
 
         source = PlonkedPageSource(self.bot, guild, records)
         pages = RoboPages(source, ctx=ctx)
@@ -396,7 +394,7 @@ class Config(commands.Cog):
 
     async def command_toggle(
         self,
-        connection: Connection | Pool,
+        pool: Pool,
         guild_id: int,
         channel_id: Optional[int],
         name: str,
@@ -413,27 +411,28 @@ class Config(commands.Cog):
             subcheck = 'channel_id=$3'
             args = (guild_id, name, channel_id)
 
-        async with connection.transaction():  # type: ignore  # Pyright doesn't see this method
-            # delete the previous entry regardless of what it was
-            query = f"DELETE FROM command_config WHERE guild_id=$1 AND name=$2 AND {subcheck};"
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                # delete the previous entry regardless of what it was
+                query = f"DELETE FROM command_config WHERE guild_id=$1 AND name=$2 AND {subcheck};"
 
-            # DELETE <num>
-            await connection.execute(query, *args)
+                # DELETE <num>
+                await connection.execute(query, *args)
 
-            query = "INSERT INTO command_config (guild_id, channel_id, name, whitelist) VALUES ($1, $2, $3, $4);"
+                query = "INSERT INTO command_config (guild_id, channel_id, name, whitelist) VALUES ($1, $2, $3, $4);"
 
-            try:
-                await connection.execute(query, guild_id, channel_id, name, whitelist)
-            except asyncpg.UniqueViolationError:
-                msg = 'This command is already disabled.' if not whitelist else 'This command is already explicitly enabled.'
-                raise RuntimeError(msg)
+                try:
+                    await connection.execute(query, guild_id, channel_id, name, whitelist)
+                except asyncpg.UniqueViolationError:
+                    msg = 'This command is already disabled.' if not whitelist else 'This command is already explicitly enabled.'
+                    raise RuntimeError(msg)
 
     @channel.command(name='disable')
     async def channel_disable(self, ctx: GuildContext, *, command: CommandName):
         """Disables a command for this channel."""
 
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, ctx.channel.id, command, whitelist=False)
+            await self.command_toggle(ctx.pool, ctx.guild.id, ctx.channel.id, command, whitelist=False)
         except RuntimeError as e:
             await ctx.send(str(e))
         else:
@@ -444,7 +443,7 @@ class Config(commands.Cog):
         """Enables a command for this channel."""
 
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, ctx.channel.id, command, whitelist=True)
+            await self.command_toggle(ctx.pool, ctx.guild.id, ctx.channel.id, command, whitelist=True)
         except RuntimeError as e:
             await ctx.send(str(e))
         else:
@@ -455,7 +454,7 @@ class Config(commands.Cog):
         """Disables a command for this server."""
 
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, None, command, whitelist=False)
+            await self.command_toggle(ctx.pool, ctx.guild.id, None, command, whitelist=False)
         except RuntimeError as e:
             await ctx.send(str(e))
         else:
@@ -466,7 +465,7 @@ class Config(commands.Cog):
         """Enables a command for this server."""
 
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, None, command, whitelist=True)
+            await self.command_toggle(ctx.pool, ctx.guild.id, None, command, whitelist=True)
         except RuntimeError as e:
             await ctx.send(str(e))
         else:
@@ -480,7 +479,7 @@ class Config(commands.Cog):
         channel_id = channel.id if channel else None
         human_friendly = channel.mention if channel else 'the server'
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, channel_id, command, whitelist=True)
+            await self.command_toggle(ctx.pool, ctx.guild.id, channel_id, command, whitelist=True)
         except RuntimeError as e:
             await ctx.send(str(e))
         else:
@@ -494,18 +493,11 @@ class Config(commands.Cog):
         channel_id = channel.id if channel else None
         human_friendly = channel.mention if channel else 'the server'
         try:
-            await self.command_toggle(ctx.db, ctx.guild.id, channel_id, command, whitelist=False)
+            await self.command_toggle(ctx.pool, ctx.guild.id, channel_id, command, whitelist=False)
         except RuntimeError as e:
             await ctx.send(str(e))
         else:
             await ctx.send(f'Command successfully disabled for {human_friendly}.')
-
-    @server.before_invoke
-    @channel.before_invoke
-    @config_enable.before_invoke
-    @config_disable.before_invoke
-    async def open_database_before_working(self, ctx: GuildContext):
-        await ctx.acquire()
 
     @config.command(name='disabled')
     @checks.is_mod()

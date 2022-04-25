@@ -92,7 +92,7 @@ class RNG(commands.Cog):
         if tags is None:
             return await ctx.send('Tag commands currently disabled.')
 
-        tag = await tags.get_random_tag(ctx.guild, connection=ctx.db)
+        tag = await tags.get_random_tag(ctx.guild)
         if tag is None:
             return await ctx.send('This server has no tags.')
 

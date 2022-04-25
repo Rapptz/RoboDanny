@@ -849,7 +849,7 @@ class Mod(commands.Cog):
         if total_members == 0:
             return await ctx.send('Missing members to ban.')
 
-        confirm = await ctx.prompt(f'This will ban **{plural(total_members):member}**. Are you sure?', reacquire=False)
+        confirm = await ctx.prompt(f'This will ban **{plural(total_members):member}**. Are you sure?')
         if not confirm:
             return await ctx.send('Aborting.')
 
@@ -1160,7 +1160,12 @@ class Mod(commands.Cog):
         reason = safe_reason_append(reason, until)
         await ctx.guild.ban(member, reason=reason)
         timer = await reminder.create_timer(
-            duration.dt, 'tempban', ctx.guild.id, ctx.author.id, member.id, connection=ctx.db, created=ctx.message.created_at
+            duration.dt,
+            'tempban',
+            ctx.guild.id,
+            ctx.author.id,
+            member.id,
+            created=ctx.message.created_at,
         )
         await ctx.send(f'Banned {member} for {time.format_relative(duration.dt)}.')
 
@@ -1829,7 +1834,7 @@ class Mod(commands.Cog):
             muted_members = len(role.members)
             if muted_members > 0:
                 msg = f'Are you sure you want to make this the mute role? It has {plural(muted_members):member}.'
-                confirm = await ctx.prompt(msg, reacquire=False)
+                confirm = await ctx.prompt(msg)
                 if not confirm:
                     merge = discord.utils.MISSING
 
@@ -1899,7 +1904,7 @@ class Mod(commands.Cog):
         await ctx.db.execute(query, guild_id, role.id)
         self.get_guild_config.invalidate(self, guild_id)
 
-        confirm = await ctx.prompt('Would you like to update the channel overwrites as well?', reacquire=False)
+        confirm = await ctx.prompt('Would you like to update the channel overwrites as well?')
         if not confirm:
             return await ctx.send('Mute role successfully created.')
 
@@ -1925,7 +1930,7 @@ class Mod(commands.Cog):
         muted_members = len(config.muted_members)
         if muted_members > 0:
             msg = f'Are you sure you want to unbind and unmute {plural(muted_members):member}?'
-            confirm = await ctx.prompt(msg, reacquire=False)
+            confirm = await ctx.prompt(msg)
             if not confirm:
                 return await ctx.send('Aborting.')
 
@@ -1967,7 +1972,7 @@ class Mod(commands.Cog):
 
         delta = time.human_timedelta(duration.dt, source=created_at)
         warning = f'Are you sure you want to be muted for {delta}?\n**Do not ask the moderators to undo this!**'
-        confirm = await ctx.prompt(warning, reacquire=False)
+        confirm = await ctx.prompt(warning)
         if not confirm:
             return await ctx.send('Aborting', delete_after=5.0)
 

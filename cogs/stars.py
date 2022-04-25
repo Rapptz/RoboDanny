@@ -40,7 +40,7 @@ def requires_starboard():
 
         cog: Stars = ctx.bot.get_cog('Stars')  # type: ignore
 
-        ctx.starboard = await cog.get_starboard(ctx.guild.id, connection=ctx.db)  # type: ignore
+        ctx.starboard = await cog.get_starboard(ctx.guild.id)  # type: ignore
         if ctx.starboard.channel is None:
             raise StarError('\N{WARNING SIGN} Starboard channel not found.')
 
@@ -352,7 +352,7 @@ class Stars(commands.Cog):
         message_id: int,
         starrer_id: int,
         *,
-        connection: asyncpg.Connection | asyncpg.Pool,
+        connection: asyncpg.Connection,
     ) -> None:
         """Stars a message.
 
@@ -512,7 +512,7 @@ class Stars(commands.Cog):
         message_id: int,
         starrer_id: int,
         *,
-        connection: asyncpg.Connection | asyncpg.Pool,
+        connection: asyncpg.Connection,
     ) -> None:
         """Unstars a message.
 
@@ -615,7 +615,7 @@ class Stars(commands.Cog):
         # decided to use the ?star command
         self.get_starboard.invalidate(self, ctx.guild.id)
 
-        starboard = await self.get_starboard(ctx.guild.id, connection=ctx.db)
+        starboard = await self.get_starboard(ctx.guild.id)
         if starboard.channel is not None:
             return await ctx.send(f'This server already has a starboard ({starboard.channel.mention}).')
 
@@ -1261,7 +1261,6 @@ class Stars(commands.Cog):
         """Announce stuff to every starboard."""
         query = "SELECT id, channel_id FROM starboard;"
         records = await ctx.db.fetch(query)
-        await ctx.release()
 
         to_send = []
         for guild_id, channel_id in records:

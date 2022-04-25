@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Iterable, TypeVar, Union, Optional, Generator
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Protocol, TypeVar, Union, Optional
 from discord.ext import commands
 import asyncio
 import discord
@@ -11,37 +11,55 @@ if TYPE_CHECKING:
     from bot import RoboDanny
     from aiohttp import ClientSession
     from asyncpg import Pool, Connection
+    from types import TracebackType
 
 
 T = TypeVar('T')
 
 
-class _ContextDBAcquire:
-    __slots__ = ('ctx', 'timeout')
+# For typing purposes, `Context.db` returns a Protocol type
+# that allows us to properly type the return values via narrowing
+# Right now, asyncpg is untyped so this is better than the current status quo
+# To actually receive the regular Pool type `Context.pool` can be used instead.
 
-    def __init__(self, ctx: Context, timeout: Optional[float]):
-        self.ctx: Context = ctx
-        self.timeout: Optional[float] = timeout
 
-    def __await__(self) -> Generator[Any, None, Connection]:
-        return self.ctx._acquire(self.timeout).__await__()
+class ConnectionContextManager(Protocol):
+    async def __aenter__(self) -> Connection:
+        ...
 
-    async def __aenter__(self) -> Union[Pool, Connection]:
-        await self.ctx._acquire(self.timeout)
-        return self.ctx.db
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        ...
 
-    async def __aexit__(self, *args) -> None:
-        await self.ctx.release()
+
+class DatabaseProtocol(Protocol):
+    async def execute(self, query: str, *args: Any, timeout: Optional[float] = None) -> str:
+        ...
+
+    async def fetch(self, query: str, *args: Any, timeout: Optional[float] = None) -> list[Any]:
+        ...
+
+    async def fetchrow(self, query: str, *args: Any, timeout: Optional[float] = None) -> Optional[Any]:
+        ...
+
+    def acquire(self, *, timeout: Optional[float] = None) -> ConnectionContextManager:
+        ...
+
+    def release(self, connection: Connection) -> None:
+        ...
 
 
 class ConfirmationView(discord.ui.View):
-    def __init__(self, *, timeout: float, author_id: int, reacquire: bool, ctx: Context, delete_after: bool) -> None:
+    def __init__(self, *, timeout: float, author_id: int, ctx: Context, delete_after: bool) -> None:
         super().__init__(timeout=timeout)
         self.value: Optional[bool] = None
         self.delete_after: bool = delete_after
         self.author_id: int = author_id
         self.ctx: Context = ctx
-        self.reacquire: bool = reacquire
         self.message: Optional[discord.Message] = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -52,8 +70,6 @@ class ConfirmationView(discord.ui.View):
             return False
 
     async def on_timeout(self) -> None:
-        if self.reacquire:
-            await self.ctx.acquire()
         if self.delete_after and self.message:
             await self.message.delete()
 
@@ -82,8 +98,7 @@ class Context(commands.Context):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.pool = self.bot.pool
-        self._db: Optional[Union[Pool, Connection]] = None
+        self.pool: Pool = self.bot.pool
 
     async def entry_to_code(self, entries: Iterable[tuple[str, str]]) -> None:
         width = max(len(a) for a, b in entries)
@@ -129,25 +144,20 @@ class Context(commands.Context):
         def check(m):
             return m.content.isdigit() and m.author.id == self.author.id and m.channel.id == self.channel.id
 
-        await self.release()
-
         # only give them 3 tries.
-        try:
-            for i in range(3):
-                try:
-                    message = await self.bot.wait_for('message', check=check, timeout=30.0)
-                except asyncio.TimeoutError:
-                    raise ValueError('Took too long. Goodbye.')
+        for i in range(3):
+            try:
+                message = await self.bot.wait_for('message', check=check, timeout=30.0)
+            except asyncio.TimeoutError:
+                raise ValueError('Took too long. Goodbye.')
 
-                index = int(message.content)
-                try:
-                    return matches[index - 1]
-                except:
-                    await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
+            index = int(message.content)
+            try:
+                return matches[index - 1]
+            except:
+                await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
 
-            raise ValueError('Too many tries. Goodbye.')
-        finally:
-            await self.acquire()
+        raise ValueError('Too many tries. Goodbye.')
 
     async def prompt(
         self,
@@ -155,7 +165,6 @@ class Context(commands.Context):
         *,
         timeout: float = 60.0,
         delete_after: bool = True,
-        reacquire: bool = True,
         author_id: Optional[int] = None,
     ) -> Optional[bool]:
         """An interactive reaction confirmation dialog.
@@ -168,9 +177,6 @@ class Context(commands.Context):
             How long to wait before returning.
         delete_after: bool
             Whether to delete the confirmation message after we're done.
-        reacquire: bool
-            Whether to release the database connection and then acquire it
-            again when we're done.
         author_id: Optional[int]
             The member who should respond to the prompt. Defaults to the author of the
             Context's message.
@@ -187,7 +193,6 @@ class Context(commands.Context):
         view = ConfirmationView(
             timeout=timeout,
             delete_after=delete_after,
-            reacquire=reacquire,
             ctx=self,
             author_id=author_id,
         )
@@ -207,44 +212,8 @@ class Context(commands.Context):
         return emoji
 
     @property
-    def db(self) -> Union[Pool, Connection]:
-        return self._db if self._db else self.pool
-
-    async def _acquire(self, timeout: Optional[float]) -> Connection:
-        if self._db is None:
-            self._db = await self.pool.acquire(timeout=timeout)
-        return self._db
-
-    def acquire(self, *, timeout=300.0) -> _ContextDBAcquire:
-        """Acquires a database connection from the pool. e.g. ::
-
-            async with ctx.acquire():
-                await ctx.db.execute(...)
-
-        or: ::
-
-            await ctx.acquire()
-            try:
-                await ctx.db.execute(...)
-            finally:
-                await ctx.release()
-        """
-        return _ContextDBAcquire(self, timeout)
-
-    async def release(self) -> None:
-        """Releases the database connection from the pool.
-
-        Useful if needed for "long" interactive commands where
-        we want to release the connection and re-acquire later.
-
-        Otherwise, this is called automatically by the bot.
-        """
-        # from source digging asyncpg source, releasing an already
-        # released connection does nothing
-
-        if self._db is not None:
-            await self.bot.pool.release(self._db)
-            self._db = None
+    def db(self) -> DatabaseProtocol:
+        return self.pool  # type: ignore
 
     async def show_help(self, command: Any = None) -> None:
         """Shows the help command for the specified command if given.

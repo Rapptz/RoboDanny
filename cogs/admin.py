@@ -183,7 +183,7 @@ class Admin(commands.Cog):
         modules = self.find_modules_from_git(stdout)
         mods_text = '\n'.join(f'{index}. `{module}`' for index, (_, module) in enumerate(modules, start=1))
         prompt_text = f'This will update the following modules, are you sure?\n{mods_text}'
-        confirm = await ctx.prompt(prompt_text, reacquire=False)
+        confirm = await ctx.prompt(prompt_text)
         if not confirm:
             return await ctx.send('Aborting.')
 
@@ -431,7 +431,6 @@ class Admin(commands.Cog):
         msg.author = who
         msg.content = ctx.prefix + command
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-        new_ctx._db = ctx._db
         await self.bot.invoke(new_ctx)
 
     @commands.command(hidden=True)
@@ -441,7 +440,6 @@ class Admin(commands.Cog):
         msg.content = ctx.prefix + command
 
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-        new_ctx._db = ctx._db
 
         for i in range(times):
             await new_ctx.reinvoke()
@@ -470,7 +468,6 @@ class Admin(commands.Cog):
         msg.content = ctx.prefix + command
 
         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-        new_ctx._db = PerformanceMocker()  # type: ignore
 
         # Intercepts the Messageable interface a bit
         new_ctx._state = PerformanceMocker()  # type: ignore

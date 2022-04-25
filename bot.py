@@ -375,11 +375,7 @@ class RoboDanny(commands.AutoShardedBot):
         else:
             self._auto_spam_count.pop(author_id, None)
 
-        try:
-            await self.invoke(ctx)
-        finally:
-            # Just in case we have any outstanding DB connections
-            await ctx.release()
+        await self.invoke(ctx)
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:

@@ -110,7 +110,7 @@ def cache(
                     # I want to pass asyncpg.Connection objects to the parameters
                     # however, they use default __repr__ and I do not care what
                     # connection is passed in, so I needed a bypass.
-                    if k == 'connection':
+                    if k == 'connection' or k == 'pool':
                         continue
 
                     key.append(_true_repr(k))

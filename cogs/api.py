@@ -535,7 +535,6 @@ class API(commands.Cog):
             ctx.author.id,
             ctx.channel.id,
             member.id,
-            connection=ctx.db,
             created=created_at,
         )
 
