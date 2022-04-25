@@ -539,6 +539,31 @@ class Admin(commands.Cog):
 
         await ctx.send(f'Status: {ctx.tick(success)} Time: {(end - start) * 1000:.2f}ms')
 
+    @commands.group()
+    @commands.is_owner()
+    @commands.guild_only()
+    async def sync(self, ctx: GuildContext, guild_id: Optional[int], copy: bool = False) -> None:
+        """Syncs the slash commands with the given guild"""
+
+        if guild_id:
+            guild = discord.Object(id=guild_id)
+        else:
+            guild = ctx.guild
+
+        if copy:
+            self.bot.tree.copy_global_to(guild=guild)
+
+        commands = await self.bot.tree.sync(guild=guild)
+        await ctx.send(f'Successfully synced {len(commands)} commands')
+
+    @sync.command(name='global')
+    @commands.is_owner()
+    async def sync_global(self, ctx: Context):
+        """Syncs the commands globally"""
+
+        commands = await self.bot.tree.sync(guild=None)
+        await ctx.send(f'Successfully synced {len(commands)} commands')
+
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))
