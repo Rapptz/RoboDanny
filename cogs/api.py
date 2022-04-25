@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypedDict, Union
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator, Optional, TypedDict, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands
@@ -156,16 +156,16 @@ class SphinxObjectFileReader:
     # Inspired by Sphinx's InventoryFileReader
     BUFSIZE = 16 * 1024
 
-    def __init__(self, buffer):
+    def __init__(self, buffer: bytes):
         self.stream = io.BytesIO(buffer)
 
-    def readline(self):
+    def readline(self) -> str:
         return self.stream.readline().decode('utf-8')
 
-    def skipline(self):
+    def skipline(self) -> None:
         self.stream.readline()
 
-    def read_compressed_chunks(self):
+    def read_compressed_chunks(self) -> Generator[bytes, None, None]:
         decompressor = zlib.decompressobj()
         while True:
             chunk = self.stream.read(self.BUFSIZE)
@@ -174,7 +174,7 @@ class SphinxObjectFileReader:
             yield decompressor.decompress(chunk)
         yield decompressor.flush()
 
-    def read_compressed_lines(self):
+    def read_compressed_lines(self) -> Generator[str, None, None]:
         buf = b''
         for chunk in self.read_compressed_chunks():
             buf += chunk
@@ -223,7 +223,7 @@ class API(commands.Cog):
             role = discord.Object(id=USER_BOTS_ROLE)
             await member.add_roles(role)
 
-    def parse_object_inv(self, stream, url):
+    def parse_object_inv(self, stream: SphinxObjectFileReader, url: str):
         # key: URL
         # n.b.: key doesn't have `discord` or `discord.ext.commands` namespaces
         result = {}
