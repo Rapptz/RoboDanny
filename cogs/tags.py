@@ -2,10 +2,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, TypedDict, Union
 from typing_extensions import Annotated
 
-from .utils import db, checks, formats, cache
+from .utils import checks, formats, cache
 from .utils.paginator import SimplePages
 
-from discord.ext import commands, menus
+from discord.ext import commands
 import io
 import datetime
 import discord
@@ -85,62 +85,6 @@ def can_use_box():
         return True
 
     return commands.check(pred)
-
-
-# The tag data is heavily duplicated (denormalized) and heavily indexed to speed up
-# retrieval at the expense of making inserts a little bit slower. This is a fine trade-off
-# because tags are retrieved much more often than created.
-
-
-class TagsTable(db.Table, table_name='tags'):
-    id = db.PrimaryKeyColumn()
-
-    # we will create more indexes manually
-    name = db.Column(db.String, index=True)
-
-    content = db.Column(db.String)
-    owner_id = db.Column(db.Integer(big=True))
-    uses = db.Column(db.Integer, default=0)
-    location_id = db.Column(db.Integer(big=True), index=True)
-    created_at = db.Column(db.Datetime, default="now() at time zone 'utc'")
-
-    @classmethod
-    def create_table(cls, *, exists_ok=True):
-        statement = super().create_table(exists_ok=exists_ok)
-
-        # create the indexes
-        sql = (
-            "CREATE INDEX IF NOT EXISTS tags_name_trgm_idx ON tags USING GIN (name gin_trgm_ops);\n"
-            "CREATE INDEX IF NOT EXISTS tags_name_lower_idx ON tags (LOWER(name));\n"
-            "CREATE UNIQUE INDEX IF NOT EXISTS tags_uniq_idx ON tags (LOWER(name), location_id);"
-        )
-
-        return statement + '\n' + sql
-
-
-class TagLookup(db.Table, table_name='tag_lookup'):
-    id = db.PrimaryKeyColumn()
-
-    # we will create more indexes manually
-    name = db.Column(db.String, index=True)
-    location_id = db.Column(db.Integer(big=True), index=True)
-
-    owner_id = db.Column(db.Integer(big=True))
-    created_at = db.Column(db.Datetime, default="now() at time zone 'utc'")
-    tag_id = db.Column(db.ForeignKey('tags', 'id'))
-
-    @classmethod
-    def create_table(cls, *, exists_ok=True):
-        statement = super().create_table(exists_ok=exists_ok)
-
-        # create the indexes
-        sql = (
-            "CREATE INDEX IF NOT EXISTS tag_lookup_name_trgm_idx ON tag_lookup USING GIN (name gin_trgm_ops);\n"
-            "CREATE INDEX IF NOT EXISTS tag_lookup_name_lower_idx ON tag_lookup (LOWER(name));\n"
-            "CREATE UNIQUE INDEX IF NOT EXISTS tag_lookup_uniq_idx ON tag_lookup (LOWER(name), location_id);"
-        )
-
-        return statement + '\n' + sql
 
 
 class TagName(commands.clean_content):

@@ -6,7 +6,7 @@ import sys
 from discord.ext import commands, tasks, menus
 from collections import Counter, defaultdict
 
-from .utils import db, time, formats
+from .utils import time, formats
 
 import pkg_resources
 import logging
@@ -53,18 +53,6 @@ class GatewayHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self.cog.add_record(record)
-
-
-class Commands(db.Table):
-    id = db.PrimaryKeyColumn()
-
-    guild_id = db.Column(db.Integer(big=True), index=True)
-    channel_id = db.Column(db.Integer(big=True))
-    author_id = db.Column(db.Integer(big=True), index=True)
-    used = db.Column(db.Datetime, index=True)
-    prefix = db.Column(db.String)
-    command = db.Column(db.String, index=True)
-    failed = db.Column(db.Boolean, index=True)
 
 
 _INVITE_REGEX = re.compile(r'(?:https?:\/\/)?discord(?:\.gg|\.com|app\.com\/invite)?\/[A-Za-z0-9]+')

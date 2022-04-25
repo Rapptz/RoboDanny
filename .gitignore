@@ -1,8 +1,7 @@
 node_modules/*
 
 *.json
-!migrations/*
-migrations/current-*.json
+migrations/*.json
 
 *.pyc
 *.log

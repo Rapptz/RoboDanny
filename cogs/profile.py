@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands
-from .utils import db
 from .utils.formats import plural
 from collections import defaultdict
 
@@ -14,20 +13,6 @@ if TYPE_CHECKING:
     from bot import RoboDanny
     from .utils.context import GuildContext, Context
     from cogs.splatoon import Splatoon
-
-
-class Profiles(db.Table):
-    # this is the user_id
-    id = db.Column(db.Integer(big=True), primary_key=True)
-    nnid = db.Column(db.String)
-    squad = db.Column(db.String)
-
-    # merger from the ?fc stuff
-    fc_3ds = db.Column(db.String)
-    fc_switch = db.Column(db.String)
-
-    # extra Splatoon data is stored here
-    extra = db.Column(db.JSON, default="'{}'::jsonb", nullable=False)
 
 
 class DisambiguateMember(commands.IDConverter):

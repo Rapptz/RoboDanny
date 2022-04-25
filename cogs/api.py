@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypedDict,
 from typing_extensions import Annotated
 
 from discord.ext import commands
-from .utils import checks, db, fuzzy, cache, time
+from .utils import fuzzy, cache, time
 import asyncio
 import datetime
 import discord
@@ -12,7 +12,6 @@ import zlib
 import io
 import os
 import lxml.etree as etree
-from collections import Counter
 
 if TYPE_CHECKING:
     from .utils.context import Context, GuildContext
@@ -151,19 +150,6 @@ def contributor_or_higher():
         return ctx.author.top_role >= role
 
     return commands.check(predicate)
-
-
-class Feeds(db.Table):
-    id = db.PrimaryKeyColumn()
-    channel_id = db.Column(db.Integer(big=True))
-    role_id = db.Column(db.Integer(big=True))
-    name = db.Column(db.String)
-
-
-class RTFM(db.Table):
-    id = db.PrimaryKeyColumn()
-    user_id = db.Column(db.Integer(big=True), unique=True, index=True)
-    count = db.Column(db.Integer, default=1)
 
 
 class SphinxObjectFileReader:

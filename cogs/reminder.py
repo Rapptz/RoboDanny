@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 from typing_extensions import Annotated
 
-from .utils import checks, db, time, formats
+from .utils import time, formats
 from discord.ext import commands
 import discord
 import asyncio
@@ -12,17 +12,26 @@ import textwrap
 
 if TYPE_CHECKING:
     from typing_extensions import Self
-    from .utils.context import Context, GuildContext
+    from .utils.context import Context
     from bot import RoboDanny
 
 
-class Reminders(db.Table):
-    id = db.PrimaryKeyColumn()
+class MaybeAcquire:
+    def __init__(self, connection: Optional[asyncpg.Connection], *, pool: asyncpg.Pool) -> None:
+        self.connection: Optional[asyncpg.Connection] = connection
+        self.pool: asyncpg.Pool = pool
+        self._cleanup: bool = False
 
-    expires = db.Column(db.Datetime, index=True)
-    created = db.Column(db.Datetime, default="now() at time zone 'utc'")
-    event = db.Column(db.String)
-    extra = db.Column(db.JSON, default="'{}'::jsonb")
+    async def __aenter__(self) -> asyncpg.Connection:
+        if self.connection is None:
+            self._cleanup = True
+            self._connection = c = await self.pool.acquire()
+            return c
+        return self.connection
+
+    async def __aexit__(self, *args) -> None:
+        if self._cleanup:
+            await self.pool.release(self._connection)
 
 
 class Timer:
@@ -110,7 +119,7 @@ class Reminder(commands.Cog):
         return Timer(record=record) if record else None
 
     async def wait_for_active_timers(self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7) -> Timer:
-        async with db.MaybeAcquire(connection=connection, pool=self.bot.pool) as con:
+        async with MaybeAcquire(connection=connection, pool=self.bot.pool) as con:
             timer = await self.get_active_timer(connection=con, days=days)
             if timer is not None:
                 self._have_data.set()

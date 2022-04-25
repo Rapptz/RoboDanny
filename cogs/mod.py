@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Callable, MutableMapping, Optional, List
 from typing_extensions import Annotated
 
 from discord.ext import commands, tasks
-from .utils import checks, db, time, cache
+from .utils import checks, time, cache
 from .utils.formats import plural
 from collections import Counter, defaultdict
 
@@ -19,7 +19,7 @@ import io
 
 if TYPE_CHECKING:
     from bot import RoboDanny
-    from .utils.context import GuildContext, Context
+    from .utils.context import GuildContext
     from cogs.reminder import Timer
 
     class ModGuildContext(GuildContext):
@@ -44,19 +44,6 @@ class RaidMode(enum.Enum):
 
     def __str__(self) -> str:
         return self.name
-
-
-## Tables
-
-
-class GuildConfig(db.Table, table_name='guild_mod_config'):
-    id = db.Column(db.Integer(big=True), primary_key=True)
-    raid_mode = db.Column(db.Integer(small=True))
-    broadcast_channel = db.Column(db.Integer(big=True))
-    mention_count = db.Column(db.Integer(small=True))
-    safe_mention_channel_ids = db.Column(db.Array(db.Integer(big=True)))
-    mute_role_id = db.Column(db.Integer(big=True))
-    muted_members = db.Column(db.Array(db.Integer(big=True)))
 
 
 ## Configuration

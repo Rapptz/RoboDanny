@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING, Callable, Literal, Optional, Any, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands, tasks
-from .utils import checks, db, cache
-from .utils.formats import plural, human_join
+from .utils import checks, cache
+from .utils.formats import plural
 from .utils.paginator import SimplePages
 
 import discord
@@ -18,7 +18,7 @@ import re
 
 if TYPE_CHECKING:
     from bot import RoboDanny
-    from .utils.context import GuildContext, Context
+    from .utils.context import GuildContext
 
     class StarboardContext(GuildContext):
         starboard: CompleteStarboardConfig
@@ -54,37 +54,6 @@ def MessageID(argument: str) -> int:
         return int(argument, base=10)
     except ValueError:
         raise StarError(f'"{argument}" is not a valid message ID. Use Developer Mode to get the Copy ID option.')
-
-
-class Starboard(db.Table):
-    id = db.Column(db.Integer(big=True), primary_key=True)
-
-    channel_id = db.Column(db.Integer(big=True))
-    threshold = db.Column(db.Integer, default=1, nullable=False)
-    locked = db.Column(db.Boolean, default=False)
-    max_age = db.Column(db.Interval, default="'7 days'::interval", nullable=False)
-
-
-class StarboardEntry(db.Table, table_name='starboard_entries'):
-    id = db.PrimaryKeyColumn()
-
-    bot_message_id = db.Column(db.Integer(big=True), index=True)
-    message_id = db.Column(db.Integer(big=True), index=True, unique=True, nullable=False)
-    channel_id = db.Column(db.Integer(big=True))
-    author_id = db.Column(db.Integer(big=True))
-    guild_id = db.Column(db.ForeignKey('starboard', 'id', sql_type=db.Integer(big=True)), index=True, nullable=False)
-
-
-class Starrers(db.Table):
-    id = db.PrimaryKeyColumn()
-    author_id = db.Column(db.Integer(big=True), nullable=False)
-    entry_id = db.Column(db.ForeignKey('starboard_entries', 'id'), index=True, nullable=False)
-
-    @classmethod
-    def create_table(cls, *, exists_ok=True):
-        statement = super().create_table(exists_ok=exists_ok)
-        sql = "CREATE UNIQUE INDEX IF NOT EXISTS starrers_uniq_idx ON starrers (author_id, entry_id);"
-        return statement + '\n' + sql
 
 
 class StarboardConfig:
