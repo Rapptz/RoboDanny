@@ -346,7 +346,7 @@ class Admin(commands.Cog):
             except discord.HTTPException as e:
                 await ctx.send(f'Unexpected error: `{e}`')
 
-    @commands.command(hidden=True)
+    @commands.group(hidden=True, invoke_without_command=True)
     async def sql(self, ctx: Context, *, query: str):
         """Run some SQL."""
         # the imports are here because I imagine some people would want to use
@@ -390,22 +390,13 @@ class Admin(commands.Cog):
         else:
             await ctx.send(fmt)
 
-    @commands.command(hidden=True)
-    async def sql_table(self, ctx: Context, *, table_name: str):
-        """Runs a query describing the table schema."""
+    async def send_sql_results(self, ctx: Context, records: list[Any]):
         from .utils.formats import TabularData
 
-        query = """SELECT column_name, data_type, column_default, is_nullable
-                   FROM INFORMATION_SCHEMA.COLUMNS
-                   WHERE table_name = $1
-                """
-
-        results: list[Record] = await ctx.db.fetch(query, table_name)
-
-        headers = list(results[0].keys())
+        headers = list(records[0].keys())
         table = TabularData()
         table.set_columns(headers)
-        table.add_rows(list(r.values()) for r in results)
+        table.add_rows(list(r.values()) for r in records)
         render = table.render()
 
         fmt = f'```\n{render}\n```'
@@ -414,6 +405,62 @@ class Admin(commands.Cog):
             await ctx.send('Too many results...', file=discord.File(fp, 'results.txt'))
         else:
             await ctx.send(fmt)
+
+    @sql.command(name='schema', hidden=True)
+    async def sql_schema(self, ctx: Context, *, table_name: str):
+        """Runs a query describing the table schema."""
+        query = """SELECT column_name, data_type, column_default, is_nullable
+                   FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE table_name = $1
+                """
+
+        results: list[Record] = await ctx.db.fetch(query, table_name)
+
+        if len(results) == 0:
+            await ctx.send('Could not find a table with that name')
+            return
+
+        await self.send_sql_results(ctx, results)
+
+    @sql.command(name='tables', hidden=True)
+    async def sql_tables(self, ctx: Context):
+        """Lists all SQL tables in the database."""
+
+        query = """SELECT table_name
+                   FROM information_schema.tables
+                   WHERE table_schema='public' AND table_type='BASE TABLE'
+                """
+
+        results: list[Record] = await ctx.db.fetch(query)
+
+        if len(results) == 0:
+            await ctx.send('Could not find any tables')
+            return
+
+        await self.send_sql_results(ctx, results)
+
+    @sql.command(name='sizes', hidden=True)
+    async def sql_sizes(self, ctx: Context):
+        """Display how much space the database is taking up."""
+
+        # Credit: https://wiki.postgresql.org/wiki/Disk_Usage
+        query = """
+            SELECT nspname || '.' || relname AS "relation",
+                pg_size_pretty(pg_relation_size(C.oid)) AS "size"
+              FROM pg_class C
+              LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+              WHERE nspname NOT IN ('pg_catalog', 'information_schema')
+              ORDER BY pg_relation_size(C.oid) DESC
+              LIMIT 20;
+        """
+
+        results: list[Record] = await ctx.db.fetch(query)
+
+        if len(results) == 0:
+            await ctx.send('Could not find any tables')
+            return
+
+        await self.send_sql_results(ctx, results)
 
     @commands.command(hidden=True)
     async def sudo(
