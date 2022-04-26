@@ -819,8 +819,9 @@ class API(commands.Cog):
             for node in nodes:
                 self.faq_entries[''.join(node.itertext()).strip()] = base_url + node.get('href').strip()
 
-    @commands.command()
-    async def faq(self, ctx: Context, *, query: str = None):
+    @commands.hybrid_command()
+    @app_commands.describe(query='The FAQ entry to look up')
+    async def faq(self, ctx: Context, *, query: Optional[str] = None):
         """Shows an FAQ entry from the discord.py documentation"""
         if not hasattr(self, 'faq_entries'):
             await self.refresh_faq_cache()
@@ -837,6 +838,20 @@ class API(commands.Cog):
             paginator.add_line(f'**{key}**\n{value}')
         page = paginator.pages[0]
         await ctx.send(page, reference=ctx.replied_reference)
+
+    @faq.autocomplete('query')
+    async def faq_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        if not hasattr(self, 'faq_entries'):
+            await interaction.response.autocomplete([])
+            await self.refresh_faq_cache()
+            return []
+
+        if not current:
+            choices = [app_commands.Choice(name=key, value=key) for key in self.faq_entries][:10]
+            return choices
+
+        matches = fuzzy.extract_matches(current, self.faq_entries, scorer=fuzzy.partial_ratio, score_cutoff=40)[:10]
+        return [app_commands.Choice(name=key, value=key) for key, _, _, in matches][:10]
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
