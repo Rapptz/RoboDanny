@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator, Optional,
 from typing_extensions import Annotated
 
 from discord.ext import commands
+from discord import app_commands
 from .utils import fuzzy, cache, time
 import asyncio
 import datetime
@@ -205,6 +206,7 @@ class API(commands.Cog):
     """Discord API exclusive things."""
 
     faq_entries: dict[str, str]
+    _rtfm_cache: dict[str, dict[str, str]]
 
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
@@ -223,10 +225,10 @@ class API(commands.Cog):
             role = discord.Object(id=USER_BOTS_ROLE)
             await member.add_roles(role)
 
-    def parse_object_inv(self, stream: SphinxObjectFileReader, url: str):
+    def parse_object_inv(self, stream: SphinxObjectFileReader, url: str) -> dict[str, str]:
         # key: URL
         # n.b.: key doesn't have `discord` or `discord.ext.commands` namespaces
-        result = {}
+        result: dict[str, str] = {}
 
         # first line is version info
         inv_version = stream.readline().rstrip()
@@ -279,7 +281,7 @@ class API(commands.Cog):
         return result
 
     async def build_rtfm_lookup_table(self):
-        cache = {}
+        cache: dict[str, dict[str, str]] = {}
         for key, page in RTFM_PAGE_TYPES.items():
             cache[key] = {}
             async with self.bot.session.get(page + '/objects.inv') as resp:
@@ -326,7 +328,7 @@ class API(commands.Cog):
             query = 'INSERT INTO rtfm (user_id) VALUES ($1) ON CONFLICT (user_id) DO UPDATE SET count = rtfm.count + 1;'
             await ctx.db.execute(query, ctx.author.id)
 
-    def transform_rtfm_language_key(self, ctx: Context, prefix: str):
+    def transform_rtfm_language_key(self, ctx: Union[discord.Interaction, Context], prefix: str):
         if ctx.guild is not None:
             #                             日本語 category
             if ctx.channel.category_id == DISCORD_PY_JP_CATEGORY:  # type: ignore  # category_id is safe to access
@@ -336,36 +338,72 @@ class API(commands.Cog):
                 return prefix + '-jp'
         return prefix
 
-    @commands.group(aliases=['rtfd'], invoke_without_command=True)
-    async def rtfm(self, ctx: Context, *, obj: str = None):
+    async def rtfm_slash_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+
+        # Degenerate case: not having built caching yet
+        if not hasattr(self, '_rtfm_cache'):
+            await interaction.response.autocomplete([])
+            await self.build_rtfm_lookup_table()
+            return []
+
+        if not current:
+            return []
+
+        if len(current) < 3:
+            return [app_commands.Choice(name=current, value=current)]
+
+        assert interaction.command is not None
+        key = interaction.command.name
+        if key in ('stable', 'python'):
+            key = self.transform_rtfm_language_key(interaction, key)
+        elif key == 'jp':
+            key = 'latest-jp'
+
+        matches = fuzzy.finder(current, self._rtfm_cache[key], lazy=False)[:10]
+        return [app_commands.Choice(name=m, value=m) for m in matches]
+
+    @commands.hybrid_group(aliases=['rtfd'], fallback='stable')
+    @app_commands.describe(entity='The object to search for')
+    @app_commands.autocomplete(entity=rtfm_slash_autocomplete)
+    async def rtfm(self, ctx: Context, *, entity: Optional[str] = None):
         """Gives you a documentation link for a discord.py entity.
 
         Events, objects, and functions are all supported through
         a cruddy fuzzy algorithm.
         """
         key = self.transform_rtfm_language_key(ctx, 'stable')
-        await self.do_rtfm(ctx, key, obj)
+        await self.do_rtfm(ctx, key, entity)
 
     @rtfm.command(name='jp')
-    async def rtfm_jp(self, ctx: Context, *, obj: str = None):
+    @app_commands.describe(entity='The object to search for')
+    @app_commands.autocomplete(entity=rtfm_slash_autocomplete)
+    async def rtfm_jp(self, ctx: Context, *, entity: Optional[str] = None):
         """Gives you a documentation link for a discord.py entity (Japanese)."""
-        await self.do_rtfm(ctx, 'latest-jp', obj)
+        await self.do_rtfm(ctx, 'latest-jp', entity)
 
     @rtfm.command(name='python', aliases=['py'])
-    async def rtfm_python(self, ctx: Context, *, obj: str = None):
+    @app_commands.describe(entity='The object to search for')
+    @app_commands.autocomplete(entity=rtfm_slash_autocomplete)
+    async def rtfm_python(self, ctx: Context, *, entity: Optional[str] = None):
         """Gives you a documentation link for a Python entity."""
         key = self.transform_rtfm_language_key(ctx, 'python')
-        await self.do_rtfm(ctx, key, obj)
+        await self.do_rtfm(ctx, key, entity)
 
-    @rtfm.command(name='py-jp', aliases=['py-ja'])
-    async def rtfm_python_jp(self, ctx: Context, *, obj: str = None):
+    @rtfm.command(name='python-jp', aliases=['py-jp', 'py-ja'])
+    @app_commands.describe(entity='The object to search for')
+    @app_commands.autocomplete(entity=rtfm_slash_autocomplete)
+    async def rtfm_python_jp(self, ctx: Context, *, entity: Optional[str] = None):
         """Gives you a documentation link for a Python entity (Japanese)."""
-        await self.do_rtfm(ctx, 'python-jp', obj)
+        await self.do_rtfm(ctx, 'python-jp', entity)
 
-    @rtfm.command(name='master', aliases=['2.0', 'latest'])
-    async def rtfm_master(self, ctx: Context, *, obj: str = None):
+    @rtfm.command(name='latest', aliases=['2.0', 'master'])
+    @app_commands.describe(entity='The object to search for')
+    @app_commands.autocomplete(entity=rtfm_slash_autocomplete)
+    async def rtfm_master(self, ctx: Context, *, entity: Optional[str] = None):
         """Gives you a documentation link for a discord.py entity (master branch)"""
-        await self.do_rtfm(ctx, 'latest', obj)
+        await self.do_rtfm(ctx, 'latest', entity)
 
     @rtfm.command(name='refresh')
     @commands.is_owner()
@@ -396,8 +434,9 @@ class API(commands.Cog):
         await ctx.send(embed=e)
 
     @rtfm.command()
+    @app_commands.describe(member='The member to look up stats for')
     async def stats(self, ctx: Context, *, member: discord.Member = None):
-        """Tells you stats about the ?rtfm command."""
+        """Shows statistics on RTFM usage on a member or the server."""
         query = 'SELECT SUM(count) AS total_uses FROM rtfm;'
         record: Record = await ctx.db.fetchrow(query)
         total_uses: int = record['total_uses']
