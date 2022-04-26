@@ -18,13 +18,12 @@ class Config(Generic[_T]):
         *,
         object_hook: Optional[ObjectHook] = None,
         encoder: Optional[Type[json.JSONEncoder]] = None,
-        loop: asyncio.AbstractEventLoop,
         load_later: bool = False,
     ):
         self.name = name
         self.object_hook = object_hook
         self.encoder = encoder
-        self.loop = loop
+        self.loop = asyncio.get_running_loop()
         self.lock = asyncio.Lock()
         self._db: Dict[str, Union[_T, Any]] = {}
         if load_later:

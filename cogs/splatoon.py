@@ -532,7 +532,7 @@ class Splatoon(commands.Cog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self.splat2_data: config.Config[Any] = config.Config(
-            'splatoon2.json', loop=bot.loop, object_hook=splatoon2_decoder, encoder=Splatoon2Encoder
+            'splatoon2.json', object_hook=splatoon2_decoder, encoder=Splatoon2Encoder
         )
         self._splatnet2: asyncio.Task[None] = asyncio.create_task(self.splatnet2())
         self._last_request: datetime.datetime = discord.utils.utcnow()

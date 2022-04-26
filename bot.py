@@ -118,12 +118,12 @@ class RoboDanny(commands.AutoShardedBot):
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
         # guild_id: list
-        self.prefixes: Config[list[str]] = Config('prefixes.json', loop=self.loop)
+        self.prefixes: Config[list[str]] = Config('prefixes.json')
 
         # guild_id and user_id mapped to True
         # these are users and guilds globally blacklisted
         # from using the bot
-        self.blacklist: Config[bool] = Config('blacklist.json', loop=self.loop)
+        self.blacklist: Config[bool] = Config('blacklist.json')
 
         self.bot_app_info = await self.application_info()
         self.owner_id = self.bot_app_info.owner.id

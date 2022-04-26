@@ -306,15 +306,15 @@ class Mod(commands.Cog):
         # A batch of data for bulk inserting mute role changes
         # True - insert, False - remove
         self._data_batch: defaultdict[int, list[tuple[int, Any]]] = defaultdict(list)
-        self._batch_lock = asyncio.Lock(loop=bot.loop)
-        self._disable_lock = asyncio.Lock(loop=bot.loop)
+        self._batch_lock = asyncio.Lock()
+        self._disable_lock = asyncio.Lock()
         self.batch_updates.add_exception_type(asyncpg.PostgresConnectionError)
         self.batch_updates.start()
 
         # (guild_id, channel_id): List[str]
         # A batch list of message content for message
         self.message_batches: defaultdict[tuple[int, int], list[str]] = defaultdict(list)
-        self._batch_message_lock = asyncio.Lock(loop=bot.loop)
+        self._batch_message_lock = asyncio.Lock()
         self.bulk_send_messages.start()
 
     @property

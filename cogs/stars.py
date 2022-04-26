@@ -330,7 +330,7 @@ class Stars(commands.Cog):
         guild_id = channel.guild.id
         lock = self._locks.get(guild_id)
         if lock is None:
-            self._locks[guild_id] = lock = asyncio.Lock(loop=self.bot.loop)
+            self._locks[guild_id] = lock = asyncio.Lock()
 
         async with lock:
             async with self.bot.pool.acquire(timeout=300.0) as con:
@@ -490,7 +490,7 @@ class Stars(commands.Cog):
         guild_id = channel.guild.id
         lock = self._locks.get(guild_id)
         if lock is None:
-            self._locks[guild_id] = lock = asyncio.Lock(loop=self.bot.loop)
+            self._locks[guild_id] = lock = asyncio.Lock()
 
         async with lock:
             async with self.bot.pool.acquire(timeout=300.0) as con:

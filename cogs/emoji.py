@@ -109,7 +109,7 @@ class Emoji(commands.Cog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self._batch_of_data: defaultdict[int, Counter[int]] = defaultdict(Counter)
-        self._batch_lock = asyncio.Lock(loop=bot.loop)
+        self._batch_lock = asyncio.Lock()
         self.bulk_insert.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert.start()
 

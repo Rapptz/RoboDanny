@@ -79,11 +79,11 @@ class Stats(commands.Cog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self.process = psutil.Process()
-        self._batch_lock = asyncio.Lock(loop=bot.loop)
+        self._batch_lock = asyncio.Lock()
         self._data_batch: list[DataBatchEntry] = []
         self.bulk_insert_loop.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert_loop.start()
-        self._gateway_queue = asyncio.Queue(loop=bot.loop)
+        self._gateway_queue = asyncio.Queue()
         self.gateway_worker.start()
 
     @property

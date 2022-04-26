@@ -115,7 +115,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
         self._invite_cache: dict[str, int] = {}
         self.bot.loop.create_task(self._prepare_invites())
-        self._req_lock = asyncio.Lock(loop=self.bot.loop)
+        self._req_lock = asyncio.Lock()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
