@@ -4,6 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any, MutableMapping, Optional, TypedDict
 from typing_extensions import Self
 from discord.ext import commands, menus
+from discord import app_commands
 import discord
 from .utils.paginator import RoboPages
 import random
@@ -203,6 +204,25 @@ class SpoilerCooldown(commands.CooldownMapping):
         return bucket.update_rate_limit() is not None
 
 
+class FeedbackModal(discord.ui.Modal, title='Submit Feedback'):
+    summary = discord.ui.TextInput(label='Summary', placeholder='A brief explanation of what you want')
+    details = discord.ui.TextInput(label='Details', style=discord.TextStyle.long, required=False)
+
+    def __init__(self, cog: Buttons) -> None:
+        super().__init__()
+        self.cog: Buttons = cog
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        channel = self.cog.feedback_channel
+        if channel is None:
+            await interaction.response.send_message('Could not submit your feedback, sorry about this', ephemeral=True)
+            return
+
+        embed = self.cog.get_feedback_embed(interaction, summary=str(self.summary), details=self.details.value)
+        await channel.send(embed=embed)
+        await interaction.response.send_message('Successfully submitted feedback', ephemeral=True)
+
+
 class Buttons(commands.Cog):
     """Buttons that make you feel."""
 
@@ -259,6 +279,38 @@ class Buttons(commands.Cog):
         """boredom looms"""
         await ctx.send('http://i.imgur.com/BuTKSzf.png')
 
+    def get_feedback_embed(
+        self,
+        obj: Context | discord.Interaction,
+        *,
+        summary: str,
+        details: Optional[str] = None,
+    ) -> discord.Embed:
+        e = discord.Embed(title='Feedback', colour=0x738BD7)
+
+        if details is not None:
+            e.description = details
+            e.title = summary[:256]
+        else:
+            e.description = summary
+
+        if obj.guild is not None:
+            e.add_field(name='Server', value=f'{obj.guild.name} (ID: {obj.guild.id})', inline=False)
+
+        if obj.channel is not None:
+            e.add_field(name='Channel', value=f'{obj.channel} (ID: {obj.channel.id})', inline=False)
+
+        if isinstance(obj, discord.Interaction):
+            e.timestamp = obj.created_at
+            user = obj.user
+        else:
+            e.timestamp = obj.message.created_at
+            user = obj.author
+
+        e.set_author(name=str(user), icon_url=user.display_avatar.url)
+        e.set_footer(text=f'Author ID: {user.id}')
+        return e
+
     @commands.command()
     @commands.cooldown(rate=1, per=60.0, type=commands.BucketType.user)
     async def feedback(self, ctx: Context, *, content: str):
@@ -273,24 +325,19 @@ class Buttons(commands.Cog):
         You can only request feedback once a minute.
         """
 
-        e = discord.Embed(title='Feedback', colour=0x738BD7)
-
         channel = self.feedback_channel
         if channel is None:
             return
 
-        e.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
-        e.description = content
-        e.timestamp = ctx.message.created_at
-
-        if ctx.guild is not None:
-            e.add_field(name='Server', value=f'{ctx.guild.name} (ID: {ctx.guild.id})', inline=False)
-
-        e.add_field(name='Channel', value=f'{ctx.channel} (ID: {ctx.channel.id})', inline=False)
-        e.set_footer(text=f'Author ID: {ctx.author.id}')
-
+        e = self.get_feedback_embed(ctx, summary=content)
         await channel.send(embed=e)
         await ctx.send(f'{ctx.tick(True)} Successfully sent feedback')
+
+    @app_commands.command(name='feedback')
+    async def feedback_slash(self, interaction: discord.Interaction):
+        """Give feedback about the bot directly to the owner."""
+
+        await interaction.response.send_modal(FeedbackModal(self))
 
     @commands.command()
     @commands.is_owner()
