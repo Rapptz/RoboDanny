@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Protocol, TypeVar, Union, Optional
+from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, Protocol, TypeVar, Union, Optional
 from discord.ext import commands
 import asyncio
 import discord
@@ -90,6 +90,36 @@ class ConfirmationView(discord.ui.View):
         self.stop()
 
 
+class DisambiguatorView(discord.ui.View, Generic[T]):
+    message: discord.Message
+    selected: T
+
+    def __init__(self, ctx: Context, data: list[T], entry: Callable[[T], str]):
+        super().__init__()
+        self.ctx: Context = ctx
+        self.data: list[T] = data
+
+        options = [discord.SelectOption(label=entry(x), value=str(i)) for i, x in enumerate(data)]
+        select = discord.ui.Select(options=options)
+
+        select.callback = self.on_select_submit
+        self.select = select
+        self.add_item(select)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message('This select menu is not meant for you, sorry.', ephemeral=True)
+            return False
+        return True
+
+    async def on_select_submit(self, interaction: discord.Interaction):
+        index = int(self.select.values[0])
+        self.selected = self.data[index]
+        await interaction.response.defer()
+        await self.message.delete()
+        self.stop()
+
+
 class Context(commands.Context):
     channel: Union[discord.VoiceChannel, discord.TextChannel, discord.Thread, discord.DMChannel]
     prefix: str
@@ -138,26 +168,13 @@ class Context(commands.Context):
         if len(matches) == 1:
             return matches[0]
 
-        await self.send('There are too many matches... Which one did you mean? **Only say the number**.')
-        await self.send('\n'.join(f'{index}: {entry(item)}' for index, item in enumerate(matches, 1)))
+        if len(matches) > 25:
+            raise ValueError('Too many results... sorry.')
 
-        def check(m):
-            return m.content.isdigit() and m.author.id == self.author.id and m.channel.id == self.channel.id
-
-        # only give them 3 tries.
-        for i in range(3):
-            try:
-                message = await self.bot.wait_for('message', check=check, timeout=30.0)
-            except asyncio.TimeoutError:
-                raise ValueError('Took too long. Goodbye.')
-
-            index = int(message.content)
-            try:
-                return matches[index - 1]
-            except:
-                await self.send(f'Please give me a valid number. {2 - i} tries remaining...')
-
-        raise ValueError('Too many tries. Goodbye.')
+        view = DisambiguatorView(self, matches, entry)
+        view.message = await self.send('There are too many matches... Which one did you mean?', view=view)
+        await view.wait()
+        return view.selected
 
     async def prompt(
         self,
