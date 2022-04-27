@@ -180,7 +180,7 @@ class SpoilerCache:
         return embed
 
     def to_spoiler_embed(self, ctx: Context, storage_message: discord.abc.Snowflake) -> discord.Embed:
-        description = 'React with <:spoiler:430469957042831371> to reveal the spoiler.'
+        description = 'This spoiler has been hidden. Press the button to reveal it!'
         embed = discord.Embed(title=f'{self.title} Spoiler', description=description)
         if self.has_single_image() and self.text is None:
             embed.title = f'{self.title} Spoiler Image'
@@ -223,6 +223,29 @@ class FeedbackModal(discord.ui.Modal, title='Submit Feedback'):
         await interaction.response.send_message('Successfully submitted feedback', ephemeral=True)
 
 
+class SpoilerView(discord.ui.View):
+    def __init__(self, cog: Buttons) -> None:
+        super().__init__(timeout=None)
+        self.cog: Buttons = cog
+
+    @discord.ui.button(
+        label='Reveal Spoiler',
+        style=discord.ButtonStyle.grey,
+        emoji=discord.PartialEmoji(name='spoiler', id=430469957042831371),
+        custom_id='cogs:buttons:reveal_spoiler',
+    )
+    async def reveal_spoiler(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        assert interaction.message is not None
+        assert interaction.channel_id is not None
+
+        cache = await self.cog.get_spoiler_cache(interaction.channel_id, interaction.message.id)
+        if cache is not None:
+            embed = cache.to_embed(self.cog.bot)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message('Could not find this message in storage', ephemeral=True)
+
+
 class Buttons(commands.Cog):
     """Buttons that make you feel."""
 
@@ -230,6 +253,11 @@ class Buttons(commands.Cog):
         self.bot: RoboDanny = bot
         self._spoiler_cache: MutableMapping[int, SpoilerCache] = LRU(128)
         self._spoiler_cooldown = SpoilerCooldown()
+        self._spoiler_view = SpoilerView(self)
+        bot.add_view(self._spoiler_view)
+
+    def cog_unload(self) -> None:
+        self._spoiler_view.stop()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -482,7 +510,7 @@ class Buttons(commands.Cog):
         Only 8MiB of total media can be uploaded at once.
         Sorry, Discord limitation.
 
-        To opt-in to a post's spoiler you must click the reaction.
+        To opt-in to a post's spoiler you must press the button.
         """
 
         if len(title) > 100:
@@ -493,9 +521,8 @@ class Buttons(commands.Cog):
         except Exception as e:
             return await ctx.send(str(e))
 
-        spoiler_message = await ctx.send(embed=cache.to_spoiler_embed(ctx, storage_message))
+        spoiler_message = await ctx.send(embed=cache.to_spoiler_embed(ctx, storage_message), view=self._spoiler_view)
         self._spoiler_cache[spoiler_message.id] = cache
-        await spoiler_message.add_reaction(':spoiler:430469957042831371')
 
     @commands.command(usage='<url>')
     @commands.cooldown(1, 5.0, commands.BucketType.member)
