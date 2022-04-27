@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, TypedDict, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands
@@ -13,7 +13,7 @@ import re
 if TYPE_CHECKING:
     from bot import RoboDanny
     from .utils.context import GuildContext, Context
-    from cogs.splatoon import Splatoon
+    from cogs.splatoon import Splatoon, SplatoonConfigWeapon
 
 
 class DisambiguateMember(commands.IDConverter, app_commands.Transformer):
@@ -82,6 +82,21 @@ def valid_nnid(argument: str) -> str:
     if len(arg) > 16:
         raise commands.BadArgument('An NNID has a maximum of 16 characters.')
     return arg
+
+
+# For documentation purposes, this is the extras field schema
+
+if TYPE_CHECKING:
+
+    class ProfileExtraRank(TypedDict):
+        rank: str
+        number: str
+
+    class ProfileExtras(TypedDict):
+        sp1_rank: str
+        sp2_rank: dict[Literal['Rainmaker', 'Tower Control', 'Splat Zones', 'Clam Blitz'], ProfileExtraRank]
+        sp1_weapon: SplatoonConfigWeapon
+        sp2_weapon: SplatoonConfigWeapon
 
 
 _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
@@ -184,9 +199,66 @@ class SplatoonWeapon(commands.Converter):
         try:
             weapon = await ctx.disambiguate(weapons, lambda w: w['name'], ephemeral=True)
         except ValueError as e:
-            raise commands.BadArgument(str(e)) from None
+            raise commands.BadArgument(
+                f'Could not find a weapon named {discord.utils.escape_mentions(argument)!r}'
+            ) from None
         else:
             return weapon
+
+
+class ProfileCreateModal(discord.ui.Modal, title='Create Profile'):
+    switch = discord.ui.TextInput(label='Switch Friend Code', placeholder='1234-5678-9012')
+    weapon = discord.ui.TextInput(label='Splatoon Weapon', placeholder='Splattershot', required=False)
+    rank = discord.ui.TextInput(label='Splatoon Ranking', placeholder='Clam Blitz C+30', required=False)
+
+    def __init__(self, cog: Profile, ctx: Context):
+        super().__init__()
+        self.cog: Profile = cog
+        self.ctx: Context = ctx
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+
+        fc_switch: str
+        extra = {}
+        try:
+            fc_switch = valid_fc(str(self.switch.value))
+            if self.weapon.value:
+                extra['sp2_weapon'] = await SplatoonWeapon().convert(self.ctx, self.weapon.value)
+
+            if self.rank.value:
+                extra['sp2_rank'] = SplatoonRank(self.rank.value).to_dict()
+
+        except commands.BadArgument as e:
+            await interaction.followup.send(f'Sorry, an error happened while setting up your profile:\n{e}', ephemeral=True)
+            return
+
+        query = """
+            INSERT INTO profiles (id, fc_switch, extra)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (id)
+            DO UPDATE
+            SET fc_switch = EXCLUDED.fc_switch,
+                extra = profiles.extra || EXCLUDED.extra;
+        """
+
+        try:
+            await self.ctx.db.execute(query, self.ctx.author.id, fc_switch, extra)
+        except Exception as e:
+            await interaction.followup.send(f'Sorry, an error happened while setting up your profile:\n{e}', ephemeral=True)
+        else:
+            await interaction.followup.send('Successfully created your profile', ephemeral=True)
+
+
+class PromptProfileCreationView(discord.ui.View):
+    def __init__(self, cog: Profile, ctx: Context):
+        super().__init__()
+        self.cog: Profile = cog
+        self.ctx: Context = ctx
+
+    @discord.ui.button(label='Create Profile', style=discord.ButtonStyle.blurple)
+    async def create_profile(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ProfileCreateModal(self.cog, self.ctx))
 
 
 class Profile(commands.Cog):
@@ -224,9 +296,8 @@ class Profile(commands.Cog):
         if record is None:
             if member == ctx.author:
                 await ctx.send(
-                    'You did not set up a profile.'
-                    f' If you want to input a switch friend code, type {ctx.prefix}profile switch 1234-5678-9012'
-                    f' or check {ctx.prefix}help profile'
+                    'You did not set up a profile. Press the button below to set one up.',
+                    view=PromptProfileCreationView(self, ctx),
                 )
             else:
                 await ctx.send('This member did not set up a profile.')
