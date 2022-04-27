@@ -821,6 +821,11 @@ class Splatoon(commands.Cog):
         results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
         return [v for k, _, v in results]
 
+    def query_weapons_named(self, name: str) -> list[SplatoonConfigWeapon]:
+        data: list[SplatoonConfigWeapon] = self.splat2_data.get('weapons', [])
+        results = fuzzy.finder(name, data, key=lambda w: w['name'], lazy=False)
+        return results
+
     async def generate_scrims(self, ctx: Context, maps: list[str], games: int, mode: Optional[str]):
         modes = ['Rainmaker', 'Splat Zones', 'Tower Control', 'Clam Blitz']
 

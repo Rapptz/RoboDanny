@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands
+from discord import app_commands
 from .utils.formats import plural
 from collections import defaultdict
 
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
     from cogs.splatoon import Splatoon
 
 
-class DisambiguateMember(commands.IDConverter):
+class DisambiguateMember(commands.IDConverter, app_commands.Transformer):
     async def convert(self, ctx: Context, argument: str) -> discord.abc.User:
         # check if it's a user ID or mention
         match = self._get_id_match(argument) or re.match(r'<@!?([0-9]+)>$', argument)
@@ -67,6 +68,14 @@ class DisambiguateMember(commands.IDConverter):
             raise commands.BadArgument("Could not found this member. Note this is case sensitive.")
         return result
 
+    @classmethod
+    def type(cls) -> discord.AppCommandOptionType:
+        return discord.AppCommandOptionType.user
+
+    @classmethod
+    async def transform(cls, interaction: discord.Interaction, value: discord.abc.User) -> discord.abc.User:
+        return value
+
 
 def valid_nnid(argument: str) -> str:
     arg = argument.strip('"')
@@ -78,7 +87,7 @@ def valid_nnid(argument: str) -> str:
 _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
 
 
-class SplatoonRank:
+class SplatoonRank(app_commands.Transformer):
     mode: str
     rank: str
     number: str
@@ -133,6 +142,10 @@ class SplatoonRank:
     def to_dict(self) -> dict[str, Any]:
         return {self.mode: {'rank': self.rank, 'number': self.number}}
 
+    @classmethod
+    async def transform(cls, interaction: discord.Interaction, value: str) -> Any:
+        return cls(value)
+
 
 def valid_squad(argument: str) -> str:
     arg = argument.strip('"')
@@ -169,7 +182,7 @@ class SplatoonWeapon(commands.Converter):
         weapons = cog.get_weapons_named(query)
 
         try:
-            weapon = await ctx.disambiguate(weapons, lambda w: w['name'])
+            weapon = await ctx.disambiguate(weapons, lambda w: w['name'], ephemeral=True)
         except ValueError as e:
             raise commands.BadArgument(str(e)) from None
         else:
@@ -188,17 +201,17 @@ class Profile(commands.Cog):
 
     async def cog_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
-            await ctx.send(str(error))
+            await ctx.send(str(error), ephemeral=True)
 
-    @commands.group(invoke_without_command=True)
+    @commands.hybrid_group(invoke_without_command=True, fallback='get')
+    @app_commands.describe(member='The member profile to get, if not given then it shows your profile')
     async def profile(
-        self, ctx: Context, *, member: Annotated[Union[discord.Member, discord.User], DisambiguateMember] = None
+        self,
+        ctx: Context,
+        *,
+        member: Annotated[Union[discord.Member, discord.User], DisambiguateMember] = None,
     ):
-        """Manages your profile.
-
-        If you don't pass in a subcommand, it will do a lookup based on
-        the member passed in. If no member is passed in, you will
-        get your own profile.
+        """Retrieves a member's profile.
 
         All commands will create a profile for you.
         """
@@ -263,31 +276,36 @@ class Profile(commands.Cog):
 
         await ctx.db.execute(query, ctx.author.id, *fields.values())
 
-    @profile.command()
-    async def nnid(self, ctx: Context, *, NNID: Annotated[str, valid_nnid]):
+    @profile.command(usage='<NNID>')
+    @app_commands.describe(nnid='Your NNID (Nintendo Network ID)')
+    async def nnid(self, ctx: Context, *, nnid: Annotated[str, valid_nnid]):
         """Sets the NNID portion of your profile."""
-        await self.edit_fields(ctx, nnid=NNID)
+        await self.edit_fields(ctx, nnid=nnid)
         await ctx.send('Updated NNID.')
 
     @profile.command()
+    @app_commands.describe(squad='Your Splatoon squad')
     async def squad(self, ctx: Context, *, squad: Annotated[str, valid_squad]):
         """Sets the Splatoon 2 squad part of your profile."""
         await self.edit_fields(ctx, squad=squad)
         await ctx.send('Updated squad.')
 
     @profile.command(name='3ds')
+    @app_commands.describe(fc='Your 3DS Friend Code')
     async def profile_3ds(self, ctx: Context, *, fc: Annotated[str, valid_fc]):
         """Sets the 3DS friend code of your profile."""
         await self.edit_fields(ctx, fc_3ds=fc)
         await ctx.send('Updated 3DS friend code.')
 
     @profile.command()
+    @app_commands.describe(fc='Your Switch Friend Code')
     async def switch(self, ctx: Context, *, fc: Annotated[str, valid_fc]):
         """Sets the Switch friend code of your profile."""
         await self.edit_fields(ctx, fc_switch=fc)
         await ctx.send('Updated Switch friend code.')
 
     @profile.command()
+    @app_commands.describe(weapon='Your Splatoon 2 main weapon')
     async def weapon(self, ctx: Context, *, weapon: Annotated[Dict[str, str], SplatoonWeapon]):
         """Sets the Splatoon 2 weapon part of your profile.
 
@@ -305,7 +323,17 @@ class Profile(commands.Cog):
         await ctx.db.execute(query, ctx.author.id, weapon)
         await ctx.send(f'Successfully set weapon to {weapon["name"]}.')
 
+    @weapon.autocomplete('weapon')
+    async def weapon_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        cog: Optional[Splatoon] = self.bot.get_cog('Splatoon')  # type: ignore
+        if cog is None:
+            return []
+
+        weapons = cog.query_weapons_named(current)[:25]
+        return [app_commands.Choice(name=weapon['name'], value=weapon['name']) for weapon in weapons]
+
     @profile.command(usage='<mode> <rank>')
+    @app_commands.describe(ranking='Your Splatoon 2 ranking')
     async def rank(self, ctx: Context, *, ranking: SplatoonRank):
         """Sets the Splatoon 2 rank part of your profile.
 
@@ -332,38 +360,28 @@ class Profile(commands.Cog):
         await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.rank}{ranking.number}.')
 
     @profile.command()
-    async def delete(self, ctx: Context, *, field: Optional[str] = None):
-        """Deletes a field from your profile.
-
-        The valid fields that could be deleted are:
-
-        - nnid
-        - switch
-        - 3ds
-        - squad
-        - weapon
-        - rank
-        - tower control rank
-        - splat zones rank
-        - rainmaker rank
-
-        Omitting a field will delete your entire profile.
-        """
-
-        # simple case: delete entire profile
-        if field is None:
-            confirm = await ctx.prompt("Are you sure you want to delete your profile?")
-            if confirm:
-                query = "DELETE FROM profiles WHERE id=$1;"
-                await ctx.db.execute(query, ctx.author.id)
-                await ctx.send('Successfully deleted profile.')
-            else:
-                await ctx.send('Aborting profile deletion.')
-            return
-
-        field = field.lower()
-
-        valid_fields = (
+    @app_commands.choices(
+        field=[
+            app_commands.Choice(value='all', name='Everything'),
+            app_commands.Choice(value='nnid', name='NNID'),
+            app_commands.Choice(value='switch', name='Switch Friend Code'),
+            app_commands.Choice(value='3ds', name='3DS Friend Code'),
+            app_commands.Choice(value='squad', name='Squad'),
+            app_commands.Choice(value='weapon', name='Weapon'),
+            app_commands.Choice(value='rank', name='All Rankings'),
+            app_commands.Choice(value='tower control rank', name='Tower Control Rank'),
+            app_commands.Choice(value='splat zones rank', name='Splat Zones Rank'),
+            app_commands.Choice(value='rainmaker rank', name='Rainmaker Rank'),
+            app_commands.Choice(value='clam blitz rank', name='Clam Blitz Rank'),
+        ]
+    )
+    @app_commands.describe(field='The field to delete from your profile. If not given then your entire profile is deleted.')
+    async def delete(
+        self,
+        ctx: Context,
+        *,
+        field: Literal[
+            'all',
             'nnid',
             'switch',
             '3ds',
@@ -373,10 +391,38 @@ class Profile(commands.Cog):
             'tower control rank',
             'splat zones rank',
             'rainmaker rank',
-        )
+            'clam blitz rank',
+        ] = 'all',
+    ):
+        """Deletes a field from your profile.
 
-        if field not in valid_fields:
-            return await ctx.send("I don't know what field you want me to delete here bub.")
+        The valid fields that could be deleted are:
+
+        - all
+        - nnid
+        - switch
+        - 3ds
+        - squad
+        - weapon
+        - rank
+        - tower control rank
+        - splat zones rank
+        - rainmaker rank
+        - clam blitz rank
+
+        Omitting a field will delete your entire profile.
+        """
+
+        # simple case: delete entire profile
+        if field == 'all':
+            confirm = await ctx.prompt('Are you sure you want to delete your profile?')
+            if confirm:
+                query = "DELETE FROM profiles WHERE id=$1;"
+                await ctx.db.execute(query, ctx.author.id)
+                await ctx.send('Successfully deleted profile.')
+            else:
+                await ctx.send('Aborting profile deletion.')
+            return
 
         # a little intermediate case, basic field deletion:
         field_to_column = {
@@ -407,6 +453,7 @@ class Profile(commands.Cog):
         await ctx.send(f'Successfully deleted {mode} ranking.')
 
     @profile.command()
+    @app_commands.describe(query='The search query, must be at least 3 characters')
     async def search(self, ctx: Context, *, query: str):
         """Searches profiles via either friend code, NNID, or Squad.
 

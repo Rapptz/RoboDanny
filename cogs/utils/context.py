@@ -70,14 +70,14 @@ class ConfirmationView(discord.ui.View):
             return False
 
     async def on_timeout(self) -> None:
-        if self.delete_after and self.message:
+        if self.delete_after and self.message and not self.message.flags.ephemeral:
             await self.message.delete()
 
     @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         await interaction.response.defer()
-        if self.delete_after:
+        if self.delete_after and self.message and not self.message.flags.ephemeral:
             await interaction.delete_original_message()
         self.stop()
 
@@ -85,7 +85,7 @@ class ConfirmationView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
         await interaction.response.defer()
-        if self.delete_after:
+        if self.delete_after and self.message and not self.message.flags.ephemeral:
             await interaction.delete_original_message()
         self.stop()
 
@@ -116,7 +116,9 @@ class DisambiguatorView(discord.ui.View, Generic[T]):
         index = int(self.select.values[0])
         self.selected = self.data[index]
         await interaction.response.defer()
-        await self.message.delete()
+        if not self.message.flags.ephemeral:
+            await self.message.delete()
+
         self.stop()
 
 
@@ -161,7 +163,7 @@ class Context(commands.Context):
             return ref.resolved.to_reference()
         return None
 
-    async def disambiguate(self, matches: list[T], entry: Callable[[T], Any]) -> T:
+    async def disambiguate(self, matches: list[T], entry: Callable[[T], Any], *, ephemeral: bool = False) -> T:
         if len(matches) == 0:
             raise ValueError('No results found.')
 
@@ -172,7 +174,9 @@ class Context(commands.Context):
             raise ValueError('Too many results... sorry.')
 
         view = DisambiguatorView(self, matches, entry)
-        view.message = await self.send('There are too many matches... Which one did you mean?', view=view)
+        view.message = await self.send(
+            'There are too many matches... Which one did you mean?', view=view, ephemeral=ephemeral
+        )
         await view.wait()
         return view.selected
 
@@ -213,7 +217,7 @@ class Context(commands.Context):
             ctx=self,
             author_id=author_id,
         )
-        view.message = await self.send(message, view=view)
+        view.message = await self.send(message, view=view, ephemeral=delete_after)
         await view.wait()
         return view.value
 
