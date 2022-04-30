@@ -96,7 +96,7 @@ _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*
 class SplatoonRank:
     mode: str
     rank: str
-    number: Optional[int]
+    number: str
 
     def __init__(self, argument: str, *, _rank=_rank):
         m = _rank.match(argument.strip('"'))
@@ -135,25 +135,15 @@ class SplatoonRank:
 
         number = m.group('number')
         if number:
-            number = int(number)
-            if number and rank not in ('S+', 'X'):
+            value = int(number)
+            if value and rank not in ('S+', 'X'):
                 raise commands.BadArgument('Only S+ or X can input numbers.')
-            if rank == 'S+' and number > 10:
+            if rank == 'S+' and value > 10:
                 raise commands.BadArgument('S+10 is the current cap.')
-        else:
-            number = None
 
         self.mode = mode
         self.rank = rank
         self.number = number
-
-    @property
-    def display_rank(self) -> str:
-        if self.number is None:
-            return self.rank
-        else:
-            return f'{self.rank} {self.number}'
-
 
     def to_dict(self) -> dict[str, Any]:
         return {self.mode: {'rank': self.rank, 'number': self.number}}
@@ -354,7 +344,7 @@ class Profile(commands.Cog):
                 """
 
         await ctx.db.execute(query, ctx.author.id, ranking.to_dict())
-        await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.display_rank}.')
+        await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.rank}{ranking.number}.')
 
     @profile.command()
     async def delete(self, ctx: Context, *, field: Optional[str] = None):
