@@ -77,8 +77,8 @@ class Config(Generic[_T]):
         del self._db[str(key)]
         await self.save()
 
-    def __contains__(self, item: str) -> bool:
-        return item in self._db
+    def __contains__(self, item: Any) -> bool:
+        return str(item) in self._db
 
     def __getitem__(self, item: Any) -> Union[_T, Any]:
         return self._db[str(item)]
