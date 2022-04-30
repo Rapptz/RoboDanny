@@ -31,7 +31,7 @@ class Profiles(db.Table):
 
 
 class DisambiguateMember(commands.IDConverter):
-    async def convert(self, ctx: GuildContext, argument: str) -> discord.abc.User:
+    async def convert(self, ctx: Context, argument: str) -> discord.abc.User:
         # check if it's a user ID or mention
         match = self._get_id_match(argument) or re.match(r'<@!?([0-9]+)>$', argument)
 
@@ -96,7 +96,7 @@ _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*
 class SplatoonRank:
     mode: str
     rank: str
-    number: int
+    number: Optional[int]
 
     def __init__(self, argument: str, *, _rank=_rank):
         m = _rank.match(argument.strip('"'))
@@ -134,17 +134,18 @@ class SplatoonRank:
             rank = 'S'
 
         number = m.group('number')
-        if number is not None:
+        if number:
             number = int(number)
-
             if number and rank not in ('S+', 'X'):
                 raise commands.BadArgument('Only S+ or X can input numbers.')
             if rank == 'S+' and number > 10:
                 raise commands.BadArgument('S+10 is the current cap.')
+        else:
+            number = None
 
         self.mode = mode
         self.rank = rank
-        self.number = number or 0
+        self.number = number
 
     def to_dict(self) -> dict[str, Any]:
         return {self.mode: {'rank': self.rank, 'number': self.number}}
