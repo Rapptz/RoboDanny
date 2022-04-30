@@ -147,6 +147,14 @@ class SplatoonRank:
         self.rank = rank
         self.number = number
 
+    @property
+    def display_rank(self) -> str:
+        if self.number is None:
+            return self.rank
+        else:
+            return f'{self.rank} {self.number}'
+
+
     def to_dict(self) -> dict[str, Any]:
         return {self.mode: {'rank': self.rank, 'number': self.number}}
 
@@ -346,7 +354,7 @@ class Profile(commands.Cog):
                 """
 
         await ctx.db.execute(query, ctx.author.id, ranking.to_dict())
-        await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.rank}{ranking.number}.')
+        await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.display_rank}.')
 
     @profile.command()
     async def delete(self, ctx: Context, *, field: Optional[str] = None):
