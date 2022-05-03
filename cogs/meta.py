@@ -402,7 +402,7 @@ class Meta(commands.Cog):
         await self.bot.set_guild_prefixes(ctx.guild, [])
         await ctx.send(ctx.tick(True))
 
-    @commands.command()
+    @commands.command(aliases=["src"])
     async def source(self, ctx: Context, *, command: str = None):
         """Displays my full source code or for a specific command.
 
