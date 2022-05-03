@@ -12,7 +12,7 @@ import re
 
 if TYPE_CHECKING:
     from bot import RoboDanny
-    from .utils.context import GuildContext, Context
+    from .utils.context import Context
     from cogs.splatoon import Splatoon, SplatoonConfigWeapon
 
 
@@ -40,6 +40,7 @@ class DisambiguateMember(commands.IDConverter, app_commands.Transformer):
             pred = lambda u: u.name == name and u.discriminator == discriminator
             result = discord.utils.find(pred, ctx.bot.users)
         else:
+            matches: list[discord.Member | discord.User]
             # disambiguate I guess
             if ctx.guild is None:
                 matches = [user for user in ctx.bot.users if user.name == argument]
