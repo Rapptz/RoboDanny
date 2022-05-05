@@ -698,7 +698,7 @@ class Meta(commands.Cog):
 
     @commands.command(aliases=['invite'])
     async def join(self, ctx: Context):
-        """Joins a server."""
+        """Posts my invite to allow you to invite me"""
         perms = discord.Permissions.none()
         perms.read_messages = True
         perms.external_emojis = True
