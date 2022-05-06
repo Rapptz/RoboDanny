@@ -6,6 +6,7 @@ import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
 from .formats import plural, human_join, format_dt as format_dt
 from discord.ext import commands
+from discord import app_commands
 import re
 
 # Monkey patch mins and secs into the units
@@ -84,6 +85,27 @@ class FutureTime(Time):
 
         if self._past:
             raise commands.BadArgument('this time is in the past')
+
+
+class BadTimeTransform(app_commands.AppCommandError):
+    pass
+
+
+class TimeTransformer(app_commands.Transformer):
+    @classmethod
+    async def transform(cls, interaction, value: str) -> datetime.datetime:
+        now = interaction.created_at
+        try:
+            short = ShortTime(value, now=now)
+        except commands.BadArgument:
+            try:
+                human = FutureTime(value, now=now)
+            except commands.BadArgument as e:
+                raise BadTimeTransform(str(e)) from None
+            else:
+                return human.dt
+        else:
+            return short.dt
 
 
 class FriendlyTimeResult:

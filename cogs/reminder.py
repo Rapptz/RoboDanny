@@ -4,6 +4,7 @@ from typing_extensions import Annotated
 
 from .utils import time, formats
 from discord.ext import commands
+from discord import app_commands
 import discord
 import asyncio
 import asyncpg
@@ -235,7 +236,7 @@ class Reminder(commands.Cog):
 
         return timer
 
-    @commands.group(aliases=['timer', 'remind'], usage='<when>', invoke_without_command=True)
+    @commands.hybrid_group(aliases=['timer', 'remind'], usage='<when>')
     async def reminder(
         self,
         ctx: Context,
@@ -266,6 +267,33 @@ class Reminder(commands.Cog):
         )
         delta = time.human_timedelta(when.dt, source=timer.created_at)
         await ctx.send(f"Alright {ctx.author.mention}, in {delta}: {when.arg}")
+
+    @reminder.app_command.command(name='set')
+    @app_commands.describe(when='When to be reminded of something, in UTC.', text='What to be reminded of')
+    async def reminder_set(
+        self,
+        interaction: discord.Interaction,
+        when: app_commands.Transform[datetime.datetime, time.TimeTransformer],
+        text: str = '…',
+    ):
+        """Sets a reminder to remind you of something at a specific time."""
+
+        timer = await self.create_timer(
+            when,
+            'reminder',
+            interaction.user.id,
+            interaction.channel_id,
+            text,
+            created=interaction.created_at,
+            message_id=None,
+        )
+        delta = time.human_timedelta(when, source=timer.created_at)
+        await interaction.response.send_message(f"Alright {interaction.user.mention}, in {delta}: {text}")
+
+    @reminder_set.error
+    async def reminder_set_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, time.BadTimeTransform):
+            await interaction.response.send_message(str(error), ephemeral=True)
 
     @reminder.command(name='list', ignore_extra=False)
     async def reminder_list(self, ctx: Context):
@@ -343,7 +371,7 @@ class Reminder(commands.Cog):
 
         confirm = await ctx.prompt(f'Are you sure you want to delete {formats.plural(total):reminder}?')
         if not confirm:
-            return await ctx.send('Aborting')
+            return await ctx.send('Aborting', ephemeral=True)
 
         query = """DELETE FROM reminders WHERE event = 'reminder' AND extra #>> '{args,0}' = $1;"""
         await ctx.db.execute(query, author_id)
