@@ -126,7 +126,9 @@ class Migrations:
             f'-- Reason: {reason}\n\n'
         )
 
-        path.write_text(stub, encoding='utf-8', newline='\n')
+        with open(path, 'w', encoding='utf-8', newline='\n') as fp:
+            fp.write(stub)
+
         self.save()
         return Revision(kind=kind, description=reason, version=self.version + 1, file=path)
 
