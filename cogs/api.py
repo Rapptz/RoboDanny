@@ -405,7 +405,7 @@ class API(commands.Cog):
         """Gives you a documentation link for a discord.py entity (master branch)"""
         await self.do_rtfm(ctx, 'latest', entity)
 
-    @rtfm.command(name='refresh')
+    @rtfm.command(name='refresh', with_app_command=False)
     @commands.is_owner()
     async def rtfm_refresh(self, ctx: Context):
         """Refreshes the RTFM and FAQ cache"""
