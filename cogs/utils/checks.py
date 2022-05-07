@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 # You have permissions and the bot has permissions. If you meet the permissions
 # required to execute the command (and the bot does as well) then it goes through
 # and you can execute the command.
-# Certain permissions signify if the person is a moderator (Manage Server) or an
+# Certain permissions signify if the person is a moderator or an
 # admin (Administrator). Having these signify certain bypasses.
 # Of course, the owner will always be able to execute commands.
 
