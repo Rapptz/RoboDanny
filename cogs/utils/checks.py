@@ -1,10 +1,13 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, TypeVar
+from discord import app_commands
 
 from discord.ext import commands
 
 if TYPE_CHECKING:
     from .context import GuildContext
+
+T = TypeVar('T')
 
 # The permission system of the bot is based on a "just works" basis
 # You have permissions and the bot has permissions. If you meet the permissions
@@ -53,34 +56,31 @@ def has_guild_permissions(*, check=all, **perms: bool):
 # These do not take channel overrides into account
 
 
-def is_manager():
-    async def pred(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, {'manage_guild': True})
+def hybrid_permissions_check(**perms: bool) -> Callable[[T], T]:
+    async def pred(ctx: GuildContext):
+        if ctx.interaction is not None:
+            # For application commands just trust the admin set it up properly
+            return True
+        return await check_guild_permissions(ctx, perms)
 
-    return commands.check(pred)
+    def decorator(func: T) -> T:
+        commands.check(pred)(func)
+        app_commands.default_permissions(**perms)(func)
+        return func
+
+    return decorator
+
+
+def is_manager():
+    return hybrid_permissions_check(manage_guild=True)
 
 
 def is_mod():
-    async def pred(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, {'ban_members': True, 'manage_messages': True})
-
-    return commands.check(pred)
+    return hybrid_permissions_check(ban_members=True, manage_messages=True)
 
 
 def is_admin():
-    async def pred(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, {'administrator': True})
-
-    return commands.check(pred)
-
-
-def admin_or_permissions(**perms: bool):
-    perms['administrator'] = True
-
-    async def predicate(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, perms, check=any)
-
-    return commands.check(predicate)
+    return hybrid_permissions_check(administrator=True)
 
 
 def is_in_guilds(*guild_ids: int):
