@@ -1736,6 +1736,10 @@ class Mod(commands.Cog):
                 overwrite = channel.overwrites_for(role)
                 overwrite.send_messages = False
                 overwrite.add_reactions = False
+                overwrite.use_application_commands = False
+                overwrite.create_private_threads = False
+                overwrite.create_public_threads = False
+                overwrite.send_messages_in_threads = False
                 try:
                     await channel.set_permissions(role, overwrite=overwrite, reason=reason)
                 except discord.HTTPException:
