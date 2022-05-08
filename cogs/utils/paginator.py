@@ -220,16 +220,26 @@ class RoboPages(discord.ui.View):
 class FieldPageSource(menus.ListPageSource):
     """A page source that requires (field_name, field_value) tuple items."""
 
-    def __init__(self, entries, *, per_page=12):
+    def __init__(
+        self,
+        entries: list[tuple[Any, Any]],
+        *,
+        per_page: int = 12,
+        inline: bool = False,
+        clear_description: bool = True,
+    ) -> None:
         super().__init__(entries, per_page=per_page)
-        self.embed = discord.Embed(colour=discord.Colour.blurple())
+        self.embed: discord.Embed = discord.Embed(colour=discord.Colour.blurple())
+        self.clear_description: bool = clear_description
+        self.inline: bool = inline
 
-    async def format_page(self, menu, entries):
+    async def format_page(self, menu: RoboPages, entries: list[tuple[Any, Any]]) -> discord.Embed:
         self.embed.clear_fields()
-        self.embed.description = None
+        if self.clear_description:
+            self.embed.description = None
 
         for key, value in entries:
-            self.embed.add_field(name=key, value=value, inline=False)
+            self.embed.add_field(name=key, value=value, inline=self.inline)
 
         maximum = self.get_max_pages()
         if maximum > 1:

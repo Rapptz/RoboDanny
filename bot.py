@@ -70,6 +70,7 @@ class RoboDanny(commands.AutoShardedBot):
     pool: asyncpg.Pool
     command_stats: Counter[str]
     socket_stats: Counter[str]
+    command_types_used: Counter[bool]
     gateway_handler: Any
     bot_app_info: discord.AppInfo
 
