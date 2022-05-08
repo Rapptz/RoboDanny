@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Option
 from typing_extensions import Annotated
 
 from discord.ext import commands, tasks
+from discord import app_commands
 from .utils import checks, time, cache, flags
 from .utils.formats import plural
 from collections import Counter, defaultdict
@@ -723,13 +724,10 @@ class Mod(commands.Cog):
         except discord.Forbidden:
             pass
 
-    @commands.group(invoke_without_command=True)
+    @commands.hybrid_group(aliases=['automod'], fallback='info')
     @checks.is_mod()
     async def robomod(self, ctx: GuildContext):
-        """Controls RoboMod (automatic moderation) behaviour on the server.
-
-        Calling this command with no arguments will show the current RoboMod
-        information.
+        """Show current RoboMod (automatic moderation) behaviour on the server.
 
         You must have Ban Members and Manage Messages permissions to use this
         command or its subcommands.
@@ -775,13 +773,16 @@ class Mod(commands.Cog):
 
     @robomod.command(name='joins')
     @checks.is_mod()
-    @checks.has_permissions(manage_webhooks=True)
+    @app_commands.describe(
+        channel='The channel to broadcast join messages to. The bot must be able to create webhooks in it.'
+    )
     async def robomod_joins(self, ctx: GuildContext, *, channel: discord.TextChannel):
         """Enables join message logging in the given channel.
 
         The bot must have the ability to create webhooks in the given channel.
         """
 
+        await ctx.defer()
         config = await self.get_guild_config(ctx.guild.id)
         if config and config.automod_flags.joins:
             await ctx.send(
@@ -853,6 +854,13 @@ class Mod(commands.Cog):
 
     @robomod.command(name='disable', aliases=['off'])
     @checks.is_mod()
+    @app_commands.describe(protection='The protection to disable')
+    @app_commands.choices(protection=[
+        app_commands.Choice(name='Everything', value='all'),
+        app_commands.Choice(name='Join logging', value='joins'),
+        app_commands.Choice(name='Raid protection', value='raid'),
+        app_commands.Choice(name='Mention spam protection', value='mentions'),
+    ])
     async def robomod_disable(self, ctx: GuildContext, *, protection: Literal['all', 'joins', 'raid', 'mentions'] = 'all'):
         """Disables RoboMod on the server.
 
@@ -868,14 +876,18 @@ class Mod(commands.Cog):
 
         if protection == 'all':
             updates = 'automod_flags = 0, mention_count = 0, broadcast_channel = NULL'
+            message = 'RoboMod has been disabled.'
         elif protection == 'joins':
             updates = (
                 f'automod_flags = guild_mod_config.automod_flags & ~{AutoModFlags.joins.flag}, broadcast_channel = NULL'
             )
+            message = 'Join logs have been disabled.'
         elif protection == 'raid':
             updates = f'automod_flags = guild_mod_config.automod_flags & ~{AutoModFlags.raid.flag}'
+            message = 'Raid protection has been disabled.'
         elif protection == 'mentions':
-            updates = 'mention_count = 0'
+            updates = 'mention_count = NULL'
+            message = 'Mention spam protection has been disabled'
 
         query = f'UPDATE guild_mod_config SET {updates} WHERE id=$1 RETURNING broadcast_webhook_url'
 
@@ -886,15 +898,16 @@ class Mod(commands.Cog):
         if record is not None and record[0] is not None and protection in ('all', 'joins'):
             wh = discord.Webhook.from_url(record[0], session=self.bot.session)
             try:
-                await wh.delete(reason='RoboMod has been disabled')
+                await wh.delete(reason=message)
             except discord.HTTPException:
-                await ctx.send('RoboMod has been disabled, however the webhook could not be deleted for some reason.')
+                await ctx.send(f'{message} However the webhook could not be deleted for some reason.')
                 return
 
-        await ctx.send('RoboMod has been disabled.')
+        await ctx.send(message)
 
     @robomod.command(name='raid')
     @checks.is_mod()
+    @app_commands.describe(enabled='Whether raid protection should be enabled or not, toggles if not given.')
     async def robomod_raid(self, ctx: GuildContext, enabled: Optional[bool] = None):
         """Toggles raid protection on the server.
 
@@ -902,8 +915,8 @@ class Mod(commands.Cog):
         """
 
         perms = ctx.me.guild_permissions
-        if not (perms.kick_members and perms.ban_members):
-            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to kick and ban members.')
+        if not perms.ban_members:
+            return await ctx.send('\N{NO ENTRY SIGN} I do not have permissions to ban members.')
 
         query = """INSERT INTO guild_mod_config (id, automod_flags)
                    VALUES ($1, $2) ON CONFLICT (id)
@@ -924,30 +937,17 @@ class Mod(commands.Cog):
 
     @robomod.command(name='mentions')
     @commands.guild_only()
-    @checks.has_permissions(ban_members=True)
-    async def robomod_mentions(self, ctx: GuildContext, count: int):
+    @app_commands.describe(count='The maximum amount of mentions before banning.')
+    async def robomod_mentions(self, ctx: GuildContext, count: commands.Range[int, 3]):
         """Enables auto-banning accounts that spam more than "count" mentions.
 
         If a message contains `count` or more mentions then the
         bot will automatically attempt to auto-ban the member.
-        The `count` must be greater than 3. If the `count` is 0
-        then this is disabled.
+        The `count` must be greater than 3.
 
         This only applies for user mentions. Everyone or Role
         mentions are not included.
-
-        To use this command you must have the Ban Members permission.
         """
-
-        if count == 0:
-            query = """UPDATE guild_mod_config SET mention_count = NULL WHERE id=$1;"""
-            await ctx.db.execute(query, ctx.guild.id)
-            self.get_guild_config.invalidate(self, ctx.guild.id)
-            return await ctx.send('Mention spam protection has been disabled.')
-
-        if count <= 3:
-            await ctx.send('\N{NO ENTRY SIGN} Mention spam protection threshold must be greater than three.')
-            return
 
         query = """INSERT INTO guild_mod_config (id, mention_count, safe_automod_channel_ids)
                    VALUES ($1, $2, '{}')
@@ -957,6 +957,11 @@ class Mod(commands.Cog):
         await ctx.db.execute(query, ctx.guild.id, count)
         self.get_guild_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Mention spam protection threshold set to {count}.')
+
+    @robomod_mentions.error
+    async def robomod_mentions_error(self, ctx: GuildContext, error: commands.CommandError):
+        if isinstance(error, commands.RangeError):
+            await ctx.send('\N{NO ENTRY SIGN} Mention spam protection threshold must be greater than three.')
 
     @robomod.command(name='ignore')
     @commands.guild_only()
