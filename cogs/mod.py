@@ -141,6 +141,46 @@ class MigrateJoinLogView(discord.ui.View):
             await interaction.followup.send('Successfully migrated to new join logs!', ephemeral=True)
 
 
+class PreExistingMuteRoleView(discord.ui.View):
+    message: discord.Message
+
+    def __init__(self, user: discord.abc.User):
+        super().__init__(timeout=120.0)
+        self.user: discord.abc.User = user
+        self.merge: Optional[bool] = None
+
+    async def on_timeout(self) -> None:
+        try:
+            await self.message.reply('Aborting.')
+            await self.message.delete()
+        except:
+            pass
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("Sorry, these buttons aren't for you", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label='Merge', style=discord.ButtonStyle.blurple)
+    async def merge_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer()
+        await interaction.delete_original_message()
+        self.merge = True
+
+    @discord.ui.button(label='Replace', style=discord.ButtonStyle.grey)
+    async def replace_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer()
+        await interaction.delete_original_message()
+        self.merge = False
+
+    @discord.ui.button(label='Quit', style=discord.ButtonStyle.red)
+    async def abort_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_message('Aborting', ephemeral=True)
+        self.merge = None
+        await self.message.delete()
+
+
 ## Converters
 
 
@@ -1950,59 +1990,31 @@ class Mod(commands.Cog):
 
         config = await self.get_guild_config(ctx.guild.id)
         has_pre_existing = config is not None and config.mute_role is not None
-        merge = False
-        author_id = ctx.author.id
+        merge: Optional[bool] = False
 
         if has_pre_existing:
-            if not ctx.channel.permissions_for(ctx.me).add_reactions:
-                return await ctx.send('The bot is missing Add Reactions permission.')
-
             msg = (
                 '\N{WARNING SIGN} **There seems to be a pre-existing mute role set up.**\n\n'
-                'If you want to abort the set-up process react with \N{CROSS MARK}.\n'
-                'If you want to merge the pre-existing member data with the new member data react with \u2934.\n'
-                'If you want to replace pre-existing member data with the new member data react with \U0001f504.\n\n'
+                'If you want to merge the pre-existing member data with the new member data press the Merge button.\n'
+                'If you want to replace pre-existing member data with the new member data press the Replace button.\n\n'
                 '**Note: Merging is __slow__. It will also add the role to every possible member that needs it.**'
             )
 
-            sent = await ctx.send(msg)
-            emojis = {
-                '\N{CROSS MARK}': ...,
-                '\u2934': True,
-                '\U0001f504': False,
-            }
-
-            def check(payload):
-                nonlocal merge
-                if payload.message_id != sent.id or payload.user_id != author_id:
-                    return False
-
-                codepoint = str(payload.emoji)
-                try:
-                    merge = emojis[codepoint]
-                except KeyError:
-                    return False
-                else:
-                    return True
-
-            for emoji in emojis:
-                await sent.add_reaction(emoji)
-
-            try:
-                await self.bot.wait_for('raw_reaction_add', check=check, timeout=120.0)
-            except asyncio.TimeoutError:
-                return await ctx.send('Took too long. Aborting.')
-            finally:
-                await sent.delete()
+            view = PreExistingMuteRoleView(ctx.author)
+            view.message = await ctx.send(msg, view=view)
+            await view.wait()
+            if view.merge is None:
+                return
+            merge = view.merge
         else:
             muted_members = len(role.members)
             if muted_members > 0:
                 msg = f'Are you sure you want to make this the mute role? It has {plural(muted_members):member}.'
                 confirm = await ctx.prompt(msg)
                 if not confirm:
-                    merge = discord.utils.MISSING
+                    merge = None
 
-        if merge is discord.utils.MISSING:
+        if merge is None:
             return await ctx.send('Aborting.')
 
         async with ctx.typing():
@@ -2035,7 +2047,7 @@ class Mod(commands.Cog):
             total = success + failure + skipped
             await ctx.send(
                 f'Attempted to update {total} channel permissions. '
-                f'[Updated: {success}, Failed: {failure}, Skipped: {skipped}]'
+                f'[Updated: {success}, Failed: {failure}, Skipped (no permissions): {skipped}]'
             )
 
     @_mute_role.command(name='create')
