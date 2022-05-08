@@ -731,8 +731,8 @@ class Mod(commands.Cog):
         Calling this command with no arguments will show the current RoboMod
         information.
 
-        You must have Manage Server permissions to use this command or
-        its subcommands.
+        You must have Ban Members and Manage Messages permissions to use this
+        command or its subcommands.
         """
 
         config = await self.get_guild_config(ctx.guild.id)
@@ -1949,7 +1949,7 @@ class Mod(commands.Cog):
                 self._data_batch[guild_id].append((member_id, False))
 
     @_mute.group(name='role', invoke_without_command=True)
-    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    @checks.has_guild_permissions(moderate_members=True, manage_roles=True)
     async def _mute_role(self, ctx: GuildContext):
         """Shows configuration of the mute role.
 
@@ -1968,7 +1968,7 @@ class Mod(commands.Cog):
         await ctx.send(f'Role: {role}\nMembers Muted: {total}')
 
     @_mute_role.command(name='set')
-    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    @checks.has_guild_permissions(moderate_members=True, manage_roles=True)
     @commands.cooldown(1, 60.0, commands.BucketType.guild)
     async def mute_role_set(self, ctx: GuildContext, *, role: discord.Role):
         """Sets the mute role to a pre-existing role.
@@ -2026,7 +2026,7 @@ class Mod(commands.Cog):
             )
 
     @_mute_role.command(name='update', aliases=['sync'])
-    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    @checks.has_guild_permissions(moderate_members=True, manage_roles=True)
     async def mute_role_update(self, ctx: GuildContext):
         """Updates the permission overwrites of the mute role.
 
@@ -2051,7 +2051,7 @@ class Mod(commands.Cog):
             )
 
     @_mute_role.command(name='create')
-    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    @checks.has_guild_permissions(moderate_members=True, manage_roles=True)
     async def mute_role_create(self, ctx: GuildContext, *, name):
         """Creates a mute role with the given name.
 
@@ -2091,7 +2091,7 @@ class Mod(commands.Cog):
             )
 
     @_mute_role.command(name='unbind')
-    @checks.has_guild_permissions(manage_guild=True, manage_roles=True)
+    @checks.has_guild_permissions(moderate_members=True, manage_roles=True)
     async def mute_role_unbind(self, ctx: GuildContext):
         """Unbinds a mute role without deleting it.
 

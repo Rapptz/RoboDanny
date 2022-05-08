@@ -287,10 +287,10 @@ class Config(commands.Cog):
 
         If no channel or member is specified, the current channel is ignored.
 
-        Users with Manage Server can still use the bot, regardless of ignore
+        Users with Administrator can still use the bot, regardless of ignore
         status.
 
-        To use this command you must have Manage Server permissions.
+        To use this command you must have Ban Members and Manage Messages permissions.
         """
 
         if len(entities) == 0:
@@ -311,7 +311,7 @@ class Config(commands.Cog):
     async def ignore_list(self, ctx: GuildContext):
         """Tells you what channels or members are currently ignored in this server.
 
-        To use this command you must have Manage Server permissions.
+        To use this command you must have Ban Members and Manage Messages permissions.
         """
 
         query = "SELECT entity_id FROM plonks WHERE guild_id=$1;"
@@ -335,7 +335,7 @@ class Config(commands.Cog):
         the ignore list. If more channels are added then they will have to be
         ignored by using the ignore command.
 
-        To use this command you must have Manage Server permissions.
+        To use this command you must have Ban Members and Manage Messages permissions.
         """
         await self._bulk_ignore_entries(ctx, ctx.guild.text_channels)
         await ctx.send('Successfully blocking all channels here.')
@@ -345,7 +345,7 @@ class Config(commands.Cog):
     async def ignore_clear(self, ctx: GuildContext):
         """Clears all the currently set ignores.
 
-        To use this command you must have Manage Server permissions.
+        To use this command you must have Ban Members and Manage Messages permissions.
         """
 
         query = "DELETE FROM plonks WHERE guild_id=$1;"
@@ -360,7 +360,7 @@ class Config(commands.Cog):
 
         If nothing is specified, it unignores the current channel.
 
-        To use this command you must have the Manage Server permission.
+        To use this command you must have Ban Members and Manage Messages permissions.
         """
 
         if len(entities) == 0:

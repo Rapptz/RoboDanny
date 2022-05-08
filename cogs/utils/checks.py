@@ -53,9 +53,16 @@ def has_guild_permissions(*, check=all, **perms: bool):
 # These do not take channel overrides into account
 
 
-def is_mod():
+def is_manager():
     async def pred(ctx: GuildContext) -> bool:
         return await check_guild_permissions(ctx, {'manage_guild': True})
+
+    return commands.check(pred)
+
+
+def is_mod():
+    async def pred(ctx: GuildContext) -> bool:
+        return await check_guild_permissions(ctx, {'ban_members': True, 'manage_messages': True})
 
     return commands.check(pred)
 
@@ -65,15 +72,6 @@ def is_admin():
         return await check_guild_permissions(ctx, {'administrator': True})
 
     return commands.check(pred)
-
-
-def mod_or_permissions(**perms: bool):
-    perms['manage_guild'] = True
-
-    async def predicate(ctx: GuildContext) -> bool:
-        return await check_guild_permissions(ctx, perms, check=any)
-
-    return commands.check(predicate)
 
 
 def admin_or_permissions(**perms: bool):
