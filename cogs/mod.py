@@ -855,12 +855,14 @@ class Mod(commands.Cog):
     @robomod.command(name='disable', aliases=['off'])
     @checks.is_mod()
     @app_commands.describe(protection='The protection to disable')
-    @app_commands.choices(protection=[
-        app_commands.Choice(name='Everything', value='all'),
-        app_commands.Choice(name='Join logging', value='joins'),
-        app_commands.Choice(name='Raid protection', value='raid'),
-        app_commands.Choice(name='Mention spam protection', value='mentions'),
-    ])
+    @app_commands.choices(
+        protection=[
+            app_commands.Choice(name='Everything', value='all'),
+            app_commands.Choice(name='Join logging', value='joins'),
+            app_commands.Choice(name='Raid protection', value='raid'),
+            app_commands.Choice(name='Mention spam protection', value='mentions'),
+        ]
+    )
     async def robomod_disable(self, ctx: GuildContext, *, protection: Literal['all', 'joins', 'raid', 'mentions'] = 'all'):
         """Disables RoboMod on the server.
 
