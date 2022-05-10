@@ -523,6 +523,11 @@ class AdminPanel(discord.ui.View):
         await self.cog.splat2_data.put('iksm_session', cookie)
         await modal.interaction.response.send_message(f'Successfully refreshed cookie', ephemeral=True)
 
+    @discord.ui.button(label='Exit', style=discord.ButtonStyle.red)
+    async def exit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await interaction.delete_original_message()
+
 
 class Splatoon(commands.Cog):
     """Splatoon related commands."""
