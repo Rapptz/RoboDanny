@@ -11,7 +11,7 @@ from .utils.formats import plural
 
 if TYPE_CHECKING:
     from bot import RoboDanny
-    from .utils.context import Context
+    from .utils.context import GuildContext, Context
     from .splatoon import Splatoon
     from .tags import Tags
 
@@ -83,7 +83,8 @@ class RNG(commands.Cog):
         await ctx.send('\n'.join(result))
 
     @random.command()
-    async def tag(self, ctx: Context):
+    @commands.guild_only()
+    async def tag(self, ctx: GuildContext):
         """Displays a random tag.
 
         A tag showing up in this does not get its usage count increased.
