@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, TypedDict
 from typing_extensions import Annotated, NotRequired, Self
 
 from discord.ext import commands, menus
+from discord import app_commands
 from .utils import config, fuzzy, time
 from .utils.formats import plural
 from .utils.paginator import RoboPages, FieldPageSource
@@ -529,7 +530,7 @@ class AdminPanel(discord.ui.View):
         await interaction.delete_original_message()
 
 
-class Splatoon(commands.Cog):
+class Splatoon(commands.GroupCog):
     """Splatoon related commands."""
 
     BASE_URL = yarl.URL('https://app.splatoon2.nintendo.net')
@@ -871,7 +872,8 @@ class Splatoon(commands.Cog):
         """A nice little easter egg."""
         await ctx.send('http://i.stack.imgur.com/0OT9X.png')
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(title='The title of the page to search for.')
     async def splatwiki(self, ctx: Context, *, title: str):
         """Returns a Inkipedia page."""
         url = f'http://splatoonwiki.org/wiki/Special:Search/{urlquote(title)}'
@@ -925,7 +927,15 @@ class Splatoon(commands.Cog):
         menu = RoboPages(p, ctx=ctx, compact=True)
         await menu.start()
 
-    @commands.command(aliases=['maps'])
+    @commands.hybrid_command(aliases=['maps'])
+    @app_commands.choices(
+        type=[
+            app_commands.Choice(name='Ranked Battle', value='rank'),
+            app_commands.Choice(name='Turf War', value='turf'),
+            app_commands.Choice(name='League Battle', value='league'),
+        ]
+    )
+    @app_commands.describe(type='The type of schedule to show')
     async def schedule(self, ctx, *, type: Annotated[Optional[str], mode_key] = None):
         """Shows the current Splatoon 2 schedule."""
         if type is None:
@@ -933,7 +943,7 @@ class Splatoon(commands.Cog):
         else:
             await self.paginated_splatoon2_schedule(ctx, type)
 
-    @commands.command()
+    @commands.hybrid_command()
     async def nextmaps(self, ctx: Context):
         """Shows the next Splatoon 2 maps."""
         e = discord.Embed(colour=0x19D719, description='Nothing found...')
@@ -956,7 +966,7 @@ class Splatoon(commands.Cog):
 
         await ctx.send(embed=e)
 
-    @commands.group(invoke_without_command=True)
+    @commands.hybrid_command()
     async def salmonrun(self, ctx: Context):
         """Shows the Salmon Run schedule, if any."""
         salmon = self.salmon_run
@@ -966,7 +976,7 @@ class Splatoon(commands.Cog):
         pages = RoboPages(SalmonRunPageSource(salmon), ctx=ctx, compact=True)
         await pages.start()
 
-    @commands.command(aliases=['splatnetshop'])
+    @commands.hybrid_command(aliases=['splatnetshop'])
     async def splatshop(self, ctx: Context):
         """Shows the currently running SplatNet 2 merchandise."""
         if not self.sp2_shop:
@@ -975,7 +985,7 @@ class Splatoon(commands.Cog):
         pages = RoboPages(MerchPageSource(self.sp2_shop), ctx=ctx, compact=True)
         await pages.start()
 
-    @commands.command()
+    @commands.hybrid_command()
     async def splatfest(self, ctx: Context):
         """Shows information about the currently running NA Splatfest, if any."""
         if self.sp2_festival is None:
@@ -983,7 +993,8 @@ class Splatoon(commands.Cog):
 
         await ctx.send(embed=self.sp2_festival.embed())
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(query='The weapon name, sub, or special to search for')
     async def weapon(self, ctx: Context, *, query: str):
         """Displays Splatoon 2 weapon info from a query.
 
@@ -1014,7 +1025,11 @@ class Splatoon(commands.Cog):
         e.add_field(name='Special', value=special)
         await ctx.send(embed=e)
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(games='The number of games to scrim for', mode='The mode to play in')
+    @app_commands.choices(
+        mode=[app_commands.Choice(name=r, value=r) for r in ('Rainmaker', 'Splat Zones', 'Tower Control', 'Clam Blitz')]
+    )
     async def scrim(self, ctx: Context, games: int = 5, *, mode: Optional[str] = None):
         """Generates Splatoon 2 scrim map and mode combinations.
 
