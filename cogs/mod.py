@@ -2,9 +2,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Optional, List, Union
 from typing_extensions import Annotated
 
-from discord.ext import commands, tasks
+from discord.ext import commands, tasks, menus
 from discord import app_commands
 from .utils import checks, time, cache, flags
+from .utils.paginator import SimplePages
 from .utils.formats import plural
 from collections import Counter, defaultdict
 
@@ -60,7 +61,7 @@ class ModConfig:
         'broadcast_channel_id',
         'broadcast_webhook_url',
         'mention_count',
-        'safe_automod_channel_ids',
+        'safe_automod_entity_ids',
         'mute_role_id',
         'muted_members',
         '_cs_broadcast_webhook',
@@ -72,7 +73,7 @@ class ModConfig:
     broadcast_channel_id: Optional[int]
     broadcast_webhook_url: Optional[str]
     mention_count: Optional[int]
-    safe_automod_channel_ids: set[int]
+    safe_automod_entity_ids: set[int]
     muted_members: set[int]
     mute_role_id: Optional[int]
 
@@ -87,7 +88,7 @@ class ModConfig:
         self.broadcast_channel_id = record['broadcast_channel']
         self.broadcast_webhook_url = record['broadcast_webhook_url']
         self.mention_count = record['mention_count']
-        self.safe_automod_channel_ids = set(record['safe_automod_channel_ids'] or [])
+        self.safe_automod_entity_ids = set(record['safe_automod_entity_ids'] or [])
         self.muted_members = set(record['muted_members'] or [])
         self.mute_role_id = record['mute_role_id']
         return self
@@ -233,6 +234,18 @@ class ActionReason(commands.Converter):
             reason_max = 512 - len(ret) + len(argument)
             raise commands.BadArgument(f'Reason is too long ({len(argument)}/{reason_max})')
         return ret
+
+
+IgnoreableEntity = Union[discord.TextChannel, discord.VoiceChannel, discord.Thread, discord.User, discord.Role]
+
+
+class IgnoreEntity(commands.Converter):
+    async def convert(self, ctx: GuildContext, argument: str):
+        # Hybrid commands (justifiably) does not support union types
+        # since Discord doesn't support it, so we just need to run
+        # the converter manually and that way the transformer is different
+        assert ctx.current_parameter is not None
+        return await commands.run_converters(ctx, IgnoreableEntity, argument, ctx.current_parameter)
 
 
 def safe_reason_append(base: str, to_append: str) -> str:
@@ -594,7 +607,13 @@ class Mod(commands.Cog):
         if config is None:
             return
 
-        if message.channel.id in config.safe_automod_channel_ids:
+        if message.channel.id in config.safe_automod_entity_ids:
+            return
+
+        if author.id in config.safe_automod_entity_ids:
+            return
+
+        if any(i in config.safe_automod_entity_ids for i in author._roles):
             return
 
         # check for raid mode stuff
@@ -792,17 +811,25 @@ class Mod(commands.Cog):
         mention_spam = f'{config.mention_count} mentions' if config.mention_count else 'Disabled'
         e.add_field(name='Mention Spam Protection', value=mention_spam)
 
-        if config.safe_automod_channel_ids:
-            if len(config.safe_automod_channel_ids) <= 5:
-                ignored = '\n'.join(f'<#{c}>' for c in config.safe_automod_channel_ids)
+        if config.safe_automod_entity_ids:
+
+            def resolve_entity_id(x: int):
+                if ctx.guild.get_role(x):
+                    return f'<@&{x}>'
+                if ctx.guild.get_channel_or_thread(x):
+                    return f'<#{x}>'
+                return f'<@{x}>'
+
+            if len(config.safe_automod_entity_ids) <= 5:
+                ignored = '\n'.join(resolve_entity_id(c) for c in config.safe_automod_entity_ids)
             else:
-                sliced = list(config.safe_automod_channel_ids)[:5]
-                channels = '\n'.join(f'<#{c}>' for c in sliced)
-                ignored = f'{channels}\n({len(config.safe_automod_channel_ids) - 5} more...)'
+                sliced = list(config.safe_automod_entity_ids)[:5]
+                entities = '\n'.join(resolve_entity_id(c) for c in sliced)
+                ignored = f'{entities}\n({len(config.safe_automod_entity_ids) - 5} more...)'
         else:
             ignored = 'Nothing'
 
-        e.add_field(name='Ignored Channels', value=ignored, inline=False)
+        e.add_field(name='Ignored Entities', value=ignored, inline=False)
         await ctx.send(embed=e)
 
     @robomod.command(name='joins')
@@ -985,7 +1012,7 @@ class Mod(commands.Cog):
         mentions are not included.
         """
 
-        query = """INSERT INTO guild_mod_config (id, mention_count, safe_automod_channel_ids)
+        query = """INSERT INTO guild_mod_config (id, mention_count, safe_automod_entity_ids)
                    VALUES ($1, $2, '{}')
                    ON CONFLICT (id) DO UPDATE SET
                        mention_count = $2;
@@ -1001,52 +1028,81 @@ class Mod(commands.Cog):
 
     @robomod.command(name='ignore')
     @commands.guild_only()
-    @checks.has_permissions(ban_members=True)
-    async def robomod_ignore(self, ctx: GuildContext, channels: commands.Greedy[discord.TextChannel]):
-        """Specifies what channels ignore RoboMod auto-bans.
-
-        If a channel is given then that channel will no longer be protected
-        by RoboMod.
+    @checks.hybrid_permissions_check(ban_members=True)
+    @app_commands.describe(entities='Space separated list of roles, members, or channels to ignore')
+    async def robomod_ignore(
+        self, ctx: GuildContext, entities: Annotated[List[IgnoreableEntity], commands.Greedy[IgnoreEntity]]
+    ):
+        """Specifies what roles, members, or channels ignore RoboMod auto-bans.
 
         To use this command you must have the Ban Members permission.
         """
 
         query = """UPDATE guild_mod_config
-                   SET safe_automod_channel_ids =
-                       ARRAY(SELECT DISTINCT * FROM unnest(COALESCE(safe_automod_channel_ids, '{}') || $2::bigint[]))
+                   SET safe_automod_entity_ids =
+                       ARRAY(SELECT DISTINCT * FROM unnest(COALESCE(safe_automod_entity_ids, '{}') || $2::bigint[]))
                    WHERE id = $1;
                 """
 
-        if len(channels) == 0:
-            return await ctx.send('Missing channels to ignore.')
+        if len(entities) == 0:
+            return await ctx.send('Missing entities to ignore.')
 
-        channel_ids = [c.id for c in channels]
-        await ctx.db.execute(query, ctx.guild.id, channel_ids)
+        ids = [c.id for c in entities]
+        await ctx.db.execute(query, ctx.guild.id, ids)
         self.get_guild_config.invalidate(self, ctx.guild.id)
-        await ctx.send(f'Mentions are now ignored on {", ".join(c.mention for c in channels)}.')
+        await ctx.send(
+            f'Updated ignore list to ignore {", ".join(c.mention for c in entities)}',
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     @robomod.command(name='unignore')
     @commands.guild_only()
-    @checks.has_permissions(ban_members=True)
-    async def robomod_unignore(self, ctx: GuildContext, channels: commands.Greedy[discord.TextChannel]):
-        """Specifies what channels to take off the RoboMod ignore list.
+    @checks.hybrid_permissions_check(ban_members=True)
+    @app_commands.describe(entities='Space separated list of roles, members, or channels to take off the ignore list')
+    async def robomod_unignore(
+        self, ctx: GuildContext, entities: Annotated[List[IgnoreableEntity], commands.Greedy[IgnoreEntity]]
+    ):
+        """Specifies what roles, members, or channels to take off the RoboMod ignore list.
 
         To use this command you must have the Ban Members permission.
         """
 
-        if len(channels) == 0:
-            return await ctx.send('Missing channels to protect.')
+        if len(entities) == 0:
+            return await ctx.send('Missing entities to unignore.')
 
         query = """UPDATE guild_mod_config
-                   SET safe_automod_channel_ids =
-                       ARRAY(SELECT element FROM unnest(safe_automod_channel_ids) AS element
+                   SET safe_automod_entity_ids =
+                       ARRAY(SELECT element FROM unnest(safe_automod_entity_ids) AS element
                              WHERE NOT(element = ANY($2::bigint[])))
                    WHERE id = $1;
                 """
 
-        await ctx.db.execute(query, ctx.guild.id, [c.id for c in channels])
+        await ctx.db.execute(query, ctx.guild.id, [c.id for c in entities])
         self.get_guild_config.invalidate(self, ctx.guild.id)
-        await ctx.send('Updated mentionspam ignore list.')
+        await ctx.send(
+            f'Updated ignore list to no longer ignore {", ".join(c.mention for c in entities)}',
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @robomod.command(name='ignored')
+    @commands.guild_only()
+    async def robomod_ignored(self, ctx: GuildContext):
+        """Lists what channels, roles, and members are in the RoboMod ignore list"""
+
+        config = await self.get_guild_config(ctx.guild.id)
+        if config is None:
+            return await ctx.send('Nothing is ignored!')
+
+        def resolve_entity_id(x: int, *, guild=ctx.guild):
+            if guild.get_role(x):
+                return f'<@&{x}>'
+            if guild.get_channel_or_thread(x):
+                return f'<#{x}>'
+            return f'<@{x}>'
+
+        entities = [resolve_entity_id(x) for x in config.safe_automod_entity_ids]
+        pages = SimplePages(entities, ctx=ctx, per_page=20)
+        await pages.start()
 
     async def _basic_cleanup_strategy(self, ctx: GuildContext, search: int):
         count = 0
