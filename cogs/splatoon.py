@@ -634,6 +634,7 @@ class Splatoon(commands.GroupCog):
             if not merch:
                 return
 
+            dirty = False
             for elem in merch:
                 try:
                     value = Merchandise(elem)
@@ -646,10 +647,14 @@ class Splatoon(commands.GroupCog):
                     kind = self.splat2_data.get(value.gear.kind, [])
                     for gear in kind:
                         if gear.name == value.gear.name:
+                            if not dirty:
+                                dirty = gear.image != value.gear.image
                             gear.image = value.gear.image
                             break
 
-            await self.splat2_data.save()
+            if dirty:
+                await self.splat2_data.save()
+
             self.sp2_shop.sort(key=lambda m: m.end_time)
             now = discord.utils.utcnow()
 
