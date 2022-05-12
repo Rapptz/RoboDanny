@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Optional, List
+from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Optional, List, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands, tasks
@@ -242,6 +242,44 @@ def safe_reason_append(base: str, to_append: str) -> str:
     return appended
 
 
+class MassbanFlags(commands.FlagConverter):
+    channel: Optional[Union[discord.TextChannel, discord.Thread, discord.VoiceChannel]] = commands.flag(
+        description='The channel to search for message history', default=None
+    )
+    reason: Optional[str] = commands.flag(description='The reason to ban the members for', default=None)
+    username: Optional[str] = commands.flag(description='The regex that usernames must match', default=None)
+    created: Optional[int] = commands.flag(
+        description='Matches users whose accounts were created less than specified minutes ago.', default=None
+    )
+    joined: Optional[int] = commands.flag(
+        description='Matches users that joined less than specified minutes ago.', default=None
+    )
+    joined_before: Optional[discord.Member] = commands.flag(
+        description='Matches users who joined before this member', default=None, name='joined-before'
+    )
+    joined_after: Optional[discord.Member] = commands.flag(
+        description='Matches users who joined after this member', default=None, name='joined-after'
+    )
+    avatar: Optional[bool] = commands.flag(
+        description='Matches users depending on whether they have avatars or not', default=None
+    )
+    roles: Optional[bool] = commands.flag(
+        description='Matches users depending on whether they have roles or not', default=None
+    )
+    show: bool = commands.flag(description='Show members instead of banning them', default=False)
+
+    # Message history related flags
+    contains: Optional[str] = commands.flag(description='The substring to search for in the message.', default=None)
+    starts: Optional[str] = commands.flag(description='The substring to search if the message starts with.', default=None)
+    ends: Optional[str] = commands.flag(description='The substring to search if the message ends with.', default=None)
+    match: Optional[str] = commands.flag(description='The regex to match the message content to.', default=None)
+    search: commands.Range[int, 1, 2000] = commands.flag(description='How many messages to search for', default=100)
+    after: Optional[str] = commands.flag(description='Messages must come after this message ID.', default=None)
+    before: Optional[str] = commands.flag(description='Messages must come before this message ID.', default=None)
+    files: Optional[bool] = commands.flag(description='Whether the message should have attachments.', default=None)
+    embeds: Optional[bool] = commands.flag(description='Whether the message should have embeds.', default=None)
+
+
 ## Spam detector
 
 # TODO: add this to d.py maybe
@@ -414,7 +452,7 @@ class Mod(commands.Cog):
         self._automod_migration_view.stop()
 
     async def cog_command_error(self, ctx: GuildContext, error: commands.CommandError):
-        if isinstance(error, commands.BadArgument):
+        if isinstance(error, (commands.BadArgument, NoMuteRole, commands.UserInputError, commands.FlagError)):
             await ctx.send(str(error))
         elif isinstance(error, commands.CommandInvokeError):
             original = error.original
@@ -424,10 +462,6 @@ class Mod(commands.Cog):
                 await ctx.send(f'This entity does not exist: {original.text}')
             elif isinstance(original, discord.HTTPException):
                 await ctx.send('Somehow, an unexpected error occurred. Try again later?')
-        elif isinstance(error, NoMuteRole):
-            await ctx.send(str(error))
-        elif isinstance(error, commands.UserInputError):
-            await ctx.send(str(error))
 
     async def bulk_insert(self):
         query = """UPDATE guild_mod_config
@@ -1167,87 +1201,50 @@ class Mod(commands.Cog):
 
         await ctx.send(f'Banned {total_members - failed}/{total_members} members.')
 
-    @commands.command()
+    @commands.hybrid_command(usage='[flags...]')
     @commands.guild_only()
     @checks.has_permissions(ban_members=True)
-    async def massban(self, ctx: GuildContext, *, arguments: str):
+    async def massban(self, ctx: GuildContext, *, args: MassbanFlags):
         """Mass bans multiple members from the server.
 
-        This command has a powerful "command line" syntax. To use this command
+        This command uses a syntax similar to Discord's search bar. To use this command
         you and the bot must both have Ban Members permission. **Every option is optional.**
 
         Users are only banned **if and only if** all conditions are met.
 
         The following options are valid.
 
-        `--channel` or `-c`: Channel to search for message history.
-        `--reason` or `-r`: The reason for the ban.
-        `--regex`: Regex that usernames must match.
-        `--created`: Matches users whose accounts were created less than specified minutes ago.
-        `--joined`: Matches users that joined less than specified minutes ago.
-        `--joined-before`: Matches users who joined before the member ID given.
-        `--joined-after`: Matches users who joined after the member ID given.
-        `--no-avatar`: Matches users who have no avatar. (no arguments)
-        `--no-roles`: Matches users that have no role. (no arguments)
-        `--show`: Show members instead of banning them (no arguments).
+        `channel:` Channel to search for message history.
+        `reason:` The reason for the ban.
+        `regex:` Regex that usernames must match.
+        `created:` Matches users whose accounts were created less than specified minutes ago.
+        `joined:` Matches users that joined less than specified minutes ago.
+        `joined-before:` Matches users who joined before the member ID given.
+        `joined-after:` Matches users who joined after the member ID given.
+        `avatar:` Matches users who have no avatar.
+        `roles:` Matches users that have no role.
+        `show:` Show members instead of banning them.
 
-        Message history filters (Requires `--channel`):
+        Message history filters (Requires `channel:`):
 
-        `--contains`: A substring to search for in the message.
-        `--starts`: A substring to search if the message starts with.
-        `--ends`: A substring to search if the message ends with.
-        `--match`: A regex to match the message content to.
-        `--search`: How many messages to search. Default 100. Max 2000.
-        `--after`: Messages must come after this message ID.
-        `--before`: Messages must come before this message ID.
-        `--files`: Checks if the message has attachments (no arguments).
-        `--embeds`: Checks if the message has embeds (no arguments).
+        `contains:` A substring to search for in the message.
+        `starts:` A substring to search if the message starts with.
+        `ends:` A substring to search if the message ends with.
+        `match:` A regex to match the message content to.
+        `search:` How many messages to search. Default 100. Max 2000.
+        `after:` Messages must come after this message ID.
+        `before:` Messages must come before this message ID.
+        `files:` Checks if the message has attachments.
+        `embeds:` Checks if the message has embeds.
         """
 
-        # For some reason there are cases due to caching that ctx.author
-        # can be a User even in a guild only context
-        # Rather than trying to work out the kink with it
-        # Just upgrade the member itself.
-        if not isinstance(ctx.author, discord.Member):
-            try:
-                author = await ctx.guild.fetch_member(ctx.author.id)
-            except discord.HTTPException:
-                return await ctx.send('Somehow, Discord does not seem to think you are in this server.')
-        else:
-            author = ctx.author
-
-        parser = Arguments(add_help=False, allow_abbrev=False)
-        parser.add_argument('--channel', '-c')
-        parser.add_argument('--reason', '-r')
-        parser.add_argument('--search', type=int, default=100)
-        parser.add_argument('--regex')
-        parser.add_argument('--no-avatar', action='store_true')
-        parser.add_argument('--no-roles', action='store_true')
-        parser.add_argument('--created', type=int)
-        parser.add_argument('--joined', type=int)
-        parser.add_argument('--joined-before', type=int)
-        parser.add_argument('--joined-after', type=int)
-        parser.add_argument('--contains')
-        parser.add_argument('--starts')
-        parser.add_argument('--ends')
-        parser.add_argument('--match')
-        parser.add_argument('--show', action='store_true')
-        parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
-        parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
-        parser.add_argument('--after', type=int)
-        parser.add_argument('--before', type=int)
-
-        try:
-            args = parser.parse_args(shlex.split(arguments))
-        except Exception as e:
-            return await ctx.send(str(e))
-
+        await ctx.defer()
+        author = ctx.author
         members = []
 
         if args.channel:
-            channel = await commands.TextChannelConverter().convert(ctx, args.channel)
-            before = args.before and discord.Object(id=args.before)
-            after = args.after and discord.Object(id=args.after)
+            before = discord.Object(id=int(args.before)) if args.before else None
+            after = discord.Object(id=int(args.after)) if args.after else None
             predicates = []
             if args.contains:
                 predicates.append(lambda m: args.contains in m.content)
@@ -1259,7 +1256,7 @@ class Mod(commands.Cog):
                 try:
                     _match = re.compile(args.match)
                 except re.error as e:
-                    return await ctx.send(f'Invalid regex passed to `--match`: {e}')
+                    return await ctx.send(f'Invalid regex passed to `match:` flag: {e}')
                 else:
                     predicates.append(lambda m, x=_match: x.match(m.content))
             if args.embeds:
@@ -1267,7 +1264,7 @@ class Mod(commands.Cog):
             if args.files:
                 predicates.append(args.files)
 
-            async for message in channel.history(limit=min(max(1, args.search), 2000), before=before, after=after):
+            async for message in args.channel.history(limit=args.search, before=before, after=after):
                 if all(p(message) for p in predicates):
                     members.append(message.author)
         else:
@@ -1285,19 +1282,17 @@ class Mod(commands.Cog):
             lambda m: m.discriminator != '0000',  # No deleted users
         ]
 
-        converter = commands.MemberConverter()
-
-        if args.regex:
+        if args.username:
             try:
-                _regex = re.compile(args.regex)
+                _regex = re.compile(args.username)
             except re.error as e:
-                return await ctx.send(f'Invalid regex passed to `--regex`: {e}')
+                return await ctx.send(f'Invalid regex passed to `username:` flag: {e}')
             else:
                 predicates.append(lambda m, x=_regex: x.match(m.name))
 
-        if args.no_avatar:
+        if args.avatar is False:
             predicates.append(lambda m: m.avatar is None)
-        if args.no_roles:
+        if args.roles is False:
             predicates.append(lambda m: len(getattr(m, 'roles', [])) <= 1)
 
         now = discord.utils.utcnow()
@@ -1317,19 +1312,20 @@ class Mod(commands.Cog):
 
             predicates.append(joined)
         if args.joined_after:
-            _joined_after_member = await converter.convert(ctx, str(args.joined_after))
 
-            def joined_after(member, *, _other=_joined_after_member):
+            def joined_after(member, *, _other=args.joined_after):
                 return member.joined_at and _other.joined_at and member.joined_at > _other.joined_at
 
             predicates.append(joined_after)
         if args.joined_before:
-            _joined_before_member = await converter.convert(ctx, str(args.joined_before))
 
-            def joined_before(member, *, _other=_joined_before_member):
+            def joined_before(member, *, _other=args.joined_before):
                 return member.joined_at and _other.joined_at and member.joined_at < _other.joined_at
 
             predicates.append(joined_before)
+
+        if len(predicates) == 3:
+            return await ctx.send('Missing at least one filter to use')
 
         members = {m for m in members if all(p(m) for p in predicates)}
         if len(members) == 0:
@@ -1343,7 +1339,7 @@ class Mod(commands.Cog):
             return await ctx.send(file=file)
 
         if args.reason is None:
-            return await ctx.send('--reason flag is required.')
+            return await ctx.send('`reason:` flag is required.')
         else:
             reason = await ActionReason().convert(ctx, args.reason)
 
