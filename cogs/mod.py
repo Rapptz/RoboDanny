@@ -2,11 +2,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Optional, List, Union
 from typing_extensions import Annotated
 
-from discord.ext import commands, tasks, menus
+from discord.ext import commands, tasks
 from discord import app_commands
 from .utils import checks, time, cache, flags
 from .utils.paginator import SimplePages
-from .utils.formats import plural
+from .utils.formats import plural, human_join
 from collections import Counter, defaultdict
 
 import re
@@ -181,6 +181,52 @@ class PreExistingMuteRoleView(discord.ui.View):
         await interaction.response.send_message('Aborting', ephemeral=True)
         self.merge = None
         await self.message.delete()
+
+
+class LockdownPermissionIssueView(discord.ui.View):
+    message: discord.Message
+
+    def __init__(self, me: discord.Member, channel: discord.abc.GuildChannel):
+        super().__init__()
+        self.channel: discord.abc.GuildChannel = channel
+        self.me: discord.Member = me
+        self.abort: bool = False
+
+    async def on_timeout(self) -> None:
+        self.abort = True
+        try:
+            await self.message.reply('Aborting.')
+            await self.message.delete()
+        except:
+            pass
+
+    @discord.ui.button(label='Resolve Permission Issue', style=discord.ButtonStyle.green)
+    async def resolve_permissions(self, interaction: discord.Interaction, button: discord.ui.Button):
+        overwrites = self.channel.overwrites
+        ow = overwrites.setdefault(self.me, discord.PermissionOverwrite())
+        ow.send_messages = True
+        ow.send_messages_in_threads = True
+
+        try:
+            await self.channel.set_permissions(self.me, overwrite=ow)
+        except discord.HTTPException:
+            await interaction.response.send_message(
+                f'Could not successfully edit permissions, please give the bot Send Messages '
+                f'and Send Messages in Threads in {self.channel.mention}'
+            )
+        else:
+            await self.message.delete(delay=3)
+            await interaction.response.send_message('Bot permissions have been updated... continuing', ephemeral=True)
+        finally:
+            self.stop()
+
+    @discord.ui.button(label='Quit', style=discord.ButtonStyle.red)
+    async def abort_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.abort = True
+        await interaction.response.send_message(
+            'Alright, feel free to edit the permissions yourself to give the bot Send Messages and Send Messages in Threads!'
+        )
+        self.stop()
 
 
 ## Converters
@@ -465,7 +511,10 @@ class Mod(commands.Cog):
         self._automod_migration_view.stop()
 
     async def cog_command_error(self, ctx: GuildContext, error: commands.CommandError):
-        if isinstance(error, (commands.BadArgument, NoMuteRole, commands.UserInputError, commands.FlagError)):
+        if isinstance(
+            error,
+            (commands.BadArgument, commands.BotMissingPermissions, NoMuteRole, commands.UserInputError, commands.FlagError),
+        ):
             await ctx.send(str(error))
         elif isinstance(error, commands.CommandInvokeError):
             original = error.original
@@ -2223,6 +2272,337 @@ class Mod(commands.Cog):
     async def on_selfmute_error(self, ctx: GuildContext, error: commands.CommandError):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send('Missing a duration to selfmute for.')
+
+    async def get_lockdown_information(
+        self, guild_id: int, channel_ids: Optional[list[int]] = None
+    ) -> dict[int, discord.PermissionOverwrite]:
+        rows: list[tuple[int, int, int]]
+        if channel_ids is None:
+            query = """SELECT channel_id, allow, deny FROM guild_lockdowns WHERE guild_id=$1;"""
+            rows = await self.bot.pool.fetch(query, guild_id)
+        else:
+            query = """SELECT channel_id, allow, deny
+                       FROM guild_lockdowns
+                       WHERE guild_id=$1 AND channel_id = ANY($2::bigint[]);
+                    """
+
+            rows = await self.bot.pool.fetch(query, guild_id, channel_ids)
+
+        return {
+            channel_id: discord.PermissionOverwrite.from_pair(discord.Permissions(allow), discord.Permissions(deny))
+            for channel_id, allow, deny in rows
+        }
+
+    async def start_lockdown(
+        self, ctx: GuildContext, channels: list[discord.TextChannel | discord.VoiceChannel]
+    ) -> tuple[list[discord.TextChannel | discord.VoiceChannel], list[discord.TextChannel | discord.VoiceChannel]]:
+        guild_id = ctx.guild.id
+        default_role = ctx.guild.default_role
+
+        records = []
+        success, failures = [], []
+        reason = f'Lockdown request by {ctx.author} (ID: {ctx.author.id})'
+        async with ctx.typing():
+            for channel in channels:
+                overwrites = channel.overwrites
+                overwrite = overwrites.setdefault(default_role, discord.PermissionOverwrite())
+
+                allow, deny = overwrite.pair()
+
+                overwrite.send_messages = False
+                overwrite.connect = False
+                overwrite.add_reactions = False
+                overwrite.use_application_commands = False
+                overwrite.create_private_threads = False
+                overwrite.create_public_threads = False
+                overwrite.send_messages_in_threads = False
+
+                try:
+                    await channel.edit(overwrites=overwrites, reason=reason)  # type: ignore  # Bug in library typing
+                except discord.HTTPException:
+                    failures.append(channel)
+                else:
+                    success.append(channel)
+                    records.append(
+                        {
+                            'guild_id': guild_id,
+                            'channel_id': channel.id,
+                            'allow': allow.value,
+                            'deny': deny.value,
+                        }
+                    )
+
+        query = """
+            INSERT INTO guild_lockdowns(guild_id, channel_id, allow, deny)
+            SELECT d.guild_id, d.channel_id, d.allow, d.deny
+            FROM jsonb_to_recordset($1::jsonb) AS d(guild_id BIGINT, channel_id BIGINT, allow BIGINT, deny BIGINT)
+            ON CONFLICT (guild_id, channel_id) DO NOTHING
+        """
+        await self.bot.pool.execute(query, records)
+        return success, failures
+
+    async def end_lockdown(
+        self,
+        guild: discord.Guild,
+        *,
+        channel_ids: Optional[list[int]] = None,
+        reason: Optional[str] = None,
+    ) -> list[discord.abc.GuildChannel]:
+        get_channel = guild.get_channel
+        http_fallback: Optional[dict[int, discord.abc.GuildChannel]] = None
+        default_role = guild.default_role
+        failures = []
+        lockdowns = await self.get_lockdown_information(guild.id, channel_ids=channel_ids)
+        for channel_id, permissions in lockdowns.items():
+            channel = get_channel(channel_id)
+            # If a channel isn't found, do an HTTP fallback instead of cache
+            # This way we can ensure whether the channel is there or not without
+            # making N invalid requests per deleted channel
+            if channel is None:
+                if http_fallback is None:
+                    http_fallback = {c.id: c for c in await guild.fetch_channels()}
+                    get_channel = http_fallback.get
+                    channel = get_channel(channel_id)
+                    if channel is None:
+                        continue
+                continue
+
+            overwrites = channel.overwrites
+            overwrites[default_role] = permissions
+            try:
+                await channel.edit(overwrites=overwrites, reason=reason)  # type: ignore
+            except discord.HTTPException:
+                failures.append(channel)
+
+        return failures
+
+    def is_potential_lockout(
+        self, me: discord.Member, channel: Union[discord.Thread, discord.VoiceChannel, discord.TextChannel]
+    ) -> bool:
+        if isinstance(channel, discord.Thread):
+            parent = channel.parent
+            if parent is None:
+                # Better safe than sorry?
+                return True
+
+            overwrites = parent.overwrites
+            for role in me.roles:
+                ow = overwrites.get(role)
+                if ow is None:
+                    continue
+                if ow.send_messages_in_threads:
+                    return False
+            return True
+
+        overwrites = channel.overwrites
+        for role in me.roles:
+            ow = overwrites.get(role)
+            if ow is None:
+                continue
+            if ow.send_messages:
+                return False
+        return True
+
+    @commands.hybrid_group(fallback='start')
+    @commands.guild_only()
+    @app_commands.guild_only()
+    @checks.hybrid_permissions_check(ban_members=True, manage_roles=True)
+    @commands.bot_has_guild_permissions(manage_roles=True)
+    @commands.cooldown(1, 30.0, commands.BucketType.guild)
+    @app_commands.describe(channels='A space separated list of text or voice channels to lock down')
+    async def lockdown(self, ctx: GuildContext, channels: commands.Greedy[Union[discord.TextChannel, discord.VoiceChannel]]):
+        """Locks down specific channels.
+
+        A lockdown is done by forbidding users from communicating with the channels.
+        This is implemented by blocking certain permissions for the default everyone
+        role:
+
+        - Send Messages
+        - Add Reactions
+        - Use Application Commands
+        - Create Public Threads
+        - Create Private Threads
+        - Send Messages in Threads
+
+        When the lockdown is over, the permissions are reverted into their previous
+        state.
+
+        To use this command you must have Manage Roles and Ban Members permissions.
+        The bot must also have Manage Members permissions.
+        """
+
+        if not channels:
+            return await ctx.send('Missing channels to lockdown')
+
+        if ctx.channel in channels and self.is_potential_lockout(ctx.me, ctx.channel):
+            parent = ctx.channel.parent if isinstance(ctx.channel, discord.Thread) else ctx.channel
+            if parent is None:
+                await ctx.send(
+                    'For some reason, I could not find an an appropriate channel to edit overwrites for.'
+                    'Note that this lockdown will potentially lock the bot from sending messages. '
+                    'Please explicitly give the bot permissions to send messages in threads and channels.'
+                )
+                return
+
+            view = LockdownPermissionIssueView(ctx.me, parent)
+            view.message = await ctx.send(
+                '\N{WARNING SIGN} This will potentially lock the bot from sending messages.\n'
+                'Would you like to resolve the permission issue?',
+                view=view,
+            )
+            await view.wait()
+            if view.abort:
+                return
+
+        success, failures = await self.start_lockdown(ctx, channels)
+        if failures:
+            await ctx.send(
+                f'Successfully locked down {len(success)}/{len(failures)} channels.\n'
+                f'Failed channels: {", ".join(c.mention for c in failures)}\n\n'
+                f'Give the bot Manage Roles permissions in those channels and try again.'
+            )
+        else:
+            await ctx.send(f'Successfully locked down {plural(len(success)):channel}')
+
+    @lockdown.command(name='for')
+    @commands.guild_only()
+    @checks.hybrid_permissions_check(ban_members=True, manage_roles=True)
+    @commands.bot_has_guild_permissions(manage_roles=True)
+    @commands.cooldown(1, 30.0, commands.BucketType.guild)
+    @app_commands.describe(
+        duration='A duration on how long to lock down for, e.g. 30m',
+        channels='A space separated list of text or voice channels to lock down',
+    )
+    async def lockdown_for(
+        self,
+        ctx: GuildContext,
+        duration: time.ShortTime,
+        channels: commands.Greedy[Union[discord.TextChannel, discord.VoiceChannel]],
+    ):
+        """Locks down specific channels for a specified amount of time.
+
+        A lockdown is done by forbidding users from communicating with the channels.
+        This is implemented by blocking certain permissions for the default everyone
+        role:
+
+        - Send Messages
+        - Add Reactions
+        - Use Application Commands
+        - Create Public Threads
+        - Create Private Threads
+        - Send Messages in Threads
+
+        When the lockdown is over, the permissions are reverted into their previous
+        state.
+
+        To use this command you must have Manage Roles and Ban Members permissions.
+        The bot must also have Manage Members permissions.
+        """
+
+        reminder = self.bot.reminder
+        if reminder is None:
+            return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
+
+        if not channels:
+            return await ctx.send('Missing channels to lockdown')
+
+        if ctx.channel in channels and self.is_potential_lockout(ctx.me, ctx.channel):
+            parent = ctx.channel.parent if isinstance(ctx.channel, discord.Thread) else ctx.channel
+            if parent is None:
+                await ctx.send(
+                    'For some reason, I could not find an an appropriate channel to edit overwrites for.'
+                    'Note that this lockdown will potentially lock the bot from sending messages. '
+                    'Please explicitly give the bot permissions to send messages in threads and channels.'
+                )
+                return
+
+            view = LockdownPermissionIssueView(ctx.me, parent)
+            view.message = await ctx.send(
+                '\N{WARNING SIGN} This will potentially lock the bot from sending messages.\n'
+                'Would you like to resolve the permission issue?',
+                view=view,
+            )
+            await view.wait()
+            if view.abort:
+                return
+
+        success, failures = await self.start_lockdown(ctx, channels)
+        timer = await reminder.create_timer(
+            duration.dt,
+            'lockdown',
+            ctx.guild.id,
+            ctx.author.id,
+            ctx.channel.id,
+            [c.id for c in success],
+            created=ctx.message.created_at,
+        )
+        long = duration.dt >= ctx.message.created_at + datetime.timedelta(days=1)
+        formatted_time = discord.utils.format_dt(timer.expires, 'f' if long else 'T')
+        if failures:
+            await ctx.send(
+                f'Successfully locked down {len(success)}/{len(channels)} channels until {formatted_time}.\n'
+                f'Failed channels: {", ".join(c.mention for c in failures)}\n'
+                f'Give the bot Manage Roles permissions in {plural(len(failures)):the channel|those channels} and try '
+                f'the lockdown command on the failed {plural(len(failures)):channel} again.'
+            )
+        else:
+            await ctx.send(f'Successfully locked down {plural(len(success)):channel} until {formatted_time}')
+
+    @lockdown.command(name='end')
+    @commands.guild_only()
+    @checks.hybrid_permissions_check(ban_members=True, manage_roles=True)
+    @commands.bot_has_guild_permissions(manage_roles=True)
+    async def lockdown_end(self, ctx: GuildContext):
+        """Ends all lockdowns set.
+
+        To use this command you must have Manage Roles and Ban Members permissions.
+        The bot must also have Manage Members permissions.
+        """
+
+        reason = f'Lockdown ended by {ctx.author} (ID: {ctx.author.id})'
+        async with ctx.typing():
+            failures = await self.end_lockdown(ctx.guild, reason=reason)
+
+        # Remove all the lockdown information...
+        query = "DELETE FROM guild_lockdowns WHERE guild_id=$1;"
+        await ctx.db.execute(query, ctx.guild.id)
+        if failures:
+            formatted = [c.mention for c in failures]
+            await ctx.send(f'Lockdown ended. Failed to edit {human_join(formatted, final="and")}')
+        else:
+            await ctx.send('Lockdown successfully ended')
+
+    @commands.Cog.listener()
+    async def on_lockdown_timer_complete(self, timer: Timer):
+        guild_id, mod_id, channel_id, channel_ids = timer.args
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None or guild.unavailable:
+            return
+
+        member = await self.bot.get_or_fetch_member(guild, mod_id)
+        if member is None:
+            moderator = f'Mod ID {mod_id}'
+        else:
+            moderator = f'{member} (ID: {mod_id})'
+
+        reason = f'Automatic lockdown ended from timer made on {timer.created_at} by {moderator}'
+        failures = await self.end_lockdown(guild, channel_ids=channel_ids, reason=reason)
+
+        query = "DELETE FROM guild_lockdowns WHERE guild_id=$1 AND channel_id = ANY($2::bigint[]);"
+        await self.bot.pool.execute(query, guild_id, channel_ids)
+
+        channel = guild.get_channel_or_thread(channel_id)
+        if channel is not None:
+            assert isinstance(channel, discord.abc.Messageable)
+            if failures:
+                formatted = [c.mention for c in failures]
+                await channel.send(
+                    f'Lockdown ended. However, I failed to properly edit {human_join(formatted, final="and")}'
+                )
+            else:
+                valid = [f'<#{c}>' for c in channel_ids]
+                await channel.send(f'Lockdown successfully ended for {human_join(valid, final="and")}')
 
 
 async def setup(bot: RoboDanny):
