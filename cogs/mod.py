@@ -2226,9 +2226,7 @@ class Mod(commands.Cog):
         reason = f'Lockdown request by {ctx.author} (ID: {ctx.author.id})'
         async with ctx.typing():
             for channel in channels:
-                overwrites = channel.overwrites
-                overwrite = overwrites.setdefault(default_role, discord.PermissionOverwrite())
-
+                overwrite = channel.overwrites_for(default_role)
                 allow, deny = overwrite.pair()
 
                 overwrite.send_messages = False
@@ -2240,7 +2238,7 @@ class Mod(commands.Cog):
                 overwrite.send_messages_in_threads = False
 
                 try:
-                    await channel.edit(overwrites=overwrites, reason=reason)  # type: ignore  # Bug in library typing
+                    await channel.set_permissions(default_role, overwrite=overwrite, reason=reason)
                 except discord.HTTPException:
                     failures.append(channel)
                 else:
@@ -2289,10 +2287,8 @@ class Mod(commands.Cog):
                         continue
                 continue
 
-            overwrites = channel.overwrites
-            overwrites[default_role] = permissions
             try:
-                await channel.edit(overwrites=overwrites, reason=reason)  # type: ignore
+                await channel.set_permissions(default_role, overwrite=permissions, reason=reason)
             except discord.HTTPException:
                 failures.append(channel)
 
