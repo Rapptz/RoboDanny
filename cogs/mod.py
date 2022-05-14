@@ -1703,6 +1703,10 @@ class Mod(commands.Cog):
         if flags.suffix:
             predicates.append(lambda m: m.content.endswith(flags.suffix))  # type: ignore
 
+        if not predicates:
+            # If nothing is passed then default to `True` to emulate ?purge all behaviour
+            predicates.append(lambda m: True)
+
         op = all if flags.require == 'all' else any
 
         def predicate(m: discord.Message) -> bool:
