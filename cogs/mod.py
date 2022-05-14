@@ -339,6 +339,31 @@ class MassbanFlags(commands.FlagConverter):
     embeds: Optional[bool] = commands.flag(description='Whether the message should have embeds.', default=None)
 
 
+class PurgeFlags(commands.FlagConverter):
+    user: Optional[discord.User] = commands.flag(description="Remove messages from this user", default=None)
+    contains: Optional[str] = commands.flag(
+        description='Remove messages that contains this string (case sensitive)', default=None
+    )
+    prefix: Optional[str] = commands.flag(
+        description='Remove messages that start with this string (case sensitive)', default=None
+    )
+    suffix: Optional[str] = commands.flag(
+        description='Remove messages that end with this string (case sensitive)', default=None
+    )
+    after: Optional[str] = commands.flag(description='Search for messages that come after this message ID', default=None)
+    before: Optional[str] = commands.flag(description='Search for messages that come before this message ID', default=None)
+    bot: bool = commands.flag(description='Remove messages from bots (not webhooks!)', default=False)
+    webhooks: bool = commands.flag(description='Remove messages from webhooks', default=False)
+    embeds: bool = commands.flag(description='Remove messages that have embeds', default=False)
+    files: bool = commands.flag(description='Remove messages that have attachments', default=False)
+    emoji: bool = commands.flag(description='Remove messages that have custom emoji', default=False)
+    reactions: bool = commands.flag(description='Remove messages that have reactions', default=False)
+    require: Literal['any', 'all'] = commands.flag(
+        description='Whether any or all of the flags should be met before deleting messages. Defaults to "all"',
+        default='all',
+    )
+
+
 ## Spam detector
 
 # TODO: add this to d.py maybe
@@ -1600,11 +1625,32 @@ class Mod(commands.Cog):
         reason = f'Automatic unban from timer made on {timer.created_at} by {moderator}.'
         await guild.unban(discord.Object(id=member_id), reason=reason)
 
-    @commands.group(aliases=['purge'])
+    @commands.hybrid_command(aliases=['remove'], usage='[search] [flags...]')
     @commands.guild_only()
     @checks.has_permissions(manage_messages=True)
-    async def remove(self, ctx: GuildContext):
+    @app_commands.describe(search='How many messages to search for')
+    async def purge(self, ctx: GuildContext, search: Optional[commands.Range[int, 1, 2000]] = None, *, flags: PurgeFlags):
         """Removes messages that meet a criteria.
+
+        This command uses a syntax similar to Discord's search bar.
+        The messages are only deleted if all options are met unless
+        the `require:` flag is passed to override the behaviour.
+
+        The following flags are valid.
+
+        `user:` Remove messages from the given user.
+        `contains:` Remove messages that contain a substring.
+        `prefix:` Remove messages that start with a string.
+        `suffix:` Remove messages that end with a string.
+        `after:` Search for messages that come after this message ID.
+        `before:` Search for messages that come before this message ID.
+        `bot: yes` Remove messages from bots (not webhooks!)
+        `webhooks: yes` Remove messages from webhooks
+        `embeds: yes` Remove messages that have embeds
+        `files: yes` Remove messages that have attachments
+        `emoji: yes` Remove messages that have custom emoji
+        `reactions: yes` Remove messages that have reactions
+        `require: any or all` Whether any or all flags should be met before deleting messages.
 
         In order to use this command, you must have Manage Messages permissions.
         Note that the bot needs Manage Messages as well. These commands cannot
@@ -1614,33 +1660,59 @@ class Mod(commands.Cog):
         detailing which users got removed and how many messages got removed.
         """
 
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help(ctx.command)
+        predicates: list[Callable[[discord.Message], Any]] = []
+        if flags.bot:
+            if flags.webhooks:
+                predicates.append(lambda m: m.author.bot)
+            else:
+                predicates.append(lambda m: (m.webhook_id is None or m.interaction is not None) and m.author.bot)
+        elif flags.webhooks:
+            predicates.append(lambda m: m.webhook_id is not None)
 
-    async def do_removal(
-        self,
-        ctx: GuildContext,
-        limit: int,
-        predicate: Callable[[discord.Message], Any],
-        *,
-        before: Optional[int] = None,
-        after: Optional[int] = None,
-    ):
-        if limit > 2000:
-            return await ctx.send(f'Too many messages to search given ({limit}/2000)')
+        if flags.embeds:
+            predicates.append(lambda m: len(m.embeds))
 
-        if before is None:
-            passed_before = ctx.message
-        else:
-            passed_before = discord.Object(id=before)
+        if flags.files:
+            predicates.append(lambda m: len(m.attachments))
 
-        if after is not None:
-            passed_after = discord.Object(id=after)
-        else:
-            passed_after = None
+        if flags.reactions:
+            predicates.append(lambda m: len(m.reactions))
+
+        if flags.emoji:
+            custom_emoji = re.compile(r'<:(\w+):(\d+)>')
+            predicates.append(lambda m: custom_emoji.search(m.content))
+
+        if flags.user:
+            predicates.append(lambda m: m.author == flags.user)
+
+        if flags.contains:
+            predicates.append(lambda m: flags.contains in m.content)  # type: ignore
+
+        if flags.prefix:
+            predicates.append(lambda m: m.content.startswith(flags.prefix))  # type: ignore
+
+        if flags.suffix:
+            predicates.append(lambda m: m.content.endswith(flags.suffix))  # type: ignore
+
+        op = all if flags.require == 'all' else any
+
+        def predicate(m: discord.Message) -> bool:
+            r = op(p(m) for p in predicates)
+            return r
+
+        if flags.after:
+            if search is None:
+                search = 2000
+
+        if search is None:
+            search = 100
+
+        before = discord.Object(id=int(flags.before)) if flags.before else None
+        after = discord.Object(id=int(flags.after)) if flags.after else None
+        await ctx.defer()
 
         try:
-            deleted = await ctx.channel.purge(limit=limit, before=passed_before, after=passed_after, check=predicate)
+            deleted = await ctx.channel.purge(limit=search, before=before, after=after, check=predicate)
         except discord.Forbidden as e:
             return await ctx.send('I do not have permissions to delete messages.')
         except discord.HTTPException as e:
@@ -1661,67 +1733,15 @@ class Mod(commands.Cog):
         else:
             await ctx.send(to_send, delete_after=10)
 
-    @remove.command()
-    async def embeds(self, ctx: GuildContext, search: int = 100):
-        """Removes messages that have embeds in them."""
-        await self.do_removal(ctx, search, lambda e: len(e.embeds))
 
-    @remove.command()
-    async def files(self, ctx: GuildContext, search: int = 100):
-        """Removes messages that have attachments in them."""
-        await self.do_removal(ctx, search, lambda e: len(e.attachments))
+    @commands.command(name='clear-reactions', aliases=['clear_reactions'])
+    @commands.guild_only()
+    @checks.hybrid_permissions_check(manage_messages=True)
+    async def clear_reactions(self, ctx: GuildContext, search: commands.Range[int, 1, 2000] = 100):
+        """Removes all reactions from messages that have them.
 
-    @remove.command()
-    async def images(self, ctx: GuildContext, search: int = 100):
-        """Removes messages that have embeds or attachments."""
-        await self.do_removal(ctx, search, lambda e: len(e.embeds) or len(e.attachments))
-
-    @remove.command(name='all')
-    async def _remove_all(self, ctx: GuildContext, search: int = 100):
-        """Removes all messages."""
-        await self.do_removal(ctx, search, lambda e: True)
-
-    @remove.command()
-    async def user(self, ctx: GuildContext, member: discord.Member, search: int = 100):
-        """Removes all messages by the member."""
-        await self.do_removal(ctx, search, lambda e: e.author == member)
-
-    @remove.command()
-    async def contains(self, ctx: GuildContext, *, substr: str):
-        """Removes all messages containing a substring.
-
-        The substring must be at least 3 characters long.
+        You must have Manage Messages to use this command.
         """
-        if len(substr) < 3:
-            await ctx.send('The substring length must be at least 3 characters.')
-        else:
-            await self.do_removal(ctx, 100, lambda e: substr in e.content)
-
-    @remove.command(name='bot', aliases=['bots'])
-    async def _bot(self, ctx: GuildContext, prefix: Optional[str] = None, search: int = 100):
-        """Removes a bot user's messages and messages with their optional prefix."""
-
-        def predicate(m):
-            return (m.webhook_id is None and m.author.bot) or (prefix and m.content.startswith(prefix))
-
-        await self.do_removal(ctx, search, predicate)
-
-    @remove.command(name='emoji', aliases=['emojis'])
-    async def _emoji(self, ctx: GuildContext, search: int = 100):
-        """Removes all messages containing custom emoji."""
-        custom_emoji = re.compile(r'<a?:[a-zA-Z0-9\_]+:([0-9]+)>')
-
-        def predicate(m):
-            return custom_emoji.search(m.content)
-
-        await self.do_removal(ctx, search, predicate)
-
-    @remove.command(name='reactions')
-    async def _reactions(self, ctx: GuildContext, search: int = 100):
-        """Removes all reactions from messages that have them."""
-
-        if search > 2000:
-            return await ctx.send(f'Too many messages to search for ({search}/2000)')
 
         total_reactions = 0
         async for message in ctx.history(limit=search, before=ctx.message):
@@ -1730,116 +1750,6 @@ class Mod(commands.Cog):
                 await message.clear_reactions()
 
         await ctx.send(f'Successfully removed {total_reactions} reactions.')
-
-    @remove.command()
-    async def custom(self, ctx: GuildContext, *, arguments: str):
-        """A more advanced purge command.
-
-        This command uses a powerful "command line" syntax.
-        Most options support multiple values to indicate 'any' match.
-        If the value has spaces it must be quoted.
-
-        The messages are only deleted if all options are met unless
-        the `--or` flag is passed, in which case only if any is met.
-
-        The following options are valid.
-
-        `--user`: A mention or name of the user to remove.
-        `--contains`: A substring to search for in the message.
-        `--starts`: A substring to search if the message starts with.
-        `--ends`: A substring to search if the message ends with.
-        `--search`: How many messages to search. Default 100. Max 2000.
-        `--after`: Messages must come after this message ID.
-        `--before`: Messages must come before this message ID.
-
-        Flag options (no arguments):
-
-        `--bot`: Check if it's a bot user.
-        `--embeds`: Check if the message has embeds.
-        `--files`: Check if the message has attachments.
-        `--emoji`: Check if the message has custom emoji.
-        `--reactions`: Check if the message has reactions
-        `--or`: Use logical OR for all options.
-        `--not`: Use logical NOT for all options.
-        """
-        parser = Arguments(add_help=False, allow_abbrev=False)
-        parser.add_argument('--user', nargs='+')
-        parser.add_argument('--contains', nargs='+')
-        parser.add_argument('--starts', nargs='+')
-        parser.add_argument('--ends', nargs='+')
-        parser.add_argument('--or', action='store_true', dest='_or')
-        parser.add_argument('--not', action='store_true', dest='_not')
-        parser.add_argument('--emoji', action='store_true')
-        parser.add_argument('--bot', action='store_const', const=lambda m: m.author.bot)
-        parser.add_argument('--embeds', action='store_const', const=lambda m: len(m.embeds))
-        parser.add_argument('--files', action='store_const', const=lambda m: len(m.attachments))
-        parser.add_argument('--reactions', action='store_const', const=lambda m: len(m.reactions))
-        parser.add_argument('--search', type=int)
-        parser.add_argument('--after', type=int)
-        parser.add_argument('--before', type=int)
-
-        try:
-            args = parser.parse_args(shlex.split(arguments))
-        except Exception as e:
-            await ctx.send(str(e))
-            return
-
-        predicates = []
-        if args.bot:
-            predicates.append(args.bot)
-
-        if args.embeds:
-            predicates.append(args.embeds)
-
-        if args.files:
-            predicates.append(args.files)
-
-        if args.reactions:
-            predicates.append(args.reactions)
-
-        if args.emoji:
-            custom_emoji = re.compile(r'<:(\w+):(\d+)>')
-            predicates.append(lambda m: custom_emoji.search(m.content))
-
-        if args.user:
-            users = []
-            converter = commands.MemberConverter()
-            for u in args.user:
-                try:
-                    user = await converter.convert(ctx, u)
-                    users.append(user)
-                except Exception as e:
-                    await ctx.send(str(e))
-                    return
-
-            predicates.append(lambda m: m.author in users)
-
-        if args.contains:
-            predicates.append(lambda m: any(sub in m.content for sub in args.contains))
-
-        if args.starts:
-            predicates.append(lambda m: any(m.content.startswith(s) for s in args.starts))
-
-        if args.ends:
-            predicates.append(lambda m: any(m.content.endswith(s) for s in args.ends))
-
-        op = all if not args._or else any
-
-        def predicate(m):
-            r = op(p(m) for p in predicates)
-            if args._not:
-                return not r
-            return r
-
-        if args.after:
-            if args.search is None:
-                args.search = 2000
-
-        if args.search is None:
-            args.search = 100
-
-        args.search = max(0, min(2000, args.search))  # clamp from 0-2000
-        await self.do_removal(ctx, args.search, predicate, before=args.before, after=args.after)
 
     # Mute related stuff
 
