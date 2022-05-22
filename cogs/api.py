@@ -27,6 +27,8 @@ USER_BOTS_ROLE = 178558252869484544
 CONTRIBUTORS_ROLE = 111173097888993280
 DISCORD_PY_ID = 84319995256905728
 DISCORD_PY_GUILD = 336642139381301249
+DISCORD_PY_JP_CATEGORY = 490287576670928914
+DISCORD_PY_JP_STAFF_ROLE = 490320652230852629
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELPER_ROLE = 558559632637952010
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 738572311107469354, 956435493296414720)
@@ -102,7 +104,9 @@ def can_use_block():
             return ctx.channel.permissions_for(ctx.author).manage_roles
         elif guild_id == DISCORD_PY_GUILD:
             guild_level = ctx.author.guild_permissions
-            return guild_level.manage_roles
+            return guild_level.manage_roles or (
+                ctx.channel.category_id == DISCORD_PY_JP_CATEGORY and ctx.author._roles.has(DISCORD_PY_JP_STAFF_ROLE)
+            )
         return False
 
     return commands.check(predicate)
@@ -121,9 +125,13 @@ def can_use_tempblock():
             return ctx.channel.permissions_for(ctx.author).manage_roles
         elif guild_id == DISCORD_PY_GUILD:
             guild_level = ctx.author.guild_permissions
-            return guild_level.manage_roles or (
-                ctx.channel.id in DISCORD_PY_HELP_CHANNELS
-                and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
+            return (
+                guild_level.manage_roles
+                or (
+                    ctx.channel.id in DISCORD_PY_HELP_CHANNELS
+                    and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
+                )
+                or (ctx.channel.category_id == DISCORD_PY_JP_CATEGORY and ctx.author._roles.has(DISCORD_PY_JP_STAFF_ROLE))
             )
         return False
 
@@ -335,7 +343,7 @@ class API(commands.Cog):
     def transform_rtfm_language_key(self, ctx: Context, prefix: str):
         if ctx.guild is not None:
             #                             日本語 category
-            if ctx.channel.category_id == 490287576670928914:  # type: ignore  # category_id is safe to access
+            if ctx.channel.category_id == DISCORD_PY_JP_CATEGORY:  # type: ignore  # category_id is safe to access
                 return prefix + '-jp'
             #                    d.py unofficial JP   Discord Bot Portal JP
             elif ctx.guild.id in (463986890190749698, 494911447420108820):
