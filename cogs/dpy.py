@@ -25,7 +25,7 @@ GITHUB_TODO_COLUMN = 9341868
 GITHUB_PROGRESS_COLUMN = 9341869
 GITHUB_DONE_COLUMN = 9341870
 
-TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27}')
+TOKEN_REGEX = re.compile(r'[a-zA-Z0-9_-]{23,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27,}')
 
 
 if TYPE_CHECKING:
