@@ -20,6 +20,7 @@ DISCORD_PY_TESTER_ROLE = 859169678966784031
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELP_CHANNELS = (381965515721146390, 564950631455129636, 490289254757564426, 738572311107469354)
+DISCORD_PY_HELP_FORUM = 985299059441025044
 
 GITHUB_TODO_COLUMN = 9341868
 GITHUB_PROGRESS_COLUMN = 9341869
@@ -242,6 +243,18 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             if m is not None:
                 url = f'<https://github.com/Rapptz/discord.py/issues/{m.group("number")}>'
                 await message.channel.send(url)
+
+    @commands.Cog.listener()
+    async def on_thread_create(self, thread: discord.Thread) -> None:
+        """
+        (Hopefully) temporary event handler for thread create to pin Forum post starting messages in the d.py server.
+        """
+        if not thread.parent_id == DISCORD_PY_HELP_FORUM:
+            return
+
+        message = thread.get_partial_message(thread.id)
+        await message.pin()
+
 
     async def toggle_role(self, ctx: GuildContext, role_id: int) -> None:
         if any(r.id == role_id for r in ctx.author.roles):
