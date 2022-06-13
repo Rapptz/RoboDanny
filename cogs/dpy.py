@@ -246,14 +246,14 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread) -> None:
-        """
-        (Hopefully) temporary event handler for thread create to pin Forum post starting messages in the d.py server.
-        """
-        if not thread.parent_id == DISCORD_PY_HELP_FORUM:
+        if thread.parent_id != DISCORD_PY_HELP_FORUM:
             return
 
         message = thread.get_partial_message(thread.id)
-        await message.pin()
+        try:
+            await message.pin()
+        except discord.HTTPException:
+            pass
 
 
     async def toggle_role(self, ctx: GuildContext, role_id: int) -> None:
