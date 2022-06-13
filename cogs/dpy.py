@@ -64,6 +64,19 @@ def is_doc_helper():
     return commands.check(predicate)
 
 
+def can_close_threads():
+    def predicate(ctx: GuildContext) -> bool:
+        if not isinstance(ctx.channel, discord.Thread):
+            return False
+
+        permissions = ctx.channel.permissions_for(ctx.author)
+        return ctx.channel.parent_id == DISCORD_PY_HELP_FORUM and (
+            permissions.manage_threads or ctx.channel.owner_id == ctx.author.id
+        )
+
+    return commands.check(predicate)
+
+
 class GistContent:
     source: str
     language: Optional[str]
@@ -255,7 +268,6 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         except discord.HTTPException:
             pass
 
-
     async def toggle_role(self, ctx: GuildContext, role_id: int) -> None:
         if any(r.id == role_id for r in ctx.author.roles):
             try:
@@ -430,6 +442,16 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             url = await self.create_gist(content.source, filename=f'input.{content.language}', public=False)
 
         await ctx.send(f'<{url}>')
+
+    @commands.command(name='solved')
+    @can_close_threads()
+    async def solved(self, ctx: GuildContext):
+        """Marks a thread as solved."""
+
+        assert isinstance(ctx.channel, discord.Thread)
+
+        await ctx.send('\N{THUMBS UP SIGN}')
+        await ctx.channel.edit(locked=True, reason=f'Marked as solved by {ctx.author} (ID: {ctx.author.id})')
 
 
 async def setup(bot: RoboDanny):
