@@ -449,8 +449,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         """Marks a thread as solved."""
 
         assert isinstance(ctx.channel, discord.Thread)
-
-        await ctx.send('\N{THUMBS UP SIGN}')
+        await ctx.message.add_reaction(ctx.tick(True))
         await ctx.channel.edit(locked=True, reason=f'Marked as solved by {ctx.author} (ID: {ctx.author.id})')
 
 
