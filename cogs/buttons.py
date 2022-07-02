@@ -95,7 +95,7 @@ class RedditMediaURL:
         headers = {
             'User-Agent': 'Discord:RoboDanny:v4.0 (by /u/Rapptz)',
         }
-        await ctx.trigger_typing()
+        await ctx.typing()
         if url.host == 'v.redd.it':
             # have to do a request to fetch the 'main' URL.
             async with ctx.session.get(url, headers=headers) as resp:

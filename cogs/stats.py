@@ -623,7 +623,7 @@ class Stats(commands.Cog):
     @stats_today.before_invoke
     @stats_global.before_invoke
     async def before_stats_invoke(self, ctx: Context):
-        await ctx.trigger_typing()
+        await ctx.typing()
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
