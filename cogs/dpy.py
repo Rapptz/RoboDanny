@@ -39,7 +39,7 @@ def validate_token(token: str) -> bool:
     try:
         # Just check if the first part validates as a user ID
         (user_id, _, _) = token.split('.')
-        user_id = int(base64.b64decode(user_id, validate=True))
+        user_id = int(base64.b64decode(user_id + '==', validate=True))
     except (ValueError, binascii.Error):
         return False
     else:
