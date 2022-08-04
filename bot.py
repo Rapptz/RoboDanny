@@ -362,7 +362,7 @@ class RoboDanny(commands.AutoShardedBot):
 
         bucket = self.spam_control.get_bucket(message)
         current = message.created_at.timestamp()
-        retry_after = bucket.update_rate_limit(current)
+        retry_after = bucket and bucket.update_rate_limit(current)
         author_id = message.author.id
         if retry_after and author_id != self.owner_id:
             self._auto_spam_count[author_id] += 1

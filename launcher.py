@@ -225,9 +225,9 @@ async def run_bot():
         log.exception('Could not set up PostgreSQL. Exiting.')
         return
 
-    bot = RoboDanny()
-    bot.pool = pool
-    await bot.start()
+    async with RoboDanny() as bot:
+        bot.pool = pool
+        await bot.start()
 
 
 @click.group(invoke_without_command=True, options_metavar='[options]')
@@ -279,7 +279,7 @@ def migrate(reason):
 
 
 async def run_upgrade(migrations: Migrations) -> int:
-    connection: asyncpg.Connection = await asyncpg.connect(migrations.database_uri)
+    connection: asyncpg.Connection = await asyncpg.connect(migrations.database_uri)  # type: ignore
     return await migrations.upgrade(connection)
 
 

@@ -185,7 +185,7 @@ class Tags(commands.Cog):
                     LIMIT 1;
                  """
 
-        return await con.fetchrow(query, guild.id)
+        return await con.fetchrow(query, guild.id)  # type: ignore
 
     async def get_tag(
         self,

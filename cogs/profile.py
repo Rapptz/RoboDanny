@@ -103,7 +103,7 @@ if TYPE_CHECKING:
 _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
 
 
-class SplatoonRank(app_commands.Transformer):
+class SplatoonRank:
     mode: str
     rank: str
     number: str

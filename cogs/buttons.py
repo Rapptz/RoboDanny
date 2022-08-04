@@ -201,7 +201,7 @@ class SpoilerCooldown(commands.CooldownMapping):
     def is_rate_limited(self, message_id: int, user_id: int) -> bool:
         # This is a lie but it should just work as-is
         bucket = self.get_bucket((message_id, user_id))  # type: ignore
-        return bucket.update_rate_limit() is not None
+        return bucket is not None and bucket.update_rate_limit() is not None
 
 
 class FeedbackModal(discord.ui.Modal, title='Submit Feedback'):

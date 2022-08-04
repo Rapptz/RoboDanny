@@ -28,8 +28,8 @@ class Prefix(commands.Converter):
 
 
 class GroupHelpPageSource(menus.ListPageSource):
-    def __init__(self, group: Union[commands.Group, commands.Cog], commands: list[commands.Command], *, prefix: str):
-        super().__init__(entries=commands, per_page=6)
+    def __init__(self, group: Union[commands.Group, commands.Cog], entries: list[commands.Command], *, prefix: str):
+        super().__init__(entries=entries, per_page=6)
         self.group: Union[commands.Group, commands.Cog] = group
         self.prefix: str = prefix
         self.title: str = f'{self.group.qualified_name} Commands'
@@ -51,14 +51,14 @@ class GroupHelpPageSource(menus.ListPageSource):
 
 
 class HelpSelectMenu(discord.ui.Select['HelpMenu']):
-    def __init__(self, commands: dict[commands.Cog, list[commands.Command]], bot: RoboDanny):
+    def __init__(self, entries: dict[commands.Cog, list[commands.Command]], bot: RoboDanny):
         super().__init__(
             placeholder='Select a category...',
             min_values=1,
             max_values=1,
             row=0,
         )
-        self.commands: dict[commands.Cog, list[commands.Command]] = commands
+        self.commands: dict[commands.Cog, list[commands.Command]] = entries
         self.bot: RoboDanny = bot
         self.__fill_options()
 
@@ -467,7 +467,7 @@ class Meta(commands.Cog):
         roles = [role.name.replace('@', '@\u200b') for role in getattr(user, 'roles', [])]
         e.set_author(name=str(user))
 
-        def format_date(dt: datetime.datetime):
+        def format_date(dt: Optional[datetime.datetime]):
             if dt is None:
                 return 'N/A'
             return f'{time.format_dt(dt, "F")} ({time.format_relative(dt)})'

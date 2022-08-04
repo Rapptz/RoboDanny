@@ -432,20 +432,20 @@ class SpamChecker:
 
         if message.author.id in self.fast_joiners:
             bucket = self.hit_and_run.get_bucket(message)
-            if bucket.update_rate_limit(current):
+            if bucket and bucket.update_rate_limit(current):
                 return True
 
         if self.is_new(message.author):  # type: ignore
             new_bucket = self.new_user.get_bucket(message)
-            if new_bucket.update_rate_limit(current):
+            if new_bucket and new_bucket.update_rate_limit(current):
                 return True
 
         user_bucket = self.by_user.get_bucket(message)
-        if user_bucket.update_rate_limit(current):
+        if user_bucket and user_bucket.update_rate_limit(current):
             return True
 
         content_bucket = self.by_content.get_bucket(message)
-        if content_bucket.update_rate_limit(current):
+        if content_bucket and content_bucket.update_rate_limit(current):
             return True
 
         return False
@@ -469,7 +469,7 @@ class SpamChecker:
         current = message.created_at.timestamp()
         mention_bucket = mapping.get_bucket(message, current)
         mention_count = sum(not m.bot and m.id != message.author.id for m in message.mentions)
-        return mention_bucket.update_rate_limit(current, tokens=mention_count) is not None
+        return mention_bucket is not None and mention_bucket.update_rate_limit(current, tokens=mention_count) is not None
 
 
 ## Checks
