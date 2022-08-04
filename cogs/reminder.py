@@ -35,6 +35,61 @@ class MaybeAcquire:
             await self.pool.release(self._connection)
 
 
+class SnoozeModal(discord.ui.Modal, title='Snooze'):
+    duration = discord.ui.TextInput(label='Duration', placeholder='10 minutes', default='10 minutes', min_length=2)
+
+    def __init__(self, parent: ReminderView, cog: Reminder, timer: Timer) -> None:
+        super().__init__()
+        self.parent: ReminderView = parent
+        self.timer: Timer = timer
+        self.cog: Reminder = cog
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            when = time.FutureTime(str(self.duration)).dt
+        except Exception:
+            await interaction.response.send_message(
+                'Duration could not be parsed, sorry. Try something like "5 minutes" or "1 hour"', ephemeral=True
+            )
+            return
+
+        self.parent.snooze.disabled = True
+        await interaction.response.edit_message(view=self.parent)
+
+        refreshed = await self.cog.create_timer(
+            when, self.timer.event, *self.timer.args, **self.timer.kwargs, created=interaction.created_at
+        )
+        author_id, _, message = self.timer.args
+        delta = time.human_timedelta(when, source=refreshed.created_at)
+        await interaction.followup.send(f"Alright <@{author_id}>, I've snoozed your reminder for {delta}: {message}")
+
+
+class SnoozeButton(discord.ui.Button['ReminderView']):
+    def __init__(self, cog: Reminder, timer: Timer) -> None:
+        super().__init__(label='Snooze', style=discord.ButtonStyle.blurple)
+        self.timer: Timer = timer
+        self.cog: Reminder = cog
+
+    async def callback(self, interaction: discord.Interaction) -> Any:
+        assert self.view is not None
+        await interaction.response.send_modal(SnoozeModal(self.view, self.cog, self.timer))
+
+
+class ReminderView(discord.ui.View):
+    def __init__(self, *, url: str, timer: Timer, cog: Reminder, author_id: int) -> None:
+        super().__init__(timeout=300)
+        self.author_id: int = author_id
+        self.snooze = SnoozeButton(cog, timer)
+        self.add_item(discord.ui.Button(url=url, label='Go to original message'))
+        self.add_item(self.snooze)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message('This snooze button is not for you, sorry!', ephemeral=True)
+            return False
+        return True
+
+
 class Timer:
     __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires')
 
@@ -399,8 +454,7 @@ class Reminder(commands.Cog):
 
         if message_id:
             url = f'https://discord.com/channels/{guild_id}/{channel.id}/{message_id}'
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(label='Go to original message', url=url))
+            view = ReminderView(url=url, timer=timer, cog=self, author_id=author_id)
 
         try:
             await channel.send(msg, view=view)  # type: ignore
