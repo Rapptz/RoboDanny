@@ -229,7 +229,7 @@ class Reminder(commands.Cog):
 
         return timer
 
-    @commands.group(aliases=['timer', 'remind'], usage='<when>', invoke_without_command=True)
+    @commands.group(aliases=['timer', 'remind', 'remindme'], usage='<when>', invoke_without_command=True)
     async def reminder(
         self,
         ctx: Context,
