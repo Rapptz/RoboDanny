@@ -2,9 +2,10 @@ from __future__ import annotations
 from typing_extensions import Annotated
 from typing import TYPE_CHECKING, Optional
 
+from .utils.translator import translate
+
 from discord.ext import commands
 import discord
-import googletrans
 import io
 
 if TYPE_CHECKING:
@@ -19,7 +20,6 @@ GENERAL_VOICE_ID = 81883016309248000
 class Funhouse(commands.Cog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
-        self.trans = googletrans.Translator()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -93,15 +93,13 @@ class Funhouse(commands.Cog):
                 return await ctx.send('Missing a message to translate')
 
         try:
-            ret = await loop.run_in_executor(None, self.trans.translate, message)
+            result = await translate(message, session=self.bot.session)
         except Exception as e:
             return await ctx.send(f'An error occurred: {e.__class__.__name__}: {e}')
 
         embed = discord.Embed(title='Translated', colour=0x4284F3)
-        src = googletrans.LANGUAGES.get(ret.src, '(auto-detected)').title()
-        dest = googletrans.LANGUAGES.get(ret.dest, 'Unknown').title()
-        embed.add_field(name=f'From {src}', value=ret.origin, inline=False)
-        embed.add_field(name=f'To {dest}', value=ret.text, inline=False)
+        embed.add_field(name=f'From {result.source_language}', value=result.original, inline=False)
+        embed.add_field(name=f'To {result.target_language}', value=result.translated, inline=False)
         await ctx.send(embed=embed)
 
 
