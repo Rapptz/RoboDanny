@@ -133,8 +133,7 @@ class RoboDanny(commands.AutoShardedBot):
             try:
                 await self.load_extension(extension)
             except Exception as e:
-                print(f'Failed to load extension {extension}.', file=sys.stderr)
-                traceback.print_exc()
+                log.exception('Failed to load extension %s.', extension)
 
     @property
     def owner(self) -> discord.User:
@@ -165,9 +164,7 @@ class RoboDanny(commands.AutoShardedBot):
         elif isinstance(error, commands.CommandInvokeError):
             original = error.original
             if not isinstance(original, discord.HTTPException):
-                print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
-                traceback.print_tb(original.__traceback__)
-                print(f'{original.__class__.__name__}: {original}', file=sys.stderr)
+                log.exception('In %s:', ctx.command.qualified_name, exc_info=original)
         elif isinstance(error, commands.ArgumentParsingError):
             await ctx.send(str(error))
 
@@ -317,10 +314,10 @@ class RoboDanny(commands.AutoShardedBot):
         if not hasattr(self, 'uptime'):
             self.uptime = discord.utils.utcnow()
 
-        print(f'Ready: {self.user} (ID: {self.user.id})')
+        log.info('Ready: %s (ID: %s)', self.user, self.user.id)
 
     async def on_shard_resumed(self, shard_id: int):
-        print(f'Shard ID {shard_id} has resumed...')
+        log.info('Shard ID %s has resumed...', shard_id)
         self.resumes[shard_id].append(discord.utils.utcnow())
 
     @discord.utils.cached_property
