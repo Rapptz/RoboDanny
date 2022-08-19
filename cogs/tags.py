@@ -888,7 +888,9 @@ class Tags(commands.Cog):
     @staticmethod
     def _get_tag_all_arguments(args: Optional[str]):
         parser = Arguments(add_help=False, allow_abbrev=False)
-        parser.add_argument('--text', action='store_true')
+        group = parser.add_mutually_exclusive_group(required=False)
+        group.add_argument('--text', action='store_true')
+        group.add_argument('--json', action='store_true')
         if args is not None:
             return parser.parse_args(shlex.split(args))
         else:
@@ -918,6 +920,28 @@ class Tags(commands.Cog):
         fp = io.BytesIO(table.render().encode('utf-8'))
         await ctx.send(file=discord.File(fp, 'tags.txt'))
 
+    async def _tag_all_json_mode(self, ctx):
+        query = """SELECT tag_lookup.id,
+                        tag_lookup.name,
+                        tag_lookup.owner_id,
+                        tags.uses,
+                        $2
+                        OR $3 = tag_lookup.owner_id AS "can_delete",
+                        LOWER(tag_lookup.name) <> LOWER(tags.name) AS "is_alias",
+                        tags.content
+                    FROM tag_lookup
+                        INNER JOIN tags ON tags.id = tag_lookup.tag_id
+                    WHERE tag_lookup.location_id = $1
+                    ORDER BY tags.uses DESC
+                """
+        bypass_owner_check = ctx.author.id == self.bot.owner_id or ctx.author.guild_permissions.manage_messages
+        rows = await ctx.db.fetch(query, ctx.guild.id, bypass_owner_check, ctx.author.id)
+
+        if not rows:
+            return await ctx.send('This server has no server-specific tags.')
+
+        await ctx.send(file=discord.File(io.BytesIO(json.dumps(list(map(dict, rows))).encode('utf-8')), 'tags.json'))
+
     @tag.command(name='all')
     @suggest_box()
     async def _all(self, ctx: GuildContext, *, arguments: str = None):
@@ -926,6 +950,7 @@ class Tags(commands.Cog):
         You can pass specific flags to this command to control the output:
 
         `--text`: Dumps into a text file
+        `--json`: Dumps into a json file
         """
 
         try:
@@ -935,6 +960,8 @@ class Tags(commands.Cog):
 
         if args.text:
             return await self._tag_all_text_mode(ctx)
+        elif args.json:
+            return await self._tag_all_json_mode(ctx)
 
         query = """SELECT name, id
                    FROM tag_lookup
