@@ -169,6 +169,7 @@ def setup_logging():
     log = logging.getLogger()
 
     try:
+        discord.utils.setup_logging()
         # __enter__
         max_bytes = 32 * 1024 * 1024  # 32 MiB
         logging.getLogger('discord').setLevel(logging.INFO)

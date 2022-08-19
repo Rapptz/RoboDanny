@@ -527,7 +527,7 @@ class AdminPanel(discord.ui.View):
     @discord.ui.button(label='Exit', style=discord.ButtonStyle.red)
     async def exit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        await interaction.delete_original_message()
+        await interaction.delete_original_response()
 
 
 class Splatoon(commands.GroupCog):

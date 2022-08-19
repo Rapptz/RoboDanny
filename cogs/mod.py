@@ -168,13 +168,13 @@ class PreExistingMuteRoleView(discord.ui.View):
     @discord.ui.button(label='Merge', style=discord.ButtonStyle.blurple)
     async def merge_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
-        await interaction.delete_original_message()
+        await interaction.delete_original_response()
         self.merge = True
 
     @discord.ui.button(label='Replace', style=discord.ButtonStyle.grey)
     async def replace_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
-        await interaction.delete_original_message()
+        await interaction.delete_original_response()
         self.merge = False
 
     @discord.ui.button(label='Quit', style=discord.ButtonStyle.red)
