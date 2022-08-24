@@ -163,6 +163,13 @@ class Context(commands.Context):
             return ref.resolved.to_reference()
         return None
 
+    @discord.utils.cached_property
+    def replied_message(self) -> Optional[discord.Message]:
+        ref = self.message.reference
+        if ref and isinstance(ref.resolved, discord.Message):
+            return ref.resolved
+        return None
+
     async def disambiguate(self, matches: list[T], entry: Callable[[T], Any], *, ephemeral: bool = False) -> T:
         if len(matches) == 0:
             raise ValueError('No results found.')

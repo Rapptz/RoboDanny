@@ -86,9 +86,9 @@ class Funhouse(commands.Cog):
 
         loop = self.bot.loop
         if message is None:
-            ref = ctx.message.reference
-            if ref and isinstance(ref.resolved, discord.Message):
-                message = ref.resolved.content
+            reply = ctx.replied_message
+            if reply is not None:
+                message = reply.content
             else:
                 return await ctx.send('Missing a message to translate')
 
