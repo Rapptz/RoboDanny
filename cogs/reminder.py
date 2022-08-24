@@ -217,12 +217,12 @@ class Reminder(commands.Cog):
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
-    async def short_timer_optimisation(self, seconds: int, timer: Timer) -> None:
+    async def short_timer_optimisation(self, seconds: float, timer: Timer) -> None:
         await asyncio.sleep(seconds)
         event_name = f'{timer.event}_timer_complete'
         self.bot.dispatch(event_name, timer)
 
-    async def create_timer(self, *args: Any, **kwargs: Any) -> Timer:
+    async def create_timer(self, when: datetime.datetime, event: str, /, *args: Any, **kwargs: Any) -> Timer:
         r"""Creates a timer.
 
         Parameters
@@ -251,7 +251,6 @@ class Reminder(commands.Cog):
         --------
         :class:`Timer`
         """
-        when, event, *args = args  # type: ignore
 
         pool = self.bot.pool
 
