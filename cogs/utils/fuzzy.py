@@ -295,8 +295,8 @@ def finder(
     collection: Iterable[T],
     *,
     key: Optional[Callable[[T], str]] = ...,
-    lazy: Literal[True] = ...,
-) -> Generator[T, None, None]:
+    raw: Literal[True],
+) -> list[tuple[int, int, T]]:
     ...
 
 
@@ -306,7 +306,7 @@ def finder(
     collection: Iterable[T],
     *,
     key: Optional[Callable[[T], str]] = ...,
-    lazy: Literal[False],
+    raw: Literal[False],
 ) -> list[T]:
     ...
 
@@ -317,8 +317,8 @@ def finder(
     collection: Iterable[T],
     *,
     key: Optional[Callable[[T], str]] = ...,
-    lazy: bool = ...,
-) -> Generator[T, None, None] | list[T]:
+    raw: bool = ...,
+) -> list[T]:
     ...
 
 
@@ -327,8 +327,8 @@ def finder(
     collection: Iterable[T],
     *,
     key: Optional[Callable[[T], str]] = None,
-    lazy: bool = True,
-) -> Generator[T, None, None] | list[T]:
+    raw: bool = False,
+) -> list[tuple[int, int, T]] | list[T]:
     suggestions: list[tuple[int, int, T]] = []
     text = str(text)
     pat = '.*?'.join(map(re.escape, text))
@@ -344,14 +344,14 @@ def finder(
             return tup[0], tup[1], key(tup[2])
         return tup
 
-    if lazy:
-        return (z for _, _, z in sorted(suggestions, key=sort_key))
+    if raw:
+        return sorted(suggestions, key=sort_key)
     else:
         return [z for _, _, z in sorted(suggestions, key=sort_key)]
 
 
 def find(text: str, collection: Iterable[str], *, key: Optional[Callable[[str], str]] = None) -> Optional[str]:
     try:
-        return finder(text, collection, key=key, lazy=False)[0]
+        return finder(text, collection, key=key)[0]
     except IndexError:
         return None

@@ -278,7 +278,7 @@ class API(commands.Cog):
                     break
 
         cache = list(self._rtfm_cache[key].items())
-        matches = fuzzy.finder(obj, cache, key=lambda t: t[0], lazy=False)[:8]
+        matches = fuzzy.finder(obj, cache, key=lambda t: t[0])[:8]
 
         e = discord.Embed(colour=discord.Colour.blurple())
         if len(matches) == 0:
@@ -324,7 +324,7 @@ class API(commands.Cog):
         elif key == 'jp':
             key = 'latest-jp'
 
-        matches = fuzzy.finder(current, self._rtfm_cache[key], lazy=False)[:10]
+        matches = fuzzy.finder(current, self._rtfm_cache[key])[:10]
         return [app_commands.Choice(name=m, value=m) for m in matches]
 
     @commands.hybrid_group(aliases=['rtfd'], fallback='stable')

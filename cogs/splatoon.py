@@ -834,7 +834,7 @@ class Splatoon(commands.GroupCog):
 
     def query_weapons_named(self, name: str) -> list[SplatoonConfigWeapon]:
         data: list[SplatoonConfigWeapon] = self.splat2_data.get('weapons', [])
-        results = fuzzy.finder(name, data, key=lambda w: w['name'], lazy=False)
+        results = fuzzy.finder(name, data, key=lambda w: w['name'])
         return results
 
     async def generate_scrims(self, ctx: Context, maps: list[str], games: int, mode: Optional[str]):
