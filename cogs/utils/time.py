@@ -101,8 +101,7 @@ class BadTimeTransform(app_commands.AppCommandError):
 
 
 class TimeTransformer(app_commands.Transformer):
-    @classmethod
-    async def transform(cls, interaction, value: str) -> datetime.datetime:
+    async def transform(self, interaction, value: str) -> datetime.datetime:
         now = interaction.created_at
         try:
             short = ShortTime(value, now=now)

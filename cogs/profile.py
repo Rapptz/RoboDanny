@@ -69,12 +69,11 @@ class DisambiguateMember(commands.IDConverter, app_commands.Transformer):
             raise commands.BadArgument("Could not found this member. Note this is case sensitive.")
         return result
 
-    @classmethod
-    def type(cls) -> discord.AppCommandOptionType:
+    @property
+    def type(self) -> discord.AppCommandOptionType:
         return discord.AppCommandOptionType.user
 
-    @classmethod
-    async def transform(cls, interaction: discord.Interaction, value: discord.abc.User) -> discord.abc.User:
+    async def transform(self, interaction: discord.Interaction, value: discord.abc.User) -> discord.abc.User:
         return value
 
 
