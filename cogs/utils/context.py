@@ -54,12 +54,11 @@ class DatabaseProtocol(Protocol):
 
 
 class ConfirmationView(discord.ui.View):
-    def __init__(self, *, timeout: float, author_id: int, ctx: Context, delete_after: bool) -> None:
+    def __init__(self, *, timeout: float, author_id: int, delete_after: bool) -> None:
         super().__init__(timeout=timeout)
         self.value: Optional[bool] = None
         self.delete_after: bool = delete_after
         self.author_id: int = author_id
-        self.ctx: Context = ctx
         self.message: Optional[discord.Message] = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -221,7 +220,6 @@ class Context(commands.Context):
         view = ConfirmationView(
             timeout=timeout,
             delete_after=delete_after,
-            ctx=self,
             author_id=author_id,
         )
         view.message = await self.send(message, view=view, ephemeral=delete_after)
