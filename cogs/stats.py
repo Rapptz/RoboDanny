@@ -170,11 +170,15 @@ class Stats(commands.Cog):
         command = interaction.command
         # Check if a command is found and it's not a hybrid command
         # Hybrid commands are already counted via on_command_completion
-        # This does have a partial loss of data (i.e. the `failed` field) but that's ok.
-        if command is not None and not interaction._baton:
+        if (
+            command is not None
+            and interaction.type is discord.InteractionType.application_command
+            and not command.__class__.__name__.startswith('Hybrid')  # Kind of awful, but it'll do
+        ):
             # This is technically bad, but since we only access Command.qualified_name and it's
             # available on all types of commands then it's fine
             ctx = await self.bot.get_context(interaction)
+            ctx.command_failed = interaction.command_failed or ctx.command_failed
             await self.register_command(ctx)
 
     @commands.Cog.listener()
