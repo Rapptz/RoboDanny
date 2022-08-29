@@ -93,3 +93,12 @@ def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
     if style is None:
         return f'<t:{int(dt.timestamp())}>'
     return f'<t:{int(dt.timestamp())}:{style}>'
+
+
+def tick(opt: Optional[bool], /) -> str:
+    lookup = {
+        True: '<:greenTick:330090705336664065>',
+        False: '<:redTick:330090723011592193>',
+        None: '<:greyTick:563231201280917524>',
+    }
+    return lookup.get(opt, '<:redTick:330090723011592193>')
