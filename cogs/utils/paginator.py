@@ -142,9 +142,9 @@ class RoboPages(discord.ui.View):
         else:
             await interaction.response.send_message('An unknown error occurred, sorry', ephemeral=True)
 
-    async def start(self, *, content: Optional[str] = None) -> None:
+    async def start(self, *, content: Optional[str] = None, ephemeral: bool = False) -> None:
         if self.check_embeds and not self.ctx.channel.permissions_for(self.ctx.me).embed_links:  # type: ignore
-            await self.ctx.send('Bot does not have embed links permission in this channel.')
+            await self.ctx.send('Bot does not have embed links permission in this channel.', ephemeral=True)
             return
 
         await self.source._prepare_once()
@@ -154,7 +154,7 @@ class RoboPages(discord.ui.View):
             kwargs.setdefault('content', content)
 
         self._update_labels(0)
-        self.message = await self.ctx.send(**kwargs, view=self)
+        self.message = await self.ctx.send(**kwargs, view=self, ephemeral=ephemeral)
 
     @discord.ui.button(label='≪', style=discord.ButtonStyle.grey)
     async def go_to_first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
