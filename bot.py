@@ -45,6 +45,7 @@ initial_extensions = (
     'cogs.config',
     'cogs.dpy',
     'cogs.funhouse',
+    'cogs.todo',
 )
 
 
