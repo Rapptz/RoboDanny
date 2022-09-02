@@ -197,6 +197,11 @@ RESOURCE_TO_EMOJI = {
     'Unknown': '<:unknown:338815018101506049>',
 }
 
+SPLATOON_2_PINK = 0xF02D7D
+SPLATOON_2_GREEN = 0x19D719
+SPLATOON_3_YELLOW = 0xEAFF3D
+SPLATOON_3_PURPLE = 0x603BFF
+
 
 class Rotation:
     def __init__(self, data: RotationPayload):
@@ -283,8 +288,40 @@ class Weapon:
     def choice_name(self) -> str:
         return f'{self.name} \N{EN DASH} {self.sub} \N{EN DASH} {self.special}'
 
-    def to_select_option(self) -> discord.SelectOption:
-        return discord.SelectOption(label=self.name, description=f'{self.sub} with {self.special}')
+    def to_select_option(self, *, value: Any = discord.utils.MISSING) -> discord.SelectOption:
+        return discord.SelectOption(label=self.name, value=value, description=f'{self.sub} with {self.special}')
+
+    @property
+    def embed(self) -> discord.Embed:
+        e = discord.Embed(title=self.name, colour=SPLATOON_3_YELLOW)
+        e.add_field(name='Sub', value=self.sub)
+        e.add_field(name='Special', value=self.special)
+        if self.special_cost:
+            e.add_field(name='Special Cost', value=f'{self.special_cost}p')
+        if self.level:
+            e.set_footer(text=f'Unlocked at level {self.level}')
+        return e
+
+
+class WeaponPageSource(menus.ListPageSource):
+    def __init__(self, entries: list[Weapon]) -> None:
+        super().__init__(entries=entries, per_page=1)
+
+    async def format_page(self, menu: RoboPages, page: Weapon):
+        return page.embed
+
+
+class WeaponSelect(discord.ui.Select):
+    def __init__(self, weapons: list[Weapon]) -> None:
+        super().__init__(
+            placeholder=f'Choose a weapon... ({len(weapons)} found)',
+            options=[w.to_select_option(value=str(i)) for i, w in enumerate(weapons)],
+        )
+        self.weapons: list[Weapon] = weapons
+
+    async def callback(self, interaction: discord.Interaction) -> Any:
+        index = int(self.values[0])
+        await interaction.response.edit_message(embed=self.weapons[index].embed)
 
 
 class SalmonRun:
@@ -413,7 +450,7 @@ class MerchPageSource(menus.ListPageSource):
                 original_gear = elem
                 break
 
-        e = discord.Embed(colour=0x19D719, title=gear.name, description=description)
+        e = discord.Embed(colour=SPLATOON_3_YELLOW, title=gear.name, description=description)
 
         if gear.image:
             e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{gear.image}')
@@ -609,6 +646,9 @@ class Splatoon(commands.GroupCog):
     def salmon_run(self) -> list[SalmonRun]:
         now = discord.utils.utcnow()
         return [s for s in self.sp2_salmonrun if now < s.end_time]
+
+    def random_colour(self) -> int:
+        return random.choice([SPLATOON_3_PURPLE, SPLATOON_3_YELLOW])
 
     async def log_error(self, *, ctx: Optional[Context] = None, extra: Any = None):
         e = discord.Embed(title='Error', colour=0xDD5F53)
@@ -939,7 +979,7 @@ class Splatoon(commands.GroupCog):
                 await ctx.send(f'An error has occurred of status code {resp.status} happened.')
 
     async def generic_splatoon2_schedule(self, ctx: Context):
-        e = discord.Embed(colour=0x19D719)
+        e = discord.Embed(colour=self.random_colour())
         end_time = None
 
         for key, value in self.sp2_map_data.items():
@@ -996,7 +1036,7 @@ class Splatoon(commands.GroupCog):
     @commands.hybrid_command()
     async def nextmaps(self, ctx: Context):
         """Shows the next Splatoon 2 maps."""
-        e = discord.Embed(colour=0x19D719, description='Nothing found...')
+        e = discord.Embed(colour=self.random_colour(), description='Nothing found...')
 
         start_time = None
         for key, value in self.sp2_map_data.items():
@@ -1046,34 +1086,35 @@ class Splatoon(commands.GroupCog):
     @commands.hybrid_command()
     @app_commands.describe(query='The weapon name, sub, or special to search for')
     async def weapon(self, ctx: Context, *, query: str):
-        """Displays Splatoon 2 weapon info from a query.
+        """Displays Splatoon 3 weapon info from a query.
 
         The query must be at least 3 characters long, otherwise it'll tell you it failed.
         """
-        query = query.strip().lower()
-        weapons = self.splat2_data.get('weapons', [])
         if len(query) < 3:
             return await ctx.send('The query must be at least 3 characters long.')
 
-        def predicate(weapon):
-            lowered = [weapon.lower() for weapon in weapon.values()]
-            return any(query in wep for wep in lowered)
+        weapons = self.query_weapons_autocomplete(query)
+        if not weapons:
+            await ctx.send('No weapons found matching this search query', ephemeral=True)
+            return
 
-        results = list(filter(predicate, weapons))
-        if not results:
-            return await ctx.send('No results found.')
+        top_weapon = weapons[0]
 
-        e = discord.Embed(colour=discord.Colour.blurple())
-        e.title = f'Found {plural(len(results)):weapon}'
+        # Exact match
+        if top_weapon.name.lower() == query.lower() or len(weapons) == 1:
+            await ctx.send(embed=top_weapon.embed)
+        elif len(weapons) <= 25:
+            view = discord.ui.View()
+            view.add_item(WeaponSelect(weapons))
+            await ctx.send(embed=top_weapon.embed, view=view)
+        else:
+            pages = RoboPages(WeaponPageSource(weapons), ctx=ctx)
+            await pages.start()
 
-        subs = '\n'.join(w['sub'] for w in results)
-        names = '\n'.join(w['name'] for w in results)
-        special = '\n'.join(w['special'] for w in results)
-
-        e.add_field(name='Name', value=names)
-        e.add_field(name='Sub', value=subs)
-        e.add_field(name='Special', value=special)
-        await ctx.send(embed=e)
+    @weapon.autocomplete('query')
+    async def weapon_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        weapons = self.query_weapons_autocomplete(current)[:25]
+        return [app_commands.Choice(name=weapon.choice_name, value=weapon.name) for weapon in weapons]
 
     @commands.hybrid_command()
     @app_commands.describe(games='The number of games to scrim for', mode='The mode to play in')
@@ -1096,7 +1137,7 @@ class Splatoon(commands.GroupCog):
     async def splatoon_admin(self, ctx: Context):
         """Administration panel for Splatoon configuration"""
 
-        e = discord.Embed(colour=0x19D719, title='Splatoon Cog Administration')
+        e = discord.Embed(colour=self.random_colour(), title='Splatoon Cog Administration')
         splatnet = not self._splatnet2.done()
         unauthed = self._splatnet2.done() and isinstance(self._splatnet2.exception(), Unauthenticated)
 
