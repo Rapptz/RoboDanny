@@ -943,9 +943,16 @@ class Todo(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
         item = await self.add_todo(user_id=interaction.user.id, content=content, due_date=due_date)
+        if due_date is None:
+            view = discord.ui.View()
+            view.add_item(EditDueDateButton(item))
+        else:
+            view = discord.utils.MISSING
+
         await interaction.followup.send(
             content=f'<a:agreenTick:1011968947949666324> Added todo item {item.id}.',
             embed=item.embed,
+            view=view,
             ephemeral=True,
         )
 
