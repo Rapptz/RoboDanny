@@ -281,7 +281,10 @@ class Weapon:
 
     @property
     def choice_name(self) -> str:
-        return f'{self.name} ({self.sub} with {self.special})'
+        return f'{self.name} \N{EN DASH} {self.sub} \N{EN DASH} {self.special}'
+
+    def to_select_option(self) -> discord.SelectOption:
+        return discord.SelectOption(label=self.name, description=f'{self.sub} with {self.special}')
 
 
 class SalmonRun:

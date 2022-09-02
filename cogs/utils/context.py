@@ -93,12 +93,19 @@ class DisambiguatorView(discord.ui.View, Generic[T]):
     message: discord.Message
     selected: T
 
-    def __init__(self, ctx: Context, data: list[T], entry: Callable[[T], str]):
+    def __init__(self, ctx: Context, data: list[T], entry: Callable[[T], Any]):
         super().__init__()
         self.ctx: Context = ctx
         self.data: list[T] = data
 
-        options = [discord.SelectOption(label=entry(x), value=str(i)) for i, x in enumerate(data)]
+        options = []
+        for i, x in enumerate(data):
+            opt = entry(x)
+            if not isinstance(opt, discord.SelectOption):
+                opt = discord.SelectOption(label=str(opt))
+            opt.value = str(i)
+            options.append(opt)
+
         select = discord.ui.Select(options=options)
 
         select.callback = self.on_select_submit

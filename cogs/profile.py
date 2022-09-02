@@ -199,7 +199,7 @@ class SplatoonWeapon(commands.Converter):
         weapons = cog.get_weapons_named(query)
 
         try:
-            weapon = await ctx.disambiguate(weapons, lambda w: w.name, ephemeral=True)
+            weapon = await ctx.disambiguate(weapons, lambda w: w.to_select_option(), ephemeral=True)
         except ValueError as e:
             raise commands.BadArgument(
                 f'Could not find a weapon named {discord.utils.escape_mentions(argument)!r}'
