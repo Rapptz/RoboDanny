@@ -146,7 +146,12 @@ class Stats(commands.Cog):
             destination = f'#{message.channel} ({message.guild})'
             guild_id = ctx.guild.id
 
-        log.info(f'{message.created_at}: {message.author} in {destination}: {message.content}')
+        if ctx.interaction and ctx.interaction.command:
+            content = f'/{ctx.interaction.command.qualified_name}'
+        else:
+            content = message.content
+
+        log.info(f'{message.created_at}: {message.author} in {destination}: {content}')
         async with self._batch_lock:
             self._data_batch.append(
                 {
