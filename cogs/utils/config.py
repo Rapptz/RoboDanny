@@ -33,7 +33,7 @@ class Config(Generic[_T]):
 
     def load_from_file(self):
         try:
-            with open(self.name) as f:
+            with open(self.name, 'r', encoding='utf-8') as f:
                 self._db = json.load(f, object_hook=self.object_hook)
         except FileNotFoundError:
             self._db = {}
