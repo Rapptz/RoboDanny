@@ -148,7 +148,9 @@ class Button(discord.ui.Button['BoardView']):
                 view = enemy_cell.button.view
                 await view.message.edit(content=f'You lose :(', view=view)
 
-            await self.view.parent_message.edit(content=f'{player.member.mention} wins this game of ! Congratulations.')
+            await self.view.parent_message.edit(
+                content=f'{player.member.mention} wins this game of Battleship! Congratulations.'
+            )
             return
 
         content = f"{enemy.member.mention}'s turn."
