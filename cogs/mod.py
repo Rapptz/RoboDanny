@@ -966,7 +966,7 @@ class Mod(commands.Cog):
         query = """INSERT INTO guild_mod_config (id, automod_flags, broadcast_channel, broadcast_webhook_url)
                    VALUES ($1, 0, NULL, NULL) ON CONFLICT (id)
                    DO UPDATE SET
-                        automod_flags = guild_mod_config.automod_flags & ~$2,
+                        automod_flags = guild_mod_config.automod_flags & ~$2::SMALLINT,
                         broadcast_channel = NULL,
                         broadcast_webhook_url = NULL;
                 """
