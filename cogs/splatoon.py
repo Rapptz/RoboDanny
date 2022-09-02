@@ -543,14 +543,14 @@ class AddWeaponModal(discord.ui.Modal, title='Add New Weapon'):
         self.cog: Splatoon = cog
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        weapons = self.cog.splat2_data.get('weapons', [])
+        weapons = self.cog.splat3_data.get('weapons', [])
         entry = {
             'name': self.name.value,
             'sub': self.sub.value,
             'special': self.special.value,
         }
         weapons.append(entry)
-        await self.cog.splat2_data.put('weapons', weapons)
+        await self.cog.splat3_data.put('weapons', weapons)
         await interaction.response.send_message(f'Successfully added new weapon {self.name}')
 
 
@@ -587,9 +587,9 @@ class AdminPanel(discord.ui.View):
         await modal.wait()
 
         name = modal.input.value
-        entry = self.cog.splat2_data.get('maps', [])
+        entry = self.cog.splat3_data.get('maps', [])
         entry.append(name)
-        await self.cog.splat2_data.put('maps', entry)
+        await self.cog.splat3_data.put('maps', entry)
 
         await modal.interaction.response.send_message(f'Successfully added new map {name}')
 
@@ -1122,14 +1122,14 @@ class Splatoon(commands.GroupCog):
         mode=[app_commands.Choice(name=r, value=r) for r in ('Rainmaker', 'Splat Zones', 'Tower Control', 'Clam Blitz')]
     )
     async def scrim(self, ctx: Context, games: int = 5, *, mode: Optional[str] = None):
-        """Generates Splatoon 2 scrim map and mode combinations.
+        """Generates Splatoon 3 scrim map and mode combinations.
 
         The mode combinations do not have Turf War.
 
         The mode is rotated unless you pick a mode to play, in which all map
         combinations will use that mode instead.
         """
-        maps = self.splat2_data.get('maps', [])
+        maps = self.splat3_data.get('maps', [])
         await self.generate_scrims(ctx, maps, games, mode)
 
     @commands.command(hidden=True)
