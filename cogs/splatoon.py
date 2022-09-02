@@ -148,6 +148,10 @@ class Unauthenticated(Exception):
     """Exception for when the iksm_session is expired"""
 
 
+class InvalidBrandOrAbility(commands.CommandError, app_commands.AppCommandError):
+    pass
+
+
 def get_random_scrims(modes: list[str], maps: list[str], count: int) -> list[GameEntry]:
     result: list[GameEntry] = []
     current_mode_index = 0
@@ -198,17 +202,38 @@ RESOURCE_TO_EMOJI = {
 }
 
 
-def get_splatoon3_brands() -> list[str]:
+def get_splatoon3_brands_and_abilities() -> tuple[list[str], list[str]]:
     with open('splatoon3.json', 'r', encoding='utf-8') as fp:
         data: SplatoonConfig = json.load(fp)
-        return [d['name'] for d in data['brands']]
+        return [d['name'] for d in data['brands']], data['abilities']
 
 
-SPLATOON_3_BRANDS = get_splatoon3_brands()
+SPLATOON_3_BRANDS, SPLATOON_3_ABILITIES = get_splatoon3_brands_and_abilities()
 SPLATOON_2_PINK = 0xF02D7D
 SPLATOON_2_GREEN = 0x19D719
 SPLATOON_3_YELLOW = 0xEAFF3D
 SPLATOON_3_PURPLE = 0x603BFF
+
+
+class SpecialAbilityInfo(TypedDict):
+    type: Literal['Headgear', 'Clothing', 'Shoes']
+    chunks: list[str]
+
+
+SPLATOON_3_SPECIAL_ABILITIES: dict[str, SpecialAbilityInfo] = {
+    'Opening Gambit': {'type': 'Headgear', 'chunks': ['Run Speed Up', 'Swim Speed Up', 'Ink Resistance Up']},
+    'Last-Ditch Effort': {'type': 'Headgear', 'chunks': ['Ink Saver (Main)', 'Ink Saver (Sub)', 'Ink Recovery Up']},
+    'Tenacity': {'type': 'Headgear', 'chunks': ['Special Charge Up', 'Special Saver', 'Special Power Up']},
+    'Comeback': {'type': 'Headgear', 'chunks': ['Run Speed Up', 'Swim Speed Up', 'Special Charge Up']},
+    'Ninja Squid': {'type': 'Clothing', 'chunks': ['Ink Recovery Up', 'Run Speed Up', 'Swim Speed Up']},
+    'Haunt': {'type': 'Clothing', 'chunks': ['Quick Respawn', 'Sub Power Up', 'Ink Resistance Up']},
+    'Thermal Ink': {'type': 'Clothing', 'chunks': ['Ink Saver (Main)', 'Ink Saver (Sub)', 'Intensify Action']},
+    'Respawn Punisher': {'type': 'Clothing', 'chunks': ['Special Saver', 'Quick Respawn', 'Sub Resistance Up']},
+    'Ability Doubler': {'type': 'Clothing', 'chunks': []},
+    'Stealth Jump': {'type': 'Shoes', 'chunks': ['Quick Super Jump', 'Sub Resistance Up', 'Intensify Action']},
+    'Object Shredder': {'type': 'Shoes', 'chunks': ['Ink Recovery Up', 'Special Power Up', 'Sub Power Up']},
+    'Drop Roller': {'type': 'Shoes', 'chunks': ['Quick Super Jump', 'Ink Resistance Up', 'Intensify Action']},
+}
 
 
 class Rotation:
@@ -575,6 +600,41 @@ class MerchPageSource(menus.ListPageSource):
         return e
 
 
+class BrandOrAbility:
+    def __init__(self, *, name: str, brand: bool) -> None:
+        self.name: str = name
+        self.brand: bool = brand
+
+    @classmethod
+    def get(cls, argument: str) -> Self:
+        lowered = argument.lower()
+        found = discord.utils.find(lambda b: b.lower() == lowered, SPLATOON_3_BRANDS)
+        if found is not None:
+            return cls(name=found, brand=True)
+        found = discord.utils.find(lambda a: a.lower() == lowered, SPLATOON_3_ABILITIES)
+        if found is None:
+            raise InvalidBrandOrAbility()
+        return cls(name=found, brand=False)
+
+    @classmethod
+    async def convert(cls, ctx: Context, argument: str) -> Self:
+        try:
+            return cls.get(argument)
+        except InvalidBrandOrAbility:
+            # Try and disambiguate
+            results = fuzzy.finder(argument, SPLATOON_3_BRANDS + SPLATOON_3_ABILITIES)
+            if len(results) > 25:
+                raise
+
+            found = await ctx.disambiguate(results, lambda e: e)
+            brand = found in SPLATOON_3_BRANDS
+            return cls(name=found, brand=brand)
+
+    @classmethod
+    async def transform(cls, interaction: discord.Interaction, argument: str) -> Self:
+        return cls.get(argument)
+
+
 # JSON stuff
 
 
@@ -719,6 +779,8 @@ class Splatoon(commands.GroupCog):
     async def cog_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
             return await ctx.send(str(error))
+        if isinstance(error, InvalidBrandOrAbility):
+            return await ctx.send('Could not find a brand or ability with that name')
 
     @property
     def salmon_run(self) -> list[SalmonRun]:
@@ -1265,8 +1327,8 @@ class Splatoon(commands.GroupCog):
         results = self.filter_gear_choices(
             query.name,
             brand=fuzzy.find(query.brand, SPLATOON_3_BRANDS) if query.brand else None,
-            ability=fuzzy.find(query.ability, self.splat3_data['abilities']) if query.ability else None,
-            frequent=fuzzy.find(query.frequent, self.splat3_data['abilities']) if query.frequent else None,
+            ability=fuzzy.find(query.ability, SPLATOON_3_ABILITIES) if query.ability else None,
+            frequent=fuzzy.find(query.frequent, SPLATOON_3_ABILITIES) if query.frequent else None,
             type=None if query.type == 'any' else query.type,
         )
 
@@ -1296,7 +1358,7 @@ class Splatoon(commands.GroupCog):
     async def gear_ability_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        abilities = fuzzy.finder(current, self.splat3_data['abilities'])[:25]
+        abilities = fuzzy.finder(current, SPLATOON_3_ABILITIES)[:25]
         return [app_commands.Choice(name=a, value=a) for a in abilities]
 
     @gear.error
@@ -1308,6 +1370,55 @@ class Splatoon(commands.GroupCog):
                 f"For example: {ctx.prefix}{ctx.invoked_with} brand: Splash Mob ability: Ink Resist"
             )
             await ctx.send(msg, ephemeral=True)
+
+    @commands.hybrid_command()
+    @app_commands.describe(query='The brand or ability to search for')
+    async def brand(self, ctx, *, query: BrandOrAbility):
+        """Shows Splatoon 3 brand info
+
+        This is based on either the name or the ability given.
+        If the query is an ability then it attempts to find out what brands
+        influence that ability, otherwise it just looks for the brand being given.
+
+        The query must be at least 4 characters long.
+        """
+        e = discord.Embed(colour=SPLATOON_3_PURPLE if query.brand else SPLATOON_3_YELLOW)
+        brands: list[SplatoonConfigBrand] = self.splat3_data['brands']
+        if query.brand:
+            info = discord.utils.find(lambda b: b['name'] == query.name, brands)
+            if info is None:
+                return await ctx.send('Somehow could not find this brand')
+
+            e.title = 'Brand Info'
+            e.add_field(name='Name', value=info['name'])
+            e.add_field(name='Common', value=info['buffed'])
+            e.add_field(name='Uncommon', value=info['nerfed'])
+            return await ctx.send(embed=e)
+
+        e.title = 'Ability Info'
+        buffs: list[str] = []
+        nerfs: list[str] = []
+        for brand in brands:
+            if brand['buffed'] == query.name:
+                buffs.append(brand['name'])
+            elif brand['nerfed'] == query.name:
+                nerfs.append(brand['name'])
+
+        e.add_field(name='Common Brands', value='\n'.join(buffs) or 'Nothing')
+        e.add_field(name='Uncommon Brands', value='\n'.join(nerfs) or 'Nothing')
+
+        special = SPLATOON_3_SPECIAL_ABILITIES.get(query.name)
+        if special is not None:
+            e.add_field(name='Exclusive to', value=special['type'])
+            e.add_field(name='Chunk conversion cost', value='\n'.join(special['chunks']) or 'Nothing')
+
+        await ctx.send(embed=e)
+
+    @brand.autocomplete('query')
+    async def brand_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        total = SPLATOON_3_BRANDS + SPLATOON_3_ABILITIES
+        filtered = fuzzy.finder(current, total)[:25]
+        return [app_commands.Choice(name=a, value=a) for a in filtered]
 
     @commands.hybrid_command()
     @app_commands.describe(games='The number of games to scrim for', mode='The mode to play in')
