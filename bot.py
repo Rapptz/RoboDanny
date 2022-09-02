@@ -46,6 +46,7 @@ initial_extensions = (
     'cogs.dpy',
     'cogs.funhouse',
     'cogs.todo',
+    'cogs.minigames',
 )
 
 
