@@ -13,7 +13,7 @@ import re
 if TYPE_CHECKING:
     from bot import RoboDanny
     from .utils.context import Context
-    from cogs.splatoon import Splatoon, SplatoonConfigWeapon
+    from cogs.splatoon import Splatoon, SplatoonConfigWeapon, Weapon
 
 
 class DisambiguateMember(commands.IDConverter, app_commands.Transformer):
@@ -95,8 +95,10 @@ if TYPE_CHECKING:
     class ProfileExtras(TypedDict):
         sp1_rank: str
         sp2_rank: dict[Literal['Rainmaker', 'Tower Control', 'Splat Zones', 'Clam Blitz'], ProfileExtraRank]
+        sp3_rank: dict[Literal['Rainmaker', 'Tower Control', 'Splat Zones', 'Clam Blitz'], ProfileExtraRank]
         sp1_weapon: SplatoonConfigWeapon
         sp2_weapon: SplatoonConfigWeapon
+        sp3_weapon: SplatoonConfigWeapon
 
 
 _rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
@@ -136,7 +138,7 @@ class SplatoonRank:
         try:
             mode = valid[mode.lower()]
         except KeyError:
-            raise commands.BadArgument(f'Unknown Splatoon 2 mode: {mode}') from None
+            raise commands.BadArgument(f'Unknown Splatoon 3 mode: {mode}') from None
 
         rank = m.group('rank').upper()
         if rank == 'S-':
@@ -197,7 +199,7 @@ class SplatoonWeapon(commands.Converter):
         weapons = cog.get_weapons_named(query)
 
         try:
-            weapon = await ctx.disambiguate(weapons, lambda w: w['name'], ephemeral=True)
+            weapon = await ctx.disambiguate(weapons, lambda w: w.name, ephemeral=True)
         except ValueError as e:
             raise commands.BadArgument(
                 f'Could not find a weapon named {discord.utils.escape_mentions(argument)!r}'
@@ -208,8 +210,8 @@ class SplatoonWeapon(commands.Converter):
 
 class ProfileCreateModal(discord.ui.Modal, title='Create Profile'):
     switch = discord.ui.TextInput(label='Switch Friend Code', placeholder='1234-5678-9012')
-    weapon = discord.ui.TextInput(label='Splatoon Weapon', placeholder='Splattershot', required=False)
-    rank = discord.ui.TextInput(label='Splatoon Ranking', placeholder='Clam Blitz C+30', required=False)
+    weapon = discord.ui.TextInput(label='Splatoon 3 Weapon', placeholder='Splattershot', required=False)
+    rank = discord.ui.TextInput(label='Splatoon 3 Ranking', placeholder='Clam Blitz C+30', required=False)
 
     def __init__(self, cog: Profile, ctx: Context):
         super().__init__()
@@ -224,10 +226,11 @@ class ProfileCreateModal(discord.ui.Modal, title='Create Profile'):
         try:
             fc_switch = valid_fc(str(self.switch.value))
             if self.weapon.value:
-                extra['sp2_weapon'] = await SplatoonWeapon().convert(self.ctx, self.weapon.value)
+                weapon = await SplatoonWeapon().convert(self.ctx, self.weapon.value)
+                extra['sp3_weapon'] = weapon.to_dict()
 
             if self.rank.value:
-                extra['sp2_rank'] = SplatoonRank(self.rank.value).to_dict()
+                extra['sp3_rank'] = SplatoonRank(self.rank.value).to_dict()
 
         except commands.BadArgument as e:
             await interaction.followup.send(f'Sorry, an error happened while setting up your profile:\n{e}', ephemeral=True)
@@ -259,6 +262,12 @@ class PromptProfileCreationView(discord.ui.View):
     @discord.ui.button(label='Create Profile', style=discord.ButtonStyle.blurple)
     async def create_profile(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ProfileCreateModal(self.cog, self.ctx))
+
+
+SPLATOON_2_PINK = 0xF02D7D
+SPLATOON_2_GREEN = 0x19D719
+SPLATOON_3_YELLOW = 0xEAFF3D
+SPLATOON_3_PURPLE = 0x603BFF
 
 
 class Profile(commands.Cog):
@@ -303,9 +312,7 @@ class Profile(commands.Cog):
                 await ctx.send('This member did not set up a profile.')
             return
 
-        # 0xF02D7D - Splatoon 2 Pink
-        # 0x19D719 - Splatoon 2 Green
-        e = discord.Embed(colour=0x19D719)
+        e = discord.Embed(colour=SPLATOON_3_PURPLE)
 
         keys = {
             'fc_switch': 'Switch FC',
@@ -321,15 +328,15 @@ class Profile(commands.Cog):
         e.set_author(name=member.display_name, icon_url=member.display_avatar.with_format('png'))
 
         extra = record['extra'] or {}
-        rank = extra.get('sp2_rank', {})
+        rank = extra.get('sp3_rank', {})
         value = 'Unranked'
         if rank:
             value = '\n'.join(f'{mode}: {data["rank"]}{data["number"]}' for mode, data in rank.items())
 
-        e.add_field(name='Splatoon 2 Ranks', value=value)
+        e.add_field(name='Splatoon 3 Ranks', value=value)
 
-        weapon = extra.get('sp2_weapon')
-        e.add_field(name='Splatoon 2 Weapon', value=weapon and weapon['name'])
+        weapon = extra.get('sp3_weapon')
+        e.add_field(name='Splatoon 3 Weapon', value=(weapon and weapon['name']) or 'N/A')
 
         e.add_field(name='Squad', value=record['squad'] or 'N/A')
         await ctx.send(embed=e)
@@ -357,7 +364,7 @@ class Profile(commands.Cog):
     @profile.command()
     @app_commands.describe(squad='Your Splatoon squad')
     async def squad(self, ctx: Context, *, squad: Annotated[str, valid_squad]):
-        """Sets the Splatoon 2 squad part of your profile."""
+        """Sets the Splatoon 3 squad part of your profile."""
         await self.edit_fields(ctx, squad=squad)
         await ctx.send('Updated squad.')
 
@@ -376,9 +383,9 @@ class Profile(commands.Cog):
         await ctx.send('Updated Switch friend code.')
 
     @profile.command()
-    @app_commands.describe(weapon='Your Splatoon 2 main weapon')
-    async def weapon(self, ctx: Context, *, weapon: Annotated[Dict[str, str], SplatoonWeapon]):
-        """Sets the Splatoon 2 weapon part of your profile.
+    @app_commands.describe(weapon='Your Splatoon 3 main weapon')
+    async def weapon(self, ctx: Context, *, weapon: Annotated['Weapon', SplatoonWeapon]):
+        """Sets the Splatoon 3 weapon part of your profile.
 
         If you don't have a profile set up then it'll create one for you.
         The weapon must be a valid weapon that is in the Splatoon database.
@@ -386,13 +393,13 @@ class Profile(commands.Cog):
         """
 
         query = """INSERT INTO profiles (id, extra)
-                   VALUES ($1, jsonb_build_object('sp2_weapon', $2::jsonb))
+                   VALUES ($1, jsonb_build_object('sp3_weapon', $2::jsonb))
                    ON CONFLICT (id) DO UPDATE
-                   SET extra = jsonb_set(profiles.extra, '{sp2_weapon}', $2::jsonb)
+                   SET extra = jsonb_set(profiles.extra, '{sp3_weapon}', $2::jsonb)
                 """
 
-        await ctx.db.execute(query, ctx.author.id, weapon)
-        await ctx.send(f'Successfully set weapon to {weapon["name"]}.')
+        await ctx.db.execute(query, ctx.author.id, weapon.to_dict())
+        await ctx.send(f'Successfully set weapon to {weapon.name}.')
 
     @weapon.autocomplete('weapon')
     async def weapon_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -401,12 +408,12 @@ class Profile(commands.Cog):
             return []
 
         weapons = cog.query_weapons_named(current)[:25]
-        return [app_commands.Choice(name=weapon['name'], value=weapon['name']) for weapon in weapons]
+        return [app_commands.Choice(name=weapon.name, value=weapon.name) for weapon in weapons]
 
     @profile.command(usage='<mode> <rank>')
-    @app_commands.describe(ranking='Your Splatoon 2 ranking')
+    @app_commands.describe(ranking='Your Splatoon 3 ranking')
     async def rank(self, ctx: Context, *, ranking: SplatoonRank):
-        """Sets the Splatoon 2 rank part of your profile.
+        """Sets the Splatoon 3 rank part of your profile.
 
         You set the rank on a per mode basis, such as
 
@@ -421,9 +428,9 @@ class Profile(commands.Cog):
                    ON CONFLICT (id) DO UPDATE
                    SET extra =
                        CASE
-                           WHEN profiles.extra ? 'sp2_rank'
-                           THEN jsonb_set(profiles.extra, '{sp2_rank}', profiles.extra->'sp2_rank' || $2::jsonb)
-                           ELSE jsonb_set(profiles.extra, '{sp2_rank}', $2::jsonb)
+                           WHEN profiles.extra ? 'sp3_rank'
+                           THEN jsonb_set(profiles.extra, '{sp3_rank}', profiles.extra->'sp3_rank' || $2::jsonb)
+                           ELSE jsonb_set(profiles.extra, '{sp3_rank}', $2::jsonb)
                        END
                 """
 
@@ -511,7 +518,7 @@ class Profile(commands.Cog):
 
         # whole key deletion
         if field in ('weapon', 'rank'):
-            key = 'sp2_rank' if field == 'rank' else 'sp2_weapon'
+            key = 'sp3_rank' if field == 'rank' else 'sp3_weapon'
             query = "UPDATE profiles SET extra = extra - $1 WHERE id=$2;"
             await ctx.db.execute(query, key, ctx.author.id)
             return await ctx.send(f'Successfully deleted {field} field.')
@@ -519,7 +526,7 @@ class Profile(commands.Cog):
         # a little more complicated
         mode = field.replace(' rank', '').title()
         query = "UPDATE profiles SET extra = extra #- $1::text[] WHERE id=$2;"
-        key = ['sp2_rank', mode]
+        key = ['sp3_rank', mode]
         await ctx.db.execute(query, key, ctx.author.id)
         await ctx.send(f'Successfully deleted {mode} ranking.')
 
@@ -558,7 +565,7 @@ class Profile(commands.Cog):
         if len(records) == 0:
             return await ctx.send('No results found...')
 
-        e = discord.Embed(colour=0xF02D7D)
+        e = discord.Embed(colour=SPLATOON_3_YELLOW)
 
         data = defaultdict(list)
         for record in records:
@@ -582,33 +589,33 @@ class Profile(commands.Cog):
         total = row[0]
 
         # top weapons used
-        query = """SELECT extra #> '{sp2_weapon,name}' AS "Weapon",
+        query = """SELECT extra #> '{sp3_weapon,name}' AS "Weapon",
                           COUNT(*) AS "Total"
                    FROM profiles
-                   WHERE extra #> '{sp2_weapon,name}' IS NOT NULL
-                   GROUP BY extra #> '{sp2_weapon,name}'
+                   WHERE extra #> '{sp3_weapon,name}' IS NOT NULL
+                   GROUP BY extra #> '{sp3_weapon,name}'
                    ORDER BY "Total" DESC;
                 """
 
         weapons = await ctx.db.fetch(query)
         total_weapons = sum(r['Total'] for r in weapons)
 
-        e = discord.Embed(colour=0x19D719)
+        e = discord.Embed(colour=SPLATOON_3_PURPLE)
         e.title = f'Statistics for {plural(total):profile}'
 
         # top 3 weapons
         value = f'*{total_weapons} players with weapons*\n' + '\n'.join(
             f'{r["Weapon"]} ({r["Total"]} players)' for r in weapons[:3]
         )
-        e.add_field(name='Top Splatoon 2 Weapons', value=value, inline=False)
+        e.add_field(name='Top Splatoon 3 Weapons', value=value, inline=False)
 
         # get ranked data
         for index, mode in enumerate(('Splat Zones', 'Tower Control', 'Rainmaker', 'Clam Blitz')):
-            query = f"""SELECT extra #> '{{sp2_rank,{mode},rank}}' AS "Rank",
+            query = f"""SELECT extra #> '{{sp3_rank,{mode},rank}}' AS "Rank",
                                COUNT(*) AS "Total"
                         FROM profiles
-                        WHERE extra #> '{{sp2_rank,{mode},rank}}' IS NOT NULL
-                        GROUP BY extra #> '{{sp2_rank,{mode},rank}}'
+                        WHERE extra #> '{{sp3_rank,{mode},rank}}' IS NOT NULL
+                        GROUP BY extra #> '{{sp3_rank,{mode},rank}}'
                         ORDER BY "Total" DESC
                      """
 

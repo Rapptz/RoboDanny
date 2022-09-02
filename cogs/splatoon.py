@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         special_cost: NotRequired[str]
         level: NotRequired[str]
         ink_saver_level: NotRequired[str]
+        __weapon__: NotRequired[Literal[True]]
 
     class SplatoonConfigBrand(TypedDict):
         name: str
@@ -251,6 +252,34 @@ class Gear:
         return self
 
 
+class Weapon:
+    __slots__ = ('name', 'sub', 'special', 'special_cost', 'level', 'ink_saver_level')
+
+    def __init__(self, data: SplatoonConfigWeapon) -> None:
+        self.name: str = data['name']
+        self.sub: str = data['sub']
+        self.special: str = data['special']
+        self.special_cost: Optional[str] = data.get('special_cost')
+        self.level: Optional[str] = data.get('level')
+        self.ink_saver_level: Optional[str] = data.get('ink_saver_level')
+
+    def to_dict(self) -> SplatoonConfigWeapon:
+        payload: SplatoonConfigWeapon = {
+            'name': self.name,
+            'sub': self.sub,
+            'special': self.special,
+        }
+
+        if self.special_cost is not None:
+            payload['special_cost'] = self.special_cost
+        if self.level is not None:
+            payload['level'] = self.level
+        if self.ink_saver_level is not None:
+            payload['ink_saver_level'] = self.ink_saver_level
+
+        return payload
+
+
 class SalmonRun:
     def __init__(self, data: SalmonRunDetailsPayload):
         self.start_time: datetime.datetime = datetime.datetime.fromtimestamp(data['start_time'], tz=datetime.timezone.utc)
@@ -427,18 +456,24 @@ class MerchPageSource(menus.ListPageSource):
 # JSON stuff
 
 
-class Splatoon2Encoder(json.JSONEncoder):
+class SplatoonEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Gear):
             payload = {attr: getattr(obj, attr) for attr in Gear.__slots__}
             payload['__gear__'] = True
             return payload
+        if isinstance(obj, Weapon):
+            payload = obj.to_dict()
+            payload['__weapon__'] = True
+            return payload
         return super().default(obj)
 
 
-def splatoon2_decoder(obj: Any) -> Any:
+def splatoon_decoder(obj: Any) -> Any:
     if '__gear__' in obj:
         return Gear.from_json(obj)
+    if '__weapon__' in obj:
+        return Weapon(obj)
     return obj
 
 
@@ -538,7 +573,10 @@ class Splatoon(commands.GroupCog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self.splat2_data: config.Config[Any] = config.Config(
-            'splatoon2.json', object_hook=splatoon2_decoder, encoder=Splatoon2Encoder
+            'splatoon2.json', object_hook=splatoon_decoder, encoder=SplatoonEncoder
+        )
+        self.splat3_data: config.Config[Any] = config.Config(
+            'splatoon3.json', object_hook=splatoon_decoder, encoder=SplatoonEncoder
         )
         self._splatnet2: asyncio.Task[None] = asyncio.create_task(self.splatnet2())
         self._last_request: datetime.datetime = discord.utils.utcnow()
@@ -824,17 +862,17 @@ class Splatoon(commands.GroupCog):
         except Exception:
             await self.log_error(extra='SplatNet 2 Error')
 
-    def get_weapons_named(self, name: str) -> list[SplatoonConfigWeapon]:
-        data: list[SplatoonConfigWeapon] = self.splat2_data.get('weapons', [])
+    def get_weapons_named(self, name: str) -> list[Weapon]:
+        data: list[Weapon] = self.splat3_data.get('weapons', [])
         name = name.lower()
 
-        choices = {w['name'].lower(): w for w in data}
+        choices = {w.name.lower(): w for w in data}
         results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
         return [v for k, _, v in results]
 
-    def query_weapons_named(self, name: str) -> list[SplatoonConfigWeapon]:
-        data: list[SplatoonConfigWeapon] = self.splat2_data.get('weapons', [])
-        results = fuzzy.finder(name, data, key=lambda w: w['name'])
+    def query_weapons_named(self, name: str) -> list[Weapon]:
+        data: list[Weapon] = self.splat3_data.get('weapons', [])
+        results = fuzzy.finder(name, data, key=lambda w: w.name)
         return results
 
     async def generate_scrims(self, ctx: Context, maps: list[str], games: int, mode: Optional[str]):
