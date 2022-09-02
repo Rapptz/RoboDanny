@@ -452,7 +452,7 @@ class AddTodoModal(ui.Modal, title='Add Todo'):
 
         note = self.content.value or None
         await interaction.response.defer(ephemeral=True)
-        item = await self.cog.add_todo(user_id=interaction.user.id, message=self.message, due_date=due_date, title=note)
+        item = await self.cog.add_todo(user_id=interaction.user.id, message=self.message, due_date=due_date, content=note)
         await interaction.followup.send(
             content=f'<a:agreenTick:1011968947949666324> Added todo item {item.id}.',
             embed=item.embed,
@@ -856,7 +856,7 @@ class Todo(commands.Cog):
         self,
         *,
         user_id: int,
-        title: Optional[str] = None,
+        content: Optional[str] = None,
         message: Optional[discord.Message] = None,
         due_date: Optional[datetime.datetime] = None,
     ) -> TodoItem:
@@ -868,7 +868,7 @@ class Todo(commands.Cog):
                     guild_id,
                     cached_content,
                     due_date,
-                    title
+                    content
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
                 """
@@ -883,7 +883,7 @@ class Todo(commands.Cog):
             parameters.extend([None, None, None, None])
 
         parameters.append(due_date)
-        parameters.append(title)
+        parameters.append(content)
         record = await self.bot.pool.fetchrow(query, *parameters)
         result = TodoItem(self, record)
         result.message = message
@@ -905,21 +905,21 @@ class Todo(commands.Cog):
         await ctx.send_help(ctx.command)
 
     @todo.command(name='create', with_app_command=False, aliases=['add'])
-    async def todo_add(self, ctx: Context, *, title: Optional[str] = None) -> None:
+    async def todo_add(self, ctx: Context, *, content: Optional[str] = None) -> None:
         """Add a todo item. Can be used as a reply to another message."""
 
         reply = ctx.replied_message
-        if reply is None and title is None:
+        if reply is None and content is None:
             await ctx.send(
                 "There's nothing to remind you of here. You can reply to a message to be reminded of a message or you can pass the text you want to reminded of"
             )
             return
 
-        if title is not None and len(title) > 1024:
+        if content is not None and len(content) > 1024:
             await ctx.send('The todo content is too long. The maximum length is 1024 characters.')
             return
 
-        item = await self.add_todo(user_id=ctx.author.id, title=title, message=reply)
+        item = await self.add_todo(user_id=ctx.author.id, content=content, message=reply)
         view = discord.ui.View()
         view.add_item(EditDueDateButton(item))
         await ctx.send(content=f'<a:agreenTick:1011968947949666324> Added todo item {item.id}.', view=view, embed=item.embed)
@@ -928,21 +928,21 @@ class Todo(commands.Cog):
     async def todo_add_slash(
         self,
         interaction: discord.Interaction,
-        title: str,
+        content: str,
         due_date: Optional[app_commands.Transform[datetime.datetime, time.TimeTransformer]] = None,
     ):
         """Adds a todo item
 
         Parameters
         -----------
-        title: :class:`str`
-            The title of the todo item
+        content: :class:`str`
+            The content of the todo item
         due_date: Optional[:class:`datetime.datetime`]
             The due date (in UTC) of the todo item, e.g. 1h or tomorrow
         """
 
         await interaction.response.defer(ephemeral=True)
-        item = await self.add_todo(user_id=interaction.user.id, title=title, due_date=due_date)
+        item = await self.add_todo(user_id=interaction.user.id, content=content, due_date=due_date)
         await interaction.response.send_message(
             content=f'<a:agreenTick:1011968947949666324> Added todo item {item.id}.',
             embed=item.embed,
