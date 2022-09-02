@@ -904,7 +904,7 @@ class Todo(commands.Cog):
         """Manage a todo list"""
         await ctx.send_help(ctx.command)
 
-    @todo.command(name='add', with_app_command=False)
+    @todo.command(name='create', with_app_command=False, aliases=['add'])
     async def todo_add(self, ctx: Context, *, title: Optional[str] = None) -> None:
         """Add a todo item. Can be used as a reply to another message."""
 
