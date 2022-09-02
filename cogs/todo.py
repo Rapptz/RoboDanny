@@ -943,7 +943,7 @@ class Todo(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
         item = await self.add_todo(user_id=interaction.user.id, content=content, due_date=due_date)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             content=f'<a:agreenTick:1011968947949666324> Added todo item {item.id}.',
             embed=item.embed,
             ephemeral=True,
