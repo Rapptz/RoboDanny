@@ -407,8 +407,8 @@ class Profile(commands.Cog):
         if cog is None:
             return []
 
-        weapons = cog.query_weapons_named(current)[:25]
-        return [app_commands.Choice(name=weapon.name, value=weapon.name) for weapon in weapons]
+        weapons = cog.query_weapons_autocomplete(current)[:25]
+        return [app_commands.Choice(name=weapon.choice_name, value=weapon.name) for weapon in weapons]
 
     @profile.command(usage='<mode> <rank>')
     @app_commands.describe(ranking='Your Splatoon 3 ranking')

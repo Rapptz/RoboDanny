@@ -279,6 +279,10 @@ class Weapon:
 
         return payload
 
+    @property
+    def choice_name(self) -> str:
+        return f'{self.name} ({self.sub} with {self.special})'
+
 
 class SalmonRun:
     def __init__(self, data: SalmonRunDetailsPayload):
@@ -870,9 +874,9 @@ class Splatoon(commands.GroupCog):
         results = fuzzy.extract_or_exact(name, choices, scorer=fuzzy.token_sort_ratio, score_cutoff=60)
         return [v for k, _, v in results]
 
-    def query_weapons_named(self, name: str) -> list[Weapon]:
+    def query_weapons_autocomplete(self, name: str) -> list[Weapon]:
         data: list[Weapon] = self.splat3_data.get('weapons', [])
-        results = fuzzy.finder(name, data, key=lambda w: w.name)
+        results = fuzzy.finder(name, data, key=lambda w: w.choice_name)
         return results
 
     async def generate_scrims(self, ctx: Context, maps: list[str], games: int, mode: Optional[str]):
