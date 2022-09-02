@@ -528,6 +528,7 @@ class TodoPages(RoboPages):
 
         if self.select_menu:
             self.select_menu.options = [todo.to_select_option(idx) for idx, todo in enumerate(self.todos)]
+            self.select_menu.placeholder = f'Select a todo ({plural(len(self.todos)):todo} found)'
 
     def fill_items(self) -> None:
         super().fill_items()
