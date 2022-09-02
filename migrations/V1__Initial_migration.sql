@@ -153,4 +153,3 @@ CREATE TABLE IF NOT EXISTS command_config (
 );
 
 CREATE INDEX IF NOT EXISTS command_config_guild_id_idx ON command_config (guild_id);
-CREATE UNIQUE INDEX IF NOT EXISTS command_config_uniq_idx ON command_config (channel_id, name, whitelist);
