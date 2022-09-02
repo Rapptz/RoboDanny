@@ -978,7 +978,7 @@ class Mod(commands.Cog):
         reason = f'{user} (ID: {user.id}) migrated RoboMod join logs'
 
         config = await self.get_guild_config(guild_id)
-        if config and not config.requires_migration:
+        if config and config.broadcast_webhook_url is not None:
             # If someone's successfully migrated somehow, just return early
             # The message will hopefully edit.
             return
