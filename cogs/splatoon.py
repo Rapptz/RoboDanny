@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Literal, NamedTuple, Optional, TypedDict
 from typing_extensions import Annotated, NotRequired, Self
 
 from discord.ext import commands, menus
@@ -197,6 +197,14 @@ RESOURCE_TO_EMOJI = {
     'Unknown': '<:unknown:338815018101506049>',
 }
 
+
+def get_splatoon3_brands() -> list[str]:
+    with open('splatoon3.json', 'r', encoding='utf-8') as fp:
+        data: SplatoonConfig = json.load(fp)
+        return [d['name'] for d in data['brands']]
+
+
+SPLATOON_3_BRANDS = get_splatoon3_brands()
 SPLATOON_2_PINK = 0xF02D7D
 SPLATOON_2_GREEN = 0x19D719
 SPLATOON_3_YELLOW = 0xEAFF3D
@@ -255,6 +263,76 @@ class Gear:
         self.image = data.get('image')
         self.frequent_skill = data.get('frequent_skill')
         return self
+
+    def to_embed(self, cog: Splatoon) -> discord.Embed:
+        title = self.name.replace(' ', '_')
+        e = discord.Embed(colour=cog.random_colour(), title=self.name, url=f'https://splatoonwiki.org/wiki/{title}')
+
+        if self.image:
+            e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{self.image}')
+        else:
+            e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
+
+        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {self.price or "???"}')
+
+        UNKNOWN = RESOURCE_TO_EMOJI['Unknown']
+
+        main_slot = RESOURCE_TO_EMOJI.get(self.main or 'Unknown', UNKNOWN)
+        remaining = UNKNOWN * self.stars
+        e.add_field(name='Slots', value=f'{main_slot} | {remaining}')
+        e.add_field(name='Brand', value=self.brand)
+        if self.frequent_skill is not None:
+            common = self.frequent_skill
+        else:
+            brands: list[SplatoonConfigBrand] = cog.splat3_data.get('brands', [])
+            brand = discord.utils.find(lambda b: self.brand == b['name'], brands)
+            if brand is None:
+                common = 'Not found...'
+            else:
+                common = brand['buffed']
+
+        e.add_field(name='Common Gear Ability', value=common)
+        return e
+
+    def to_select_option(self, *, value: Any = discord.utils.MISSING) -> discord.SelectOption:
+        return discord.SelectOption(
+            label=self.name,
+            value=value,
+            description=f'{self.brand}, {plural(self.stars):star}, {self.price or "???"} cash',
+        )
+
+
+class GearPageSource(menus.ListPageSource):
+    def __init__(self, entries: list[Gear], cog: Splatoon) -> None:
+        super().__init__(entries=entries, per_page=1)
+        self.cog: Splatoon = cog
+
+    async def format_page(self, menu: RoboPages, page: Gear):
+        return page.to_embed(self.cog)
+
+
+class GearSelect(discord.ui.Select):
+    def __init__(self, gear: list[Gear], cog: Splatoon) -> None:
+        super().__init__(
+            placeholder=f'Choose gear... ({len(gear)} found)',
+            options=[g.to_select_option(value=str(i)) for i, g in enumerate(gear)],
+        )
+        self.gear: list[Gear] = gear
+        self.cog: Splatoon = cog
+
+    async def callback(self, interaction: discord.Interaction) -> Any:
+        index = int(self.values[0])
+        await interaction.response.edit_message(embed=self.gear[index].to_embed(self.cog))
+
+
+class GearQuery(commands.FlagConverter):
+    name: Optional[str] = commands.flag(description='The name of the gear')
+    brand: Optional[str] = commands.flag(description='The brand of the ability')
+    ability: Optional[str] = commands.flag(description='The main ability of the gear')
+    frequent: Optional[str] = commands.flag(description='The buffed ability of the gear')
+    type: Literal['hat', 'head', 'shoes', 'shirt', 'clothes', 'any'] = commands.flag(
+        description='The type of gear to search for', default='any'
+    )
 
 
 class Weapon:
@@ -1115,6 +1193,121 @@ class Splatoon(commands.GroupCog):
     async def weapon_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         weapons = self.query_weapons_autocomplete(current)[:25]
         return [app_commands.Choice(name=weapon.choice_name, value=weapon.name) for weapon in weapons]
+
+    def filter_gear_choices(
+        self,
+        query: Optional[str],
+        *,
+        brand: Optional[str] = None,
+        ability: Optional[str] = None,
+        frequent: Optional[str] = None,
+        type: Optional[Literal['hat', 'head', 'shoes', 'clothes', 'shirt']] = None,
+    ) -> list[Gear]:
+
+        predicates: list[Callable[[Gear], bool]] = []
+        if brand is not None:
+            predicates.append(lambda g: g.brand == brand)
+        if ability is not None:
+            predicates.append(lambda g: g.main == ability)
+        if frequent is not None:
+
+            def frequent_predicate(gear: Gear) -> bool:
+                if gear.frequent_skill is not None:
+                    return gear.frequent_skill == frequent
+
+                brands: list[SplatoonConfigBrand] = self.splat3_data['brands']
+                buffed = discord.utils.find(lambda d: d['buffed'] == frequent, brands)
+                return buffed is not None and gear.brand == buffed['name']
+
+            predicates.append(frequent_predicate)
+
+        gear: list[Gear]
+        if type is not None:
+            if type == 'hat':
+                type = 'head'
+            if type == 'shirt':
+                type = 'clothes'
+            gear = self.splat3_data.get(type, [])
+        else:
+            gear = self.splat3_data.get('head', []) + self.splat3_data.get('shoes', []) + self.splat3_data.get('clothes', [])
+
+        first_pass = [g for g in gear if all(pred(g) for pred in predicates)]
+        if not query:
+            return first_pass
+        return fuzzy.finder(query, first_pass, key=lambda g: g.name)
+
+    @commands.hybrid_command()
+    @app_commands.choices(
+        brand=[app_commands.Choice(name=b, value=b) for b in SPLATOON_3_BRANDS],
+        type=[
+            app_commands.Choice(name='Head', value='head'),
+            app_commands.Choice(name='Shoes', value='shoes'),
+            app_commands.Choice(name='Clothes', value='clothes'),
+        ],
+    )
+    async def gear(self, ctx: Context, *, query: GearQuery):
+        """Searches for Splatoon 3 gear that matches your query.
+
+        This command uses a syntax similar to Discord's search bar.
+
+        The following flags are valid.
+
+        `name:` include gear matching this name
+        `brand:` include gear with this brand
+        `ability:` include gear with this main ability
+        `frequent:` with the buffed main ability probability
+        `type:` with the type of clothing (head, hat, shoes, or clothes)
+
+        For example, a query like `ability: ink resist brand: splash mob` will give all
+        gear with Ink Resistance Up and Splash Mob as the brand.
+        """
+
+        results = self.filter_gear_choices(
+            query.name,
+            brand=fuzzy.find(query.brand, SPLATOON_3_BRANDS) if query.brand else None,
+            ability=fuzzy.find(query.ability, self.splat3_data['abilities']) if query.ability else None,
+            frequent=fuzzy.find(query.frequent, self.splat3_data['abilities']) if query.frequent else None,
+            type=None if query.type == 'any' else query.type,
+        )
+
+        if not results:
+            await ctx.send('No gear found... sorry')
+        elif len(results) == 1:
+            top = results[0]
+            await ctx.send(embed=top.to_embed(self))
+        elif len(results) <= 25:
+            view = discord.ui.View()
+            view.add_item(GearSelect(results, self))
+            await ctx.send(view=view, embed=results[0].to_embed(self))
+        else:
+            pages = RoboPages(GearPageSource(results, self), ctx=ctx)
+            await pages.start()
+
+    @gear.autocomplete('name')
+    async def gear_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        namespace = interaction.namespace
+        matches = self.filter_gear_choices(
+            current, brand=namespace.brand, ability=namespace.ability, frequent=namespace.frequent, type=namespace.type
+        )[:25]
+        return [app_commands.Choice(name=g.name, value=g.name) for g in matches]
+
+    @gear.autocomplete('ability')
+    @gear.autocomplete('frequent')
+    async def gear_ability_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        abilities = fuzzy.finder(current, self.splat3_data['abilities'])[:25]
+        return [app_commands.Choice(name=a, value=a) for a in abilities]
+
+    @gear.error
+    async def gear_error(self, ctx: Context, error: Exception):
+        if isinstance(error, commands.FlagError):
+            msg = (
+                "There were some problems with the flags you passed in. Please note that only the following flags work:\n"
+                "`name`, `brand`, `ability`, `frequent`, and `type`\n\n"
+                f"For example: {ctx.prefix}{ctx.invoked_with} brand: Splash Mob ability: Ink Resist"
+            )
+            await ctx.send(msg, ephemeral=True)
 
     @commands.hybrid_command()
     @app_commands.describe(games='The number of games to scrim for', mode='The mode to play in')
