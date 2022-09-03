@@ -1049,6 +1049,7 @@ class Todo(commands.Cog):
 
         if len(todos) == 0:
             await ctx.send('No todos found!', ephemeral=True)
+            return
 
         todos = [TodoItem(self, record) for record in todos]
         if flags.brief or ctx.invoked_with in ('brief', 'compact'):
