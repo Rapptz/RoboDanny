@@ -303,6 +303,8 @@ class TodoItem:
 
         if due_date is not MISSING:
             self.cog.check_for_task_resync(self.id, due_date)
+        elif completed_at is not MISSING:
+            self.cog.check_for_task_resync(self.id)
 
         for attr, value in columns.items():
             setattr(self, attr, value)
