@@ -501,8 +501,8 @@ class Buttons(commands.Cog):
         """Marks your post a spoiler with a title.
 
         Once your post is marked as a spoiler it will be
-        automatically deleted and the bot will DM those who
-        opt-in to view the spoiler.
+        automatically deleted and the bot will send a message
+        to those who opt-in to view the spoiler.
 
         The only media types supported are png, gif, jpeg, mp4,
         and webm.
