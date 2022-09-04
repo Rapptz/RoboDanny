@@ -241,7 +241,9 @@ class SpoilerView(discord.ui.View):
         cache = await self.cog.get_spoiler_cache(interaction.channel_id, interaction.message.id)
         if cache is not None:
             embed = cache.to_embed(self.cog.bot)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label='Jump to Spoiler', url=interaction.message.jump_url))
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         else:
             await interaction.response.send_message('Could not find this message in storage', ephemeral=True)
 
