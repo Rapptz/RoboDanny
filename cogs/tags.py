@@ -68,7 +68,7 @@ class TagName(commands.clean_content):
         if first_word in root.all_commands:
             raise commands.BadArgument('This tag name starts with a reserved word.')
 
-        return converted if not self.lower else lower
+        return converted.strip() if not self.lower else lower
 
 
 # Modals
