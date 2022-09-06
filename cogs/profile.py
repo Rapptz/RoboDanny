@@ -66,7 +66,7 @@ class DisambiguateMember(commands.IDConverter, app_commands.Transformer):
                 raise commands.BadArgument(f'Could not find this member. {e}') from None
 
         if result is None:
-            raise commands.BadArgument("Could not found this member. Note this is case sensitive.")
+            raise commands.BadArgument("Could not find this member. Note this is case sensitive.")
         return result
 
     @property
