@@ -43,11 +43,17 @@ carbon_key = '' # your bot's key on carbon's site
 bots_key = '' # your key on bots.discord.pw
 postgresql = 'postgresql://user:password@host/database' # your postgresql info from above
 challonge_api_key = '...' # for tournament cog
-stat_webhook = ('<webhook_id>','<webhook_token>') # a webhook to a channel for bot stats. 
-# when you generate your webhook, take the token and ID from the URL like so: 
+stat_webhook = ('<webhook_id>','<webhook_token>') # a webhook to a channel for bot stats.
+# when you generate your webhook, take the token and ID from the URL like so:
 # https://discord.com/api/webhooks/<id>/<token>
 ```
 
 6. **Configuration of database**
 
 To configure the PostgreSQL database for use by the bot, go to the directory where `launcher.py` is located, and run the script by doing `python3.8 launcher.py db init`
+
+## Privacy Policy and Terms of Service
+
+Discord requires me to make one of these.
+
+There isn't really anything to note. No personal data is stored.
