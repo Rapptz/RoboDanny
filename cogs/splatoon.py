@@ -1618,7 +1618,7 @@ class Splatoon(commands.GroupCog):
 
     @commands.hybrid_command()
     async def nextmaps(self, ctx: Context):
-        """Shows the next Splatoon 2 maps."""
+        """Shows the next Splatoon 3 maps."""
         e = discord.Embed(colour=SPLATOON_3_PURPLE, description='Nothing found...')
         if self.sp3_map_data is None:
             return await ctx.send(embed=e)
@@ -1653,7 +1653,7 @@ class Splatoon(commands.GroupCog):
 
     @commands.hybrid_command(aliases=['splatnetshop'])
     async def splatshop(self, ctx: Context):
-        """Shows the currently running SplatNet 2 merchandise."""
+        """Shows the currently running SplatNet 3 merchandise."""
         if not self.sp3_shop:
             return await ctx.send('Nothing currently being sold...')
 
