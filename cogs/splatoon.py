@@ -718,7 +718,7 @@ class Gear:
         typename = data['__typename']
         if typename == 'HeadGear':
             self.kind = 'head'
-        elif typename == 'ClothesGear':
+        elif typename == 'ClothingGear':
             self.kind = 'clothes'
         elif typename == 'ShoesGear':
             self.kind = 'shoes'
@@ -998,7 +998,7 @@ class MerchPageSource(menus.ListPageSource):
 
     def format_page(self, menu: RoboPages, merch: Merchandise):
         original_gear = None
-        data: SplatoonConfig = menu.ctx.cog.splat2_data  # type: ignore
+        data: SplatoonConfig = menu.ctx.cog.splat3_data  # type: ignore
 
         gear = merch.gear
         description = f'{time.human_timedelta(merch.end_time)} left to buy'
