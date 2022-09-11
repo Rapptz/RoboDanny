@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Callable, Literal, NamedTuple, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, NamedTuple, Optional, TypedDict, Union
 from typing_extensions import Annotated, NotRequired, Self
 
-from discord.ext import commands, menus
+from discord.ext import commands, menus, tasks
 from discord import app_commands
 from .utils import config, fuzzy, time
 from .utils.formats import plural
@@ -18,12 +18,15 @@ import asyncio
 import discord
 import logging
 import pathlib
+import base64
 import yarl
 import json
+import io
 
 if TYPE_CHECKING:
     from bot import RoboDanny
     from .utils.context import Context
+    import aiohttp
 
     # Splatoon 2 Config schema
 
@@ -66,61 +69,138 @@ if TYPE_CHECKING:
         brands: list[SplatoonConfigBrand]
         maps: list[str]
 
-    # SplatNet2 payloads (incomplete)
+    # SplatNet3 payloads (incomplete)
 
-    RotationKey = Literal['gachi', 'clam_bitz', 'tower_control', 'rainmaker', 'regular']
+    class ImagePayload(TypedDict):
+        url: str
 
-    class RotationStagePayload(TypedDict):
-        image: str
+    class StageStatsPayload(TypedDict):
+        winRateAr: Optional[float]
+        winRateLf: Optional[float]
+        winRateGl: Optional[float]
+        winRateCl: Optional[float]
+
+    class StagePayload(TypedDict):
         id: str
         name: str
+        coopStageId: NotRequired[int]
+        vsStageId: NotRequired[int]
+        image: NotRequired[ImagePayload]
+        thumbnailImage: NotRequired[ImagePayload]
+        originalImage: NotRequired[ImagePayload]
+        stats: NotRequired[Optional[StageStatsPayload]]
 
-    class RotationGameModePayload(TypedDict):
+    class WeaponPayload(TypedDict):
         name: str
-        key: RotationKey
+        image: ImagePayload
 
-    class RotationRulePayload(TypedDict):
-        key: RotationKey
-        multiline_name: str
+    class BasicEntityPayload(TypedDict):
+        """Used by a few things and they all more or less share this semantic in common"""
+
         name: str
-
-    class RotationPayload(TypedDict):
-        id: int
-        game_mode: RotationGameModePayload
-        end_time: int
-        start_time: int
-        rule: RotationRulePayload
-        stage_a: RotationStagePayload
-        stage_b: RotationStagePayload
-
-    class SchedulePayload(TypedDict):
-        gachi: list[RotationPayload]
-        regular: list[RotationPayload]
-        league: list[RotationPayload]
-
-    class SalmonRunStagePayload(TypedDict):
-        image: str
-        name: str
-
-    class SalmonRunInnerWeaponPayload(TypedDict):
-        thumbnail: str
         id: str
-        image: str
-        name: str
+        image: NotRequired[ImagePayload]
 
-    class SalmonRunWeaponPayload(TypedDict):
-        weapon: NotRequired[SalmonRunInnerWeaponPayload]
+    class VsRulePayload(TypedDict):
+        name: Literal['Turf War', 'Tower Control', 'Rainmaker', 'Splat Zones', 'Clam Blitz']
+        rule: Literal['TURF_WAR', 'LOFT', 'GOAL', 'AREA', 'CLAM']
         id: str
 
-    class SalmonRunDetailsPayload(TypedDict):
-        stage: SalmonRunStagePayload
-        start_time: int
-        end_time: int
-        weapons: list[SalmonRunWeaponPayload]
+    class BaseMatchSettingPayload(TypedDict):
+        vsStages: list[StagePayload]
+        vsRule: VsRulePayload
 
-    class SalmonRunPayload(TypedDict):
-        details: list[SalmonRunDetailsPayload]
-        schedules: list[dict[str, int]]
+    class RegularMatchSettingPayload(BaseMatchSettingPayload):
+        __isVsSetting: Literal['RegularMatchSetting']
+        __typename: Literal['RegularMatchSetting']
+
+    class RankedMatchSettingPayload(BaseMatchSettingPayload):
+        __isVsSetting: Literal['BankaraMatchSetting']
+        __typename: Literal['BankaraMatchSetting']
+        mode: Literal['OPEN', 'CHALLENGE']
+
+    class XMatchSettingPayload(BaseMatchSettingPayload):
+        __isVsSetting: Literal['XMatchSetting']
+        __typename: Literal['XMatchSetting']
+
+    class LeagueMatchSettingPayload(BaseMatchSettingPayload):
+        __isVsSetting: Literal['LeagueMatchSetting']
+        __typename: Literal['LeagueMatchSetting']
+
+    MatchSettingPayload = Union[
+        RegularMatchSettingPayload,
+        RankedMatchSettingPayload,
+        XMatchSettingPayload,
+        LeagueMatchSettingPayload,
+    ]
+
+    class BaseScheduleRotationPayload(TypedDict):
+        startTime: str
+        endTime: str
+        festMatchSetting: Literal[None]  # Unsure what this is atm
+
+    class RegularScheduleRotationPayload(BaseScheduleRotationPayload):
+        regularMatchSetting: RegularMatchSettingPayload
+
+    class RankedScheduleRotationPayload(BaseScheduleRotationPayload):
+        bankaraMatchSettings: list[RankedMatchSettingPayload]
+
+    class XScheduleRotationPayload(BaseScheduleRotationPayload):
+        xMatchSetting: XMatchSettingPayload
+
+    class LeagueScheduleRotationPayload(BaseScheduleRotationPayload):
+        leagueMatchSetting: LeagueMatchSettingPayload
+
+    ScheduleRotationPayload = Union[
+        RegularScheduleRotationPayload,
+        RankedScheduleRotationPayload,
+        XScheduleRotationPayload,
+        LeagueScheduleRotationPayload,
+    ]
+
+    class SalmonRunSettingPayload(TypedDict):
+        __typename: Literal['CoopNormalSetting']
+        coopStage: StagePayload
+        weapons: list[WeaponPayload]
+
+    class SalmonRunRotationPayload(BaseScheduleRotationPayload):
+        setting: SalmonRunSettingPayload
+
+    class GearPowerPayload(TypedDict):
+        name: str
+        image: ImagePayload
+        desc: NotRequired[str]
+
+    class BrandPayload(TypedDict):
+        id: str
+        name: str
+        image: ImagePayload
+        usualGearPower: NotRequired[GearPowerPayload]
+
+    class GearPayload(TypedDict):
+        __typename: Literal['HeadGear', 'ClothesGear', 'ShoesGear']
+        name: str
+        primaryGearPower: GearPowerPayload
+        additionalGearPowers: list[GearPowerPayload]
+        image: ImagePayload
+        brand: BrandPayload
+
+    class MerchandisePayload(TypedDict):
+        id: str
+        saleEndTime: str
+        price: int
+        gear: GearPayload
+
+    class PickupBrandPayload(TypedDict):
+        image: ImagePayload
+        brand: BrandPayload
+        saleEndTime: str
+        brandGears: list[MerchandisePayload]
+        nextBrand: BrandPayload
+
+    class SplatNetShopPayload(TypedDict):
+        pickupBrand: PickupBrandPayload
+        limitedGears: list[MerchandisePayload]
 
 
 log = logging.getLogger(__name__)
@@ -145,7 +225,269 @@ class GameEntry(NamedTuple):
 
 
 class Unauthenticated(Exception):
-    """Exception for when the iksm_session is expired"""
+    """Exception for when the iksm_session or session_token is expired"""
+
+
+class SplatNetError(Exception):
+    pass
+
+
+class SplatNet3:
+    """A wrapper for the SplatNet 3 API.
+
+    Parameters
+    -----------
+    session_token: :class:`str`
+        The token returned from ``/connect/1.0.0/api/session_token``.
+
+        This can only be recovered from manually doing the OAuth2 flow and
+        fetching the token manually. It acts as a refresh token in the OAuth2
+        flow.
+    session: :class:`aiohttp.ClientSession`
+        The session to use for making requests.
+    """
+
+    APP_VERSION = '2.2.0'  # TODO: get dynamically
+
+    def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
+        self.session_token = session_token
+        self.session: aiohttp.ClientSession = session
+        self.bullet_token: Optional[str] = None
+        self.access_token: Optional[str] = None
+        self.expires_in: Optional[datetime.datetime] = None
+
+    async def get_f_token(self, id_token: str, hash_method: int = 1) -> tuple[str, str, int]:
+        """Get the ``f`` token and the timestamp for the request.
+
+        Returns
+        --------
+        tuple[:class:`str`, :class:`str`, :class:`int`]
+            The ``f`` token, the request ID, and the timestamp.
+        """
+
+        headers = {
+            'User-Agent': 'RoboDanny/5.0.0',
+            'Content-Type': 'application/json; charset=utf-8',
+        }
+
+        payload = {
+            'token': id_token,
+            'hashMethod': hash_method,
+        }
+
+        async with self.session.post('https://api.imink.app/f', json=payload, headers=headers) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Failed to get f token (status code {resp.status})')
+
+            data = await resp.json()
+            return data['f'], data['request_id'], data['timestamp']
+
+    def is_expired(self) -> bool:
+        return self.expires_in is None or self.expires_in < datetime.datetime.utcnow()
+
+    async def refresh_expired_tokens(self) -> None:
+        payload = {
+            'client_id': '71b963c1b7b6d119',  # NSO app
+            'session_token': self.session_token,
+            'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer-session-token',
+        }
+
+        url = 'https://accounts.nintendo.com/connect/1.0.0/api/token'
+        headers = {
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 7.1.2; SM-G965N Build/N2G48H)',
+        }
+        async with self.session.post(url, json=payload, headers=headers) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Could not get OAuth2 token (status code {resp.status})')
+
+            token_response = await resp.json()
+
+        headers = {
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip',
+            'Accept-Language': 'en-US',
+            'Authorization': f'Bearer {token_response["access_token"]}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'NASDKAPI; Android',
+        }
+
+        async with self.session.get('https://api.accounts.nintendo.com/2.0.0/users/me', headers=headers) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Could not get user information (status code {resp.status})')
+
+            user_info = await resp.json()
+            log.info('Successfully got user info for account %s', user_info['nickname'])
+
+        url = 'https://api-lp1.znc.srv.nintendo.net/v3/Account/Login'
+        headers = {
+            'Accept-Encoding': 'gzip',
+            'Content-Type': 'application/json; charset=utf-8',
+            'User-Agent': f'com.nintendo.znca/{self.APP_VERSION}(Android/7.1.2)',
+            'X-Platform': 'Android',
+            'X-ProductVersion': self.APP_VERSION,
+        }
+
+        id_token = token_response['id_token']
+        f, request_id, timestamp = await self.get_f_token(id_token)
+
+        payload = {
+            'parameter': {
+                'naIdToken': id_token,
+                'naCountry': user_info['country'],
+                'naBirthday': user_info['birthday'],
+                'language': user_info['language'],
+                'f': f,
+                'timestamp': timestamp,
+                'requestId': request_id,
+            },
+        }
+
+        async with self.session.post(url, json=payload, headers=headers) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Could not get account login token (status code {resp.status})')
+
+            data = await resp.json()
+            if 'result' not in data:
+                raise SplatNetError(f'Could not get account login token (data: {data!r})')
+
+            new_access_token = data['result']['webApiServerCredential']['accessToken']
+
+        # if self.registration_token is None:
+        #     headers.pop('X-Platform', None)
+        #     headers.pop('X-ProductVersion', None)
+        #     headers['Authorization'] = f'Bearer {new_access_token}'
+
+        #     url = 'https://api-lp1.znc.srv.nintendo.net/v1/Notification/RegisterDevice'
+        #     async with self.session.post(url, headers=headers) as resp:
+        #         if resp.status >= 400:
+        #             raise SplatNetError(f'Could not get registration token (status code {resp.status})')
+
+        #         data = await resp.json()
+        #         self.registration_token = data['result']['registrationToken']
+
+        url = 'https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken'
+        headers = {
+            'Accept-Encoding': 'gzip',
+            'Authorization': f'Bearer {new_access_token}',
+            'Content-Type': 'application/json; charset=utf-8',
+            'User-Agent': f'com.nintendo.znca/{self.APP_VERSION}(Android/7.1.2)',
+            'X-Platform': 'Android',
+            'X-ProductVersion': self.APP_VERSION,
+        }
+
+        f, request_id, timestamp = await self.get_f_token(new_access_token, hash_method=2)
+        payload = {
+            'parameter': {
+                'id': '4834290508791808',
+                'registrationToken': new_access_token,
+                'f': f,
+                'requestId': request_id,
+                'timestamp': timestamp,
+            },
+        }
+
+        async with self.session.post(url, json=payload, headers=headers) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Could not get web service token (status code {resp.status})')
+
+            data = await resp.json()
+            expires_in = data['result']['expiresIn']
+            self.expires_in = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
+            self.access_token = data['result']['accessToken']
+
+        url = 'https://api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens'
+        cookies = {'_gtoken': self.access_token}
+        headers = {
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Language': 'en-US',
+            'Content-Type': 'application/json',
+            'Referer': 'https://api.lp1.av5ja.srv.nintendo.net/?lang=en-US&na_country=ES&na_lang=en-US',
+            'Origin': 'https://api.lp1.av5ja.srv.nintendo.net',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 7.1.2; SM-G965N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/92.0.4515.131 Mobile Safari/537.36',
+            'X-NACountry': 'US',
+            'X-Requested-With': 'com.nintendo.znca',
+            'X-Web-View-Ver': '1.0.0-5e2bcdfb',
+        }
+        async with self.session.post(url, headers=headers, cookies=cookies) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Could not get bullet token (status code {resp.status})')
+
+            data = await resp.json()
+            self.bullet_token = data['bulletToken']
+
+        log.info('Successfully authenticated to SplatNet 3 until %s', self.expires_in)
+
+    async def cached_graphql_query(
+        self, query_hash: str, *, version: int = 1, variables: dict[str, Any] | None = None
+    ) -> Any:
+        if self.is_expired():
+            log.info('SplatNet 3 authentication token has expired, refreshing...')
+            await self.refresh_expired_tokens()
+
+        url = 'https://api.lp1.av5ja.srv.nintendo.net/api/graphql'
+        cookies: dict[str, Any] = {'_gtoken': self.access_token}
+        headers = {
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Language': 'en-US',
+            'Content-Type': 'application/json',
+            'Origin': 'https://api.lp1.av5ja.srv.nintendo.net',
+            'Authorization': f'Bearer {self.bullet_token}',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 7.1.2; SM-G965N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/92.0.4515.131 Mobile Safari/537.36',
+            'X-NACountry': 'US',
+            'X-Requested-With': 'com.nintendo.znca',
+            'X-Web-View-Ver': '1.0.0-5e2bcdfb',
+        }
+
+        payload = {
+            'variables': variables or {},
+            'extensions': {
+                'persistedQuery': {
+                    'version': version,
+                    'sha256Hash': query_hash,
+                }
+            },
+        }
+
+        async with self.session.post(url, headers=headers, cookies=cookies, json=payload) as resp:
+            if resp.status >= 400:
+                raise SplatNetError(f'Could not get graphql query (hash: {query_hash} status code {resp.status})')
+
+            data = await resp.json()
+            return data
+
+    async def schedule(self) -> Optional[SplatNetSchedule]:
+        data = await self.cached_graphql_query('10e1d424391e78d21670227550b3509f')
+        data = data.get('data', {})
+        if not data:
+            return None
+        return SplatNetSchedule(data)
+
+    async def shop(self) -> Optional[SplatNetShopPayload]:
+        data = await self.cached_graphql_query('d08dbdd29f31471e61daa978feea697a')
+        data = data.get('data', {}).get('gesotown', {})
+        if not data:
+            return None
+        return data
+
+    async def latest_battles(self) -> dict[str, Any]:
+        # Too lazy to type this payload
+        data = await self.cached_graphql_query('7d8b560e31617e981cf7c8aa1ca13a00')
+        return data.get('data', {})
+
+    async def battle_info_for(self, id: str) -> dict[str, Any]:
+        data = await self.cached_graphql_query('cd82f2ade8aca7687947c5f3210805a6', variables={'vsResultId': id})
+        return data.get('data', {})
 
 
 class InvalidBrandOrAbility(commands.CommandError, app_commands.AppCommandError):
@@ -236,22 +578,118 @@ SPLATOON_3_SPECIAL_ABILITIES: dict[str, SpecialAbilityInfo] = {
 }
 
 
-class Rotation:
-    def __init__(self, data: RotationPayload):
-        self.mode: str = data['rule']['name']
-        self.stage_a: str = data['stage_a']['name']
-        self.stage_b: str = data['stage_b']['name']
+def fromisoformat(s: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(s.replace('Z', '+00:00'))
 
-        self.start_time: datetime.datetime = datetime.datetime.fromtimestamp(data['start_time'], tz=datetime.timezone.utc)
-        self.end_time: datetime.datetime = datetime.datetime.fromtimestamp(data['end_time'], tz=datetime.timezone.utc)
+
+class SplatNetSchedule:
+    __slots__ = (
+        'regular',
+        'ranked_series',
+        'ranked_open',
+        'league',
+        'x_rank',
+        'salmon_run',
+    )
+
+    VALID_NAMES = (
+        'regular',
+        'ranked_series',
+        'ranked_open',
+    )
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        turf_wars: list[RegularScheduleRotationPayload] = data.get('regularSchedules', {}).get('nodes', [])
+        self.regular: list[Rotation] = []
+        for payload in turf_wars:
+            start_time = fromisoformat(payload['startTime'])
+            end_time = fromisoformat(payload['endTime'])
+            inner = payload['regularMatchSetting']
+            stages = inner['vsStages']
+            rule = inner['vsRule']['name']
+            self.regular.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+
+        ranked: list[RankedScheduleRotationPayload] = data.get('bankaraSchedules', {}).get('nodes', [])
+        self.ranked_series: list[Rotation] = []
+        self.ranked_open: list[Rotation] = []
+        for payload in ranked:
+            start_time = fromisoformat(payload['startTime'])
+            end_time = fromisoformat(payload['endTime'])
+            inner = payload['bankaraMatchSettings']
+            for inner_setting in inner:
+                stages = inner_setting['vsStages']
+                rule = inner_setting['vsRule']['name']
+                mode = inner_setting['mode']
+                rotation = Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                if mode == 'OPEN':
+                    self.ranked_open.append(rotation)
+                elif mode == 'CHALLENGE':
+                    self.ranked_series.append(rotation)
+
+        league: list[LeagueScheduleRotationPayload] = data.get('leagueSchedules', {}).get('nodes', [])
+        self.league: list[Rotation] = []
+        for payload in league:
+            start_time = fromisoformat(payload['startTime'])
+            end_time = fromisoformat(payload['endTime'])
+            inner = payload['leagueMatchSetting']
+            stages = inner['vsStages']
+            rule = inner['vsRule']['name']
+            self.league.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+
+        x_rank: list[XScheduleRotationPayload] = data.get('xSchedules', {}).get('nodes', [])
+        self.x_rank: list[Rotation] = []
+        for payload in x_rank:
+            start_time = fromisoformat(payload['startTime'])
+            end_time = fromisoformat(payload['endTime'])
+            inner = payload['xMatchSetting']
+            stages = inner['vsStages']
+            rule = inner['vsRule']['name']
+            self.x_rank.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+
+        salmon_run: list[SalmonRunRotationPayload] = (
+            data.get('coopGroupingSchedule', {}).get('regularSchedules', {}).get('nodes', [])
+        )
+        self.salmon_run: list[SalmonRun] = [SalmonRun(data) for data in salmon_run]
+
+    def pairs(self) -> tuple[tuple[str, list[Rotation]], ...]:
+        return (
+            ('Anarchy Battle (Series)', self.ranked_series),
+            ('Anarchy Battle (Open)', self.ranked_open),
+            ('Regular Battle', self.regular),
+            # ('League', self.league),
+            # ('X Rank', self.x_rank),
+        )
+
+    @property
+    def soonest_expiry(self) -> Optional[datetime.datetime]:
+        expiry_times = []
+        for sequence in (self.regular, self.ranked_series, self.ranked_open, self.league, self.x_rank, self.salmon_run):
+            if sequence:
+                expiry_times.append(sequence[0].end_time)
+
+        try:
+            return min(expiry_times)
+        except ValueError:
+            return None
+
+
+class Rotation:
+    def __init__(
+        self, *, start_time: datetime.datetime, end_time: datetime.datetime, rule: str, stages: list[StagePayload]
+    ) -> None:
+        self.start_time: datetime.datetime = start_time
+        self.end_time: datetime.datetime = end_time
+        self.stage_a: str = stages[0]['name']
+        self.stage_b: str = stages[1]['name']
+        self.rule: str = rule
 
     @property
     def current(self) -> bool:
-        now = discord.utils.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
         return self.start_time <= now <= self.end_time
 
-    def get_generic_value(self) -> str:
-        return f'{self.stage_a} and {self.stage_b}'
+    def __repr__(self) -> str:
+        return f'<Rotation start={self.start_time} end={self.end_time} rule={self.rule} stage_a={self.stage_a!r} stage_b={self.stage_b!r}>'
 
 
 class Gear:
@@ -273,6 +711,31 @@ class Gear:
             self.frequent_skill = brand['frequent_skill']['name']
         except KeyError:
             self.frequent_skill = None
+
+    @classmethod
+    def from_splatnet3(cls, data: GearPayload) -> Self:
+        self = cls.__new__(cls)
+        typename = data['__typename']
+        if typename == 'HeadGear':
+            self.kind = 'head'
+        elif typename == 'ClothesGear':
+            self.kind = 'clothes'
+        elif typename == 'ShoesGear':
+            self.kind = 'shoes'
+        else:
+            self.kind = None
+        brand = data['brand']
+        self.brand = brand['name']
+        self.name = data['name']
+        self.stars = len(data['additionalGearPowers'])
+        if 'usualGearPower' in brand:
+            self.frequent_skill = brand['usualGearPower']['name']
+        else:
+            self.frequent_skill = None
+        self.main = data['primaryGearPower']['name']
+        self.price = None
+        self.image = data.get('image', {}).get('url')
+        return self
 
     @classmethod
     def from_json(cls, data: SplatoonConfigGear) -> Self:
@@ -428,37 +891,29 @@ class WeaponSelect(discord.ui.Select):
 
 
 class SalmonRun:
-    def __init__(self, data: SalmonRunDetailsPayload):
-        self.start_time: datetime.datetime = datetime.datetime.fromtimestamp(data['start_time'], tz=datetime.timezone.utc)
-        self.end_time: datetime.datetime = datetime.datetime.fromtimestamp(data['end_time'], tz=datetime.timezone.utc)
+    def __init__(self, data: SalmonRunRotationPayload):
+        self.start_time: datetime.datetime = fromisoformat(data['startTime'])
+        self.end_time: datetime.datetime = fromisoformat(data['endTime'])
 
-        stage = data.get('stage', {})
+        setting = data['setting']
+        stage = setting['coopStage']
+        weapons = setting['weapons']
         self.stage: str = stage.get('name')
-        self._image: Optional[str] = stage.get('image')
-        weapons = data.get('weapons')
-        self.weapons: list[str] = []
-        for weapon in weapons:
-            actual_weapon_data = weapon.get('weapon')
-            if actual_weapon_data is None:
-                name = 'Rare-only Mystery' if weapon['id'] == '-2' else 'Mystery'
-            else:
-                name = actual_weapon_data.get('name', 'Mystery')
-            self.weapons.append(name)
-
-    @property
-    def image(self) -> Optional[str]:
-        return self._image and f'https://app.splatoon2.nintendo.net{self._image}'
+        self.weapons: list[str] = [weapon.get('name', 'Unknown') for weapon in weapons]
+        self.image: Optional[str] = stage.get('image', {}).get('url')
 
 
 class SalmonRunPageSource(menus.ListPageSource):
-    def __init__(self, entries: list[SalmonRun]):
+    def __init__(self, cog: Splatoon, entries: list[SalmonRun]):
         super().__init__(entries=entries, per_page=1)
+        self.cog: Splatoon = cog
 
     async def format_page(self, menu: RoboPages, salmon: SalmonRun):
         e = discord.Embed(colour=0xFF7500, title='Salmon Run')
 
-        if salmon.image:
-            e.set_image(url=salmon.image)
+        image = self.cog.get_image_url_for(salmon.stage) or salmon.image
+        if image:
+            e.set_image(url=image)
 
         now = discord.utils.utcnow()
         if now <= salmon.start_time:
@@ -530,22 +985,22 @@ class Splatfest:
 
 
 class Merchandise:
-    def __init__(self, data):
-        self.gear = Gear(data['gear'])
-        self.skill = data['skill']['name']
+    def __init__(self, data: MerchandisePayload):
+        self.gear = Gear.from_splatnet3(data['gear'])
         self.price = data['price']
-        self.end_time = datetime.datetime.fromtimestamp(data['end_time'], tz=datetime.timezone.utc)
+        self.end_time = fromisoformat(data['saleEndTime'])
 
 
 class MerchPageSource(menus.ListPageSource):
-    def __init__(self, entries: list[Merchandise]):
+    def __init__(self, cog: Splatoon, entries: list[Merchandise]):
         super().__init__(entries=entries, per_page=1)
+        self.cog: Splatoon = cog
 
     def format_page(self, menu: RoboPages, merch: Merchandise):
         original_gear = None
         data: SplatoonConfig = menu.ctx.cog.splat2_data  # type: ignore
 
-        price, gear, skill = merch.price, merch.gear, merch.skill
+        gear = merch.gear
         description = f'{time.human_timedelta(merch.end_time)} left to buy'
         gears: list[Gear] = data.get(gear.kind, [])  # type: ignore
         for elem in gears:
@@ -555,16 +1010,17 @@ class MerchPageSource(menus.ListPageSource):
 
         e = discord.Embed(colour=SPLATOON_3_YELLOW, title=gear.name, description=description)
 
-        if gear.image:
-            e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{gear.image}')
+        image = self.cog.get_image_url_for(gear.name) or gear.image
+        if image:
+            e.set_thumbnail(url=image)
         else:
             e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
 
-        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {price or "???"}')
+        e.add_field(name='Price', value=f'{RESOURCE_TO_EMOJI["Money"]} {merch.price or "???"}')
 
         UNKNOWN = RESOURCE_TO_EMOJI['Unknown']
 
-        main_slot = RESOURCE_TO_EMOJI.get(skill, UNKNOWN)
+        main_slot = RESOURCE_TO_EMOJI.get(gear.main or UNKNOWN, UNKNOWN)
         remaining = UNKNOWN * gear.stars
         e.add_field(name='Slots', value=f'{main_slot} | {remaining}')
 
@@ -661,14 +1117,21 @@ def splatoon_decoder(obj: Any) -> Any:
 
 def mode_key(argument: str) -> str:
     lower = argument.lower().strip('"')
-    if lower.startswith('rank'):
-        return 'Ranked Battle'
+    if lower in SplatNetSchedule.VALID_NAMES:
+        return lower
+
+    if lower in ('ranked series', 'rank series', 'anarchy series'):
+        return 'ranked_series'
+    elif lower in ('ranked open', 'rank open', 'anarchy open', 'anarchy', 'rank', 'ranked'):
+        return 'ranked_open'
+    elif lower.startswith('series'):
+        return 'ranked_series'
     elif lower.startswith('turf') or lower.startswith('regular'):
-        return 'Regular Battle'
-    elif lower == 'league':
-        return 'League Battle'
+        return 'regular'
+    # elif lower == 'league':
+    #     return 'league'
     else:
-        raise commands.BadArgument('Unknown schedule type, try: "ranked", "regular", or "league"')
+        raise commands.BadArgument('Unknown schedule type, try: "ranked", "series", "turf", "regular", or "league"')
 
 
 class AddWeaponModal(discord.ui.Modal, title='Add New Weapon'):
@@ -731,15 +1194,15 @@ class AdminPanel(discord.ui.View):
 
         await modal.interaction.response.send_message(f'Successfully added new map {name}')
 
-    @discord.ui.button(label='Refresh iksm_session')
+    @discord.ui.button(label='Refresh session token')
     async def refresh_session(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = SimpleTextModal(title='Refresh Cookie', label='Cookie')
+        modal = SimpleTextModal(title='Refresh Session', label='Session Token')
+        modal.input.default = self.cog.splat3_data.get('session_token')
         await interaction.response.send_modal(modal)
         await modal.wait()
 
-        cookie = modal.input.value
-        await self.cog.splat2_data.put('iksm_session', cookie)
-        await modal.interaction.response.send_message(f'Successfully refreshed cookie', ephemeral=True)
+        await self.cog.refresh_splatnet_session(modal.input.value or None)
+        await modal.interaction.response.send_message(f'Successfully refreshed session token', ephemeral=True)
 
     @discord.ui.button(label='Exit', style=discord.ButtonStyle.red)
     async def exit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -760,21 +1223,20 @@ class Splatoon(commands.GroupCog):
         self.splat3_data: config.Config[Any] = config.Config(
             'splatoon3.json', object_hook=splatoon_decoder, encoder=SplatoonEncoder
         )
-        self._splatnet2: asyncio.Task[None] = asyncio.create_task(self.splatnet2())
+        self._splatnet3: asyncio.Task[None] = asyncio.create_task(self.splatnet3())
         self._last_request: datetime.datetime = discord.utils.utcnow()
 
         # mode: List[Rotation]
-        self.sp2_map_data: dict[str, list[Rotation]] = {}
-        self.sp2_shop: list[Merchandise] = []
-        self.sp2_festival: Optional[Splatfest] = None
-        self.sp2_salmonrun: list[SalmonRun] = []
+        self.splatnet: SplatNet3 = discord.utils.MISSING
+        self.sp3_map_data: Optional[SplatNetSchedule] = None
+        self.sp3_shop: list[Merchandise] = []
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='SquidPink', id=230079634086166530)
 
     def cog_unload(self):
-        self._splatnet2.cancel()
+        self._splatnet3.cancel()
 
     async def cog_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
@@ -784,8 +1246,10 @@ class Splatoon(commands.GroupCog):
 
     @property
     def salmon_run(self) -> list[SalmonRun]:
+        if self.sp3_map_data is None:
+            return []
         now = discord.utils.utcnow()
-        return [s for s in self.sp2_salmonrun if now < s.end_time]
+        return [s for s in self.sp3_map_data.salmon_run if now < s.end_time]
 
     def random_colour(self) -> int:
         return random.choice([SPLATOON_3_PURPLE, SPLATOON_3_YELLOW])
@@ -808,246 +1272,206 @@ class Splatoon(commands.GroupCog):
 
         await self.bot.stats_webhook.send(embed=e)
 
-    async def parse_splatnet2_schedule(self) -> Optional[float]:
-        self.sp2_map_data = {}
-        async with self.bot.session.get(self.BASE_URL / 'api/schedules') as resp:
-            if resp.status == 403:
-                raise Unauthenticated()
+    def find_all_images(
+        self, data: Mapping[str, Any], storage: list[tuple[str, str]] | None = None
+    ) -> list[tuple[str, str]]:
+        images = [] if storage is None else storage
+        if not isinstance(data, dict):
+            return []
 
-            if resp.status != 200:
-                await self.log_error(extra=f'Splatnet schedule responded with {resp.status}.')
-                return
+        if 'image' in data and isinstance(data['image'], dict) and 'url' in data['image'] and 'name' in data:
+            images.append((data['name'], data['image']['url']))
 
-            data = await resp.json()
-            gachi = data.get('gachi', [])
-            self.sp2_map_data['Ranked Battle'] = [Rotation(d) for d in gachi]
-            regular = data.get('regular', [])
-            self.sp2_map_data['Regular Battle'] = [Rotation(d) for d in regular]
+        for value in data.values():
+            if isinstance(value, dict):
+                self.find_all_images(value, images)
+            elif isinstance(value, list):
+                for item in value:
+                    self.find_all_images(item, images)
+        return images
 
-            league = data.get('league', [])
-            self.sp2_map_data['League Battle'] = [Rotation(d) for d in league]
-
-            newest = []
-            for key, value in self.sp2_map_data.items():
-                value.sort(key=lambda r: r.end_time)
-                try:
-                    newest.append(value[0].end_time)
-                except IndexError:
-                    pass
-
-            try:
-                new = max(newest)
-            except ValueError:
-                return
-
+    async def parse_splatnet3_schedule(self) -> Optional[float]:
+        self.sp3_map_data = schedule = await self.splatnet.schedule()
+        expiry = schedule and schedule.soonest_expiry
+        log.info('Successfully retrieved SplatNet 3 schedule')
+        if expiry:
             now = discord.utils.utcnow()
-            if now <= new:
-                return (new - now).total_seconds()
+            return (expiry - now).total_seconds()
+        return None
 
-    async def parse_splatnet2_onlineshop(self) -> Optional[float]:
-        self.sp2_shop = []
-        async with self.bot.session.get(self.BASE_URL / 'api/onlineshop/merchandises') as resp:
-            if resp.status == 403:
-                raise Unauthenticated()
+    async def parse_splatnet3_onlineshop(self) -> Optional[float]:
+        self.sp3_shop = []
+        payload = await self.splatnet.shop()
+        if payload is None:
+            log.info('No information retreived from SplatNet 3 online shop')
+            return None
 
-            if resp.status != 200:
-                await self.log_error(extra=f'Splatnet Shop responded with {resp.status}.')
-                return
+        log.info('Successfully retrieved SplatNet 3 online shop')
+        for item in payload.get('pickupBrand', {}).get('brandGears', []):
+            self.sp3_shop.append(Merchandise(item))
+        for item in payload.get('limitedGears', []):
+            self.sp3_shop.append(Merchandise(item))
 
-            data = await resp.json()
-            merch = data.get('merchandises')
-            if not merch:
-                return
+        await self.bulk_upload_images(self.find_all_images(payload))
 
-            dirty = False
-            for elem in merch:
-                try:
-                    value = Merchandise(elem)
-                except KeyError:
-                    pass
-                else:
-                    self.sp2_shop.append(value)
-
-                    # update our image cache
-                    kind = self.splat2_data.get(value.gear.kind, [])
-                    for gear in kind:
-                        if gear.name == value.gear.name:
-                            if not dirty:
-                                dirty = gear.image != value.gear.image
-                            gear.image = value.gear.image
-                            break
-
-            if dirty:
-                await self.splat2_data.save()
-
-            self.sp2_shop.sort(key=lambda m: m.end_time)
-            now = discord.utils.utcnow()
-
-            try:
-                end = self.sp2_shop[0].end_time
-                if now <= end:
-                    return (end - now).total_seconds()
-            except IndexError:
-                pass
-
-    def scrape_data_from_player(self, player: dict[str, Any], bulk: dict[str, Any]):
-        for kind in ('shoes', 'head', 'clothes'):
-            try:
-                gear = Gear(player[kind])
-            except KeyError:
-                continue
-            else:
-                bulk[kind][gear.name] = gear
-
-    async def scrape_splatnet_stats_and_images(self) -> Optional[float]:
-        bulk_lookup = defaultdict(dict)
-        async with self.bot.session.get(self.BASE_URL / 'api/results') as resp:
-            if resp.status == 403:
-                raise Unauthenticated()
-
-            if resp.status != 200:
-                await self.log_error(extra=f'Splatnet Stats responded with {resp.status}.')
-                return
-
-            data = await resp.json()
-            results = data['results']
-            base_path = pathlib.Path('splatoon2_stats')
-
-            newest = base_path / f'{results[0]["battle_number"]}.json'
-
-            # we already scraped, so try again in an hour
-            if newest.exists():
-                log.info('No Splatoon 2 result data to scrape, retrying in an hour.')
-                return
-
-            # I am sorry papa nintendo
-            pre_existing_statistics = sorted([int(p.stem) for p in base_path.iterdir()])
-            if pre_existing_statistics:
-                largest = pre_existing_statistics[-1]
-            else:
-                largest = 0
-
-            added = 0
-            for result in results:
-                try:
-                    number = result['battle_number']
-                except KeyError:
-                    continue
-
-                if int(number) <= largest:
-                    continue
-
-                # request the full information:
-                async with self.bot.session.get(resp.url / number) as r:
-                    if r.status != 200:
-                        extra = f'Splatoon Stat {number} responded with {r.status}.'
-                        await self.log_error(extra=extra)
-                        continue
-
-                    js = await r.json()
-
-                    # save our statistics
-                    path = base_path / f'{number}.json'
-                    with path.open('w', encoding='utf-8') as fp:
-                        json.dump(js, fp, indent=2)
-
-                    added += 1
-
-                    # add stuff to image cache
-                    for enemy in js.get('other_team_members', []):
-                        self.scrape_data_from_player(enemy.get('player', {}), bulk_lookup)
-
-                    me = js.get('player_result', {}).get('player', {})
-                    self.scrape_data_from_player(me, bulk_lookup)
-
-                    for team in js.get('my_team_members', []):
-                        self.scrape_data_from_player(team.get('player', {}), bulk_lookup)
-
-                await asyncio.sleep(1)  # one request a second so we don't abuse
-
-            log.info('Scraped Splatoon 2 results from %s games.', added)
-
-            # done with bulk lookups so actually change and save now:
-            for kind, data in bulk_lookup.items():
-                old = self.splat2_data.get(kind, [])
-                for gear in old:
-                    try:
-                        new_data = data.pop(gear.name)
-                    except KeyError:
-                        continue
-                    else:
-                        gear.image = new_data.image
-
-                # add new data
-                log.info('Scraped %s new pieces of %s gear.', len(data), kind)
-                for value in data.values():
-                    old.append(value)
-
-            await self.splat2_data.save()
-
-    async def parse_splatnet2_splatfest(self) -> Optional[float]:
-        self.sp2_festival = None
-        async with self.bot.session.get(self.BASE_URL / 'api/festivals/active') as resp:
-            if resp.status == 403:
-                raise Unauthenticated()
-
-            if resp.status != 200:
-                await self.log_error(extra=f'Splatnet Splatfest Error')
-                return
-
-            js = await resp.json()
-            festivals = js['festivals']
-            if len(festivals) == 0:
-                return
-
-            current = festivals[0]
-            self.sp2_festival = Splatfest(current)
-
-    async def parse_splatnet2_salmonrun(self):
-        self.sp2_salmonrun = []
-        async with self.bot.session.get(self.BASE_URL / 'api/coop_schedules') as resp:
-            if resp.status != 200:
-                await self.log_error(extra=f'Splatnet Salmon Run Error')
-                return
-
-            js = await resp.json()
-
-            data = js['details']
-            if len(data) == 0:
-                return
-
-            self.sp2_salmonrun = [SalmonRun(d) for d in data]
-            self.sp2_salmonrun.sort(key=lambda m: m.end_time)
-            now = discord.utils.utcnow()
-            end = self.sp2_salmonrun[0].end_time
-            return None if now > end else (end - now).total_seconds()
-
-    async def splatnet2(self):
+        self.sp3_shop.sort(key=lambda x: x.end_time)
         try:
-            cookie = self.splat2_data.get('iksm_session')
-            if cookie is None:
+            expiry = self.sp3_shop[0].end_time
+        except IndexError:
+            return None
+        else:
+            now = discord.utils.utcnow()
+            return (expiry - now).total_seconds()
+
+    async def scrape_splatnet3_stats_and_images(self) -> Optional[float]:
+        data = await self.splatnet.latest_battles()
+        if not data:
+            return None
+
+        groups = data.get('latestBattleHistories', {}).get('historyGroups', {}).get('nodes', [])
+        if not groups:
+            return
+
+        base_path = pathlib.Path('splatoon3_stats')
+        previous_battles = {p.stem for p in base_path.glob('*.json')}
+
+        def parse_battle_id(x: str) -> str:
+            # The battle ID seems to be a base64 encoded string
+            # Format is something like...
+            # VsHistoryDetail-u-ankjipxt57ytvacvlnmm:RECENT:<time>_<uuid>
+            # We only really care about the part after RECENT:
+            # I'm unsure if this format will change in the future however, so just in case do a fallback
+            try:
+                decoded = base64.b64decode(x)
+            except:
+                return x
+            else:
+                _, _, filename = decoded.decode('utf-8').partition(':RECENT:')
+                return filename or x
+
+        new_entries = 0
+        images = []
+        for group in groups:
+            battles = group.get('historyDetails', {}).get('nodes', [])
+            for battle in battles:
+                raw_battle_id = battle.get('id')
+                if raw_battle_id is None:
+                    continue
+
+                battle_id = parse_battle_id(raw_battle_id)
+                if battle_id in previous_battles:
+                    continue
+
+                # Sorry for the spam nintendo
+                info = await self.splatnet.battle_info_for(raw_battle_id)
+                file = base_path / f'{battle_id}.json'
+                with file.open('w', encoding='utf-8') as f:
+                    json.dump(info, f, indent=2, ensure_ascii=False)
+
+                previous_battles.add(battle_id)
+                new_entries += 1
+
+                images.extend(self.find_all_images(info))
+                await asyncio.sleep(3)
+
+        await self.bulk_upload_images(images)
+        if new_entries:
+            log.info('Scraped Splatoon 3 results from %s games.', new_entries)
+        else:
+            log.info('No Splatoon 3 result data to scrape, retrying in an hour.')
+
+    async def get_or_save_image(self, key: str, url: str) -> Optional[str]:
+        attachments = self.splat3_data.get('attachments', {})
+        if key in attachments:
+            return attachments[key]
+
+        channel = self.bot.get_partial_messageable(1018160199749615696)
+        async with self.bot.session.get(url) as resp:
+            if resp.status != 200:
+                await self.log_error(extra=f'Image [{key}]({url}) responded with {resp.status}.')
+                return
+
+            data = await resp.read()
+            fp = io.BytesIO(data)
+            msg = await channel.send(file=discord.File(fp, filename=f'{key}.png'))
+            attachments[key] = url = msg.attachments[0].url
+            await self.splat3_data.put('attachments', attachments)
+            return url
+
+    def get_image_url_for(self, key: str) -> Optional[str]:
+        attachments = self.splat3_data.get('attachments', {})
+        return attachments.get(key)
+
+    async def bulk_upload_images(self, images: list[tuple[str, str]]) -> None:
+        if not images:
+            return
+
+        channel = self.bot.get_partial_messageable(1018160199749615696)
+        attachments = self.splat3_data.get('attachments', {})
+        new_images = 0
+        for chunk in discord.utils.as_chunks(images, 10):
+            files: list[discord.File] = []
+            for key, url in chunk:
+                if key in attachments:
+                    continue
+
+                async with self.bot.session.get(url) as resp:
+                    if resp.status != 200:
+                        await self.log_error(extra=f'Image [{key}]({url}) responded with {resp.status}.')
+                        continue
+
+                    data = await resp.read()
+                    fp = io.BytesIO(data)
+                    files.append(discord.File(fp, filename=f'{key}.png'))
+
+            if files:
+                msg = await channel.send(files=files)
+                new_images += len(files)
+                for file, attachment in zip(files, msg.attachments):
+                    attachments[file.filename[:-4]] = attachment.url
+
+        if new_images:
+            await self.splat3_data.put('attachments', attachments)
+            log.info('Successfully scraped and uploaded %s images from SplatNet 3.', new_images)
+
+
+    async def refresh_splatnet_session(self, session_token: Optional[str]) -> None:
+        config = self.splat3_data.all()
+        config['session_token'] = session_token
+        await self.splat3_data.save()
+        self._splatnet3.cancel()
+        self._splatnet3 = self.bot.loop.create_task(self.splatnet3())
+
+    async def splatnet3(self) -> None:
+        try:
+            session_token = self.splat3_data.get('session_token')
+            if session_token is None:
                 raise Unauthenticated()
 
-            self.bot.session.cookie_jar.update_cookies({'iksm_session': cookie}, response_url=self.BASE_URL)
+            self.splatnet = SplatNet3(session_token, session=self.bot.session)
+            await self.splatnet.refresh_expired_tokens()
+
             while not self.bot.is_closed():
                 seconds = []
-                seconds.append((await self.parse_splatnet2_schedule()) or 3600.0)
-                seconds.append((await self.parse_splatnet2_onlineshop()) or 3600.0)
-                seconds.append((await self.parse_splatnet2_salmonrun()) or 3600.0)
-                seconds.append((await self.scrape_splatnet_stats_and_images()) or 3600.0)
-                seconds.append((await self.parse_splatnet2_splatfest()) or 3600.0)
+                seconds.append((await self.parse_splatnet3_schedule()) or 3600.0)
+                seconds.append((await self.parse_splatnet3_onlineshop()) or 3600.0)
+                seconds.append((await self.scrape_splatnet3_stats_and_images()) or 3600.0)
                 self._last_request = discord.utils.utcnow()
+                log.info('SplatNet 3 sleeping for %s seconds.', min(seconds))
                 await asyncio.sleep(min(seconds))
         except Unauthenticated:
             await self.log_error(extra=f'Unauthenticated for SplatNet')
             raise
+        except SplatNetError:
+            await self.log_error(extra=f'Unauthenticated for SplatNet (internal error)')
+            raise Unauthenticated()
         except asyncio.CancelledError:
             raise
         except (OSError, discord.ConnectionClosed):
-            self._splatnet2.cancel()
-            self._splatnet2 = self.bot.loop.create_task(self.splatnet2())
+            self._splatnet3.cancel()
+            self._splatnet3 = self.bot.loop.create_task(self.splatnet3())
         except Exception:
-            await self.log_error(extra='SplatNet 2 Error')
+            await self.log_error(extra='SplatNet 3 Error')
 
     def get_weapons_named(self, name: str) -> list[Weapon]:
         data: list[Weapon] = self.splat3_data.get('weapons', [])
@@ -1118,68 +1542,89 @@ class Splatoon(commands.GroupCog):
             else:
                 await ctx.send(f'An error has occurred of status code {resp.status} happened.')
 
-    async def generic_splatoon2_schedule(self, ctx: Context):
-        e = discord.Embed(colour=self.random_colour())
+    async def generic_splatoon3_schedule(self, ctx: Context):
+        if self.sp3_map_data is None:
+            return await ctx.send('Sorry, no map data has been found yet.')
+
         end_time = None
+        e = discord.Embed(colour=SPLATOON_3_PURPLE)
 
-        for key, value in self.sp2_map_data.items():
-            try:
-                rotation = value[0]
-            except IndexError:
-                e.add_field(name=key, value='Nothing found...', inline=False)
+        for name, rotations in self.sp3_map_data.pairs():
+            if not rotations:
+                e.add_field(name=name, value='Nothing found...')
                 continue
-            else:
-                end_time = rotation.end_time
 
-            e.add_field(name=f'{key}: {rotation.mode}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
+            rotation = rotations[0]
+            end_time = rotation.end_time
 
-        if end_time is not None:
-            e.title = f'For {time.human_timedelta(end_time)}...'
+            e.add_field(name=f'{name}: {rotation.rule}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
+
+        if end_time:
+            e.title = f'Ends {discord.utils.format_dt(end_time, "R")}'
 
         await ctx.send(embed=e)
 
-    async def paginated_splatoon2_schedule(self, ctx: Context, mode: str):
-        try:
-            data = self.sp2_map_data[mode]
-        except KeyError:
+    async def paginated_splatoon3_schedule(self, ctx: Context, mode: str):
+        rotations: list[Rotation] = getattr(self.sp3_map_data, mode, [])
+        if not rotations:
             return await ctx.send('Sorry, no map data found...')
+
+        mode_to_kind = {
+            'regular': 'Regular Battle',
+            'ranked_series': 'Anarchy Battle (Series)',
+            'ranked_open': 'Anarchy Battle (Open)',
+            'league': 'League Battle',
+            'x_rank': 'X Rank',
+        }
+
+        kind = mode_to_kind.get(mode, 'Unknown')
 
         entries = [
             (
-                f'Now: {r.mode}' if r.current else f'In {time.human_timedelta(r.start_time)}: {r.mode}',
+                f'Now: {r.rule}' if r.current else f'{discord.utils.format_dt(r.start_time, "R")}: {r.rule}',
                 f'{r.stage_a} and {r.stage_b}',
             )
-            for r in data
+            for r in rotations
         ]
 
         p = FieldPageSource(entries, per_page=4)
-        p.embed.colour = 0xF02D7D
+        mode_to_colour = {
+            'regular': 0xCFF622,
+            'ranked_series': 0xF54910,
+            'ranked_open': 0xF54910,
+            'league': 0xF02D7D,
+            'x_rank': 0xF54910,
+        }
+        p.embed.colour = mode_to_colour.get(mode, 0xCFF622)
+        p.embed.title = kind
         menu = RoboPages(p, ctx=ctx, compact=True)
         await menu.start()
 
     @commands.hybrid_command(aliases=['maps'])
     @app_commands.choices(
         type=[
-            app_commands.Choice(name='Ranked Battle', value='rank'),
-            app_commands.Choice(name='Turf War', value='turf'),
-            app_commands.Choice(name='League Battle', value='league'),
+            app_commands.Choice(name='Anarchy Battle (Series)', value='ranked_series'),
+            app_commands.Choice(name='Anarchy Battle (Open)', value='ranked_open'),
+            app_commands.Choice(name='Turf War', value='regular'),
         ]
     )
     @app_commands.describe(type='The type of schedule to show')
     async def schedule(self, ctx, *, type: Annotated[Optional[str], mode_key] = None):
-        """Shows the current Splatoon 2 schedule."""
+        """Shows the current Splatoon 3 schedule."""
         if type is None:
-            await self.generic_splatoon2_schedule(ctx)
+            await self.generic_splatoon3_schedule(ctx)
         else:
-            await self.paginated_splatoon2_schedule(ctx, type)
+            await self.paginated_splatoon3_schedule(ctx, type)
 
     @commands.hybrid_command()
     async def nextmaps(self, ctx: Context):
         """Shows the next Splatoon 2 maps."""
-        e = discord.Embed(colour=self.random_colour(), description='Nothing found...')
+        e = discord.Embed(colour=SPLATOON_3_PURPLE, description='Nothing found...')
+        if self.sp3_map_data is None:
+            return await ctx.send(embed=e)
 
         start_time = None
-        for key, value in self.sp2_map_data.items():
+        for key, value in self.sp3_map_data.pairs():
             try:
                 rotation = value[1]
             except IndexError:
@@ -1189,10 +1634,10 @@ class Splatoon(commands.GroupCog):
                 start_time = rotation.start_time
                 e.description = None
 
-            e.add_field(name=f'{key}: {rotation.mode}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
+            e.add_field(name=f'{key}: {rotation.rule}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
 
         if start_time is not None:
-            e.title = f'In {time.human_timedelta(start_time)}'
+            e.title = f'Starts {discord.utils.format_dt(start_time, "R")}'
 
         await ctx.send(embed=e)
 
@@ -1203,25 +1648,23 @@ class Splatoon(commands.GroupCog):
         if not salmon:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        pages = RoboPages(SalmonRunPageSource(salmon), ctx=ctx, compact=True)
+        pages = RoboPages(SalmonRunPageSource(self, salmon), ctx=ctx, compact=True)
         await pages.start()
 
     @commands.hybrid_command(aliases=['splatnetshop'])
     async def splatshop(self, ctx: Context):
         """Shows the currently running SplatNet 2 merchandise."""
-        if not self.sp2_shop:
+        if not self.sp3_shop:
             return await ctx.send('Nothing currently being sold...')
 
-        pages = RoboPages(MerchPageSource(self.sp2_shop), ctx=ctx, compact=True)
+        pages = RoboPages(MerchPageSource(self, self.sp3_shop), ctx=ctx, compact=True)
         await pages.start()
 
     @commands.hybrid_command()
     async def splatfest(self, ctx: Context):
         """Shows information about the currently running NA Splatfest, if any."""
-        if self.sp2_festival is None:
-            return await ctx.send('No Splatfest has been announced.')
-
-        await ctx.send(embed=self.sp2_festival.embed())
+        # TODO: Temporary until reverse engineer in the future
+        await ctx.send('No Splatfest has been announced.')
 
     @commands.hybrid_command()
     @app_commands.describe(query='The weapon name, sub, or special to search for')
@@ -1442,12 +1885,12 @@ class Splatoon(commands.GroupCog):
         """Administration panel for Splatoon configuration"""
 
         e = discord.Embed(colour=self.random_colour(), title='Splatoon Cog Administration')
-        splatnet = not self._splatnet2.done()
-        unauthed = self._splatnet2.done() and isinstance(self._splatnet2.exception(), Unauthenticated)
+        splatnet = not self._splatnet3.done()
+        unauthed = self._splatnet3.done() and isinstance(self._splatnet3.exception(), Unauthenticated)
 
-        e.add_field(name='SplatNet 2 Running', value=ctx.tick(splatnet), inline=True)
-        e.add_field(name='SplatNet 2 Authenticated', value=ctx.tick(not unauthed), inline=True)
-        e.add_field(name='Last SplatNet 2 Request', value=time.format_dt(self._last_request, 'R'), inline=False)
+        e.add_field(name='SplatNet 3 Running', value=ctx.tick(splatnet), inline=True)
+        e.add_field(name='SplatNet 3 Authenticated', value=ctx.tick(not unauthed), inline=True)
+        e.add_field(name='Last SplatNet 3 Request', value=time.format_dt(self._last_request, 'R'), inline=False)
 
         await ctx.send(embed=e, view=AdminPanel(self))
 
