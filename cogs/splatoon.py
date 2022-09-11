@@ -525,6 +525,7 @@ RESOURCE_TO_EMOJI = {
     'Last-Ditch Effort': '<:lastditcheffort:1018636394429694042>',
     'Ninja Squid': '<:ninjasquid:1018634355788238938>',
     'Object Shredder': '<:objectshredder:1018636395281141880>',
+    'Opening Gambit': '<:openinggambit:1018642746413686875>',
     'Quick Respawn': '<:quickrespawn:1018636396140957808>',
     'Quick Super Jump': '<:quicksuperjump:1018636397038538873>',
     'Respawn Punisher': '<:respawnpunisher:1018636397923532891>',
