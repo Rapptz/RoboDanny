@@ -1280,18 +1280,20 @@ class Splatoon(commands.GroupCog):
         self, data: Mapping[str, Any], storage: list[tuple[str, str]] | None = None
     ) -> list[tuple[str, str]]:
         images = [] if storage is None else storage
-        if not isinstance(data, dict):
-            return []
 
-        if 'image' in data and isinstance(data['image'], dict) and 'url' in data['image'] and 'name' in data:
-            images.append((data['name'], data['image']['url']))
+        if 'name' in data:
+            for key in ('image', 'originalImage'):
+                if key in data and isinstance(data[key], dict) and 'url' in data[key]:
+                    images.append((data['name'], data[key]['url']))
+                    break
 
         for value in data.values():
             if isinstance(value, dict):
                 self.find_all_images(value, images)
             elif isinstance(value, list):
                 for item in value:
-                    self.find_all_images(item, images)
+                    if isinstance(item, dict):
+                        self.find_all_images(item, images)
         return images
 
     async def parse_splatnet3_schedule(self) -> Optional[float]:
