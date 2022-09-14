@@ -51,7 +51,7 @@ class LoggingHandler(logging.Handler):
         super().__init__(logging.INFO)
 
     def filter(self, record: logging.LogRecord) -> bool:
-        valid_record_name = record.name in ('bot', 'discord.gateway') or (
+        valid_record_name = record.name == 'discord.gateway' or (
             record.name not in ('cogs.dbots', 'cogs.stats') and record.name.startswith('cogs.')
         )
         return valid_record_name or 'Shard ID' in record.msg or 'Websocket closed ' in record.msg
