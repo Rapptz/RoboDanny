@@ -73,7 +73,7 @@ class RoboDanny(commands.AutoShardedBot):
     command_stats: Counter[str]
     socket_stats: Counter[str]
     command_types_used: Counter[bool]
-    gateway_handler: Any
+    logging_handler: Any
     bot_app_info: discord.AppInfo
 
     def __init__(self):

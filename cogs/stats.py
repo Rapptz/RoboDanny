@@ -45,13 +45,16 @@ class DataBatchEntry(TypedDict):
     app_command: bool
 
 
-class GatewayHandler(logging.Handler):
+class LoggingHandler(logging.Handler):
     def __init__(self, cog: Stats):
         self.cog: Stats = cog
         super().__init__(logging.INFO)
 
     def filter(self, record: logging.LogRecord) -> bool:
-        return record.name == 'discord.gateway' or 'Shard ID' in record.msg or 'Websocket closed ' in record.msg
+        valid_record_name = record.name in ('bot', 'discord.gateway') or (
+            record.name not in ('cogs.dbots', 'cogs.stats') and record.name.startswith('cogs.')
+        )
+        return valid_record_name or 'Shard ID' in record.msg or 'Websocket closed ' in record.msg
 
     def emit(self, record: logging.LogRecord) -> None:
         self.cog.add_record(record)
@@ -85,8 +88,8 @@ class Stats(commands.Cog):
         self._data_batch: list[DataBatchEntry] = []
         self.bulk_insert_loop.add_exception_type(asyncpg.PostgresConnectionError)
         self.bulk_insert_loop.start()
-        self._gateway_queue = asyncio.Queue()
-        self.gateway_worker.start()
+        self._logging_queue = asyncio.Queue()
+        self.logging_worker.start()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -117,7 +120,7 @@ class Stats(commands.Cog):
 
     def cog_unload(self):
         self.bulk_insert_loop.stop()
-        self.gateway_worker.cancel()
+        self.logging_worker.cancel()
 
     @tasks.loop(seconds=10.0)
     async def bulk_insert_loop(self):
@@ -125,9 +128,9 @@ class Stats(commands.Cog):
             await self.bulk_insert()
 
     @tasks.loop(seconds=0.0)
-    async def gateway_worker(self):
-        record = await self._gateway_queue.get()
-        await self.notify_gateway_status(record)
+    async def logging_worker(self):
+        record = await self._logging_queue.get()
+        await self.send_log_record(record)
 
     async def register_command(self, ctx: Context) -> None:
         if ctx.command is None:
@@ -696,15 +699,22 @@ class Stats(commands.Cog):
     def add_record(self, record: logging.LogRecord) -> None:
         # if self.bot.config.debug:
         #     return
-        self._gateway_queue.put_nowait(record)
+        self._logging_queue.put_nowait(record)
 
-    async def notify_gateway_status(self, record: logging.LogRecord) -> None:
+    async def send_log_record(self, record: logging.LogRecord) -> None:
         attributes = {'INFO': '\N{INFORMATION SOURCE}', 'WARNING': '\N{WARNING SIGN}'}
 
         emoji = attributes.get(record.levelname, '\N{CROSS MARK}')
         dt = datetime.datetime.utcfromtimestamp(record.created)
-        msg = textwrap.shorten(f'{emoji} [{time.format_dt(dt)}] `{record.message}`', width=1990)
-        await self.webhook.send(msg, username='Gateway', avatar_url='https://i.imgur.com/4PnCKB3.png')
+        msg = textwrap.shorten(f'{emoji} {time.format_dt(dt)} {record.message}', width=1990)
+        if record.name == 'discord.gateway':
+            username = 'Gateway'
+            avatar_url = 'https://i.imgur.com/4PnCKB3.png'
+        else:
+            username = f'{record.name} Logger'
+            avatar_url = discord.utils.MISSING
+
+        await self.webhook.send(msg, username=username, avatar_url=avatar_url)
 
     @commands.command(hidden=True)
     @commands.is_owner()
@@ -1135,12 +1145,12 @@ async def setup(bot: RoboDanny):
 
     cog = Stats(bot)
     await bot.add_cog(cog)
-    bot.gateway_handler = handler = GatewayHandler(cog)
+    bot.logging_handler = handler = LoggingHandler(cog)
     logging.getLogger().addHandler(handler)
     commands.AutoShardedBot.on_error = on_error
 
 
 async def teardown(bot: RoboDanny):
     commands.AutoShardedBot.on_error = old_on_error
-    logging.getLogger().removeHandler(bot.gateway_handler)
-    del bot.gateway_handler
+    logging.getLogger().removeHandler(bot.logging_handler)
+    del bot.logging_handler
