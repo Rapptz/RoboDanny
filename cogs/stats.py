@@ -54,7 +54,7 @@ class LoggingHandler(logging.Handler):
         valid_record_name = record.name == 'discord.gateway' or (
             record.name not in ('cogs.dbots', 'cogs.stats') and record.name.startswith('cogs.')
         )
-        return valid_record_name or 'Shard ID' in record.msg or 'Websocket closed ' in record.msg
+        return valid_record_name
 
     def emit(self, record: logging.LogRecord) -> None:
         self.cog.add_record(record)
