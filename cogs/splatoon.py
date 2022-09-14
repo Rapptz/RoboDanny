@@ -285,7 +285,7 @@ class SplatNet3:
     def is_expired(self) -> bool:
         return self.expires_in is None or self.expires_in < datetime.datetime.utcnow()
 
-    async def refresh_expired_tokens(self, *, retried: bool = False) -> None:
+    async def refresh_expired_tokens(self, *, retries: int = 0) -> None:
         payload = {
             'client_id': '71b963c1b7b6d119',  # NSO app
             'session_token': self.session_token,
@@ -331,6 +331,7 @@ class SplatNet3:
         }
 
         id_token = token_response['id_token']
+        await asyncio.sleep(3)
         f, request_id, timestamp = await self.get_f_token(id_token)
 
         payload = {
@@ -351,10 +352,10 @@ class SplatNet3:
 
             data = await resp.json()
             if 'result' not in data:
-                if data.get('status', None) == 9403 and not retried:
-                    log.info('Got an invalid SplatNet 3 token error, retrying once in a minute...')
-                    await asyncio.sleep(60)
-                    return await self.refresh_expired_tokens(retried=True)
+                if data.get('status', None) == 9403 and retries < 5:
+                    log.info('Got an invalid SplatNet 3 token error, retrying again in a minute...')
+                    await asyncio.sleep(30)
+                    return await self.refresh_expired_tokens(retries=retries + 1)
                 raise SplatNetError(f'Could not get account login token (data: {data!r})')
 
             new_access_token = data['result']['webApiServerCredential']['accessToken']
@@ -382,6 +383,7 @@ class SplatNet3:
             'X-ProductVersion': self.APP_VERSION,
         }
 
+        await asyncio.sleep(3)
         f, request_id, timestamp = await self.get_f_token(new_access_token, hash_method=2)
         payload = {
             'parameter': {
