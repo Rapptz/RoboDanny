@@ -539,7 +539,7 @@ class Admin(commands.Cog):
 
         await ctx.send(f'Status: {ctx.tick(success)} Time: {(end - start) * 1000:.2f}ms')
 
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     @commands.is_owner()
     @commands.guild_only()
     async def sync(self, ctx: GuildContext, guild_id: Optional[int], copy: bool = False) -> None:
