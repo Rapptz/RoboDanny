@@ -353,7 +353,7 @@ class SplatNet3:
             data = await resp.json()
             if 'result' not in data:
                 if data.get('status', None) == 9403 and retries < 5:
-                    log.info('Got an invalid SplatNet 3 token error, retrying again in a minute...')
+                    log.info('Got an invalid SplatNet 3 token error, retrying again in 30 seconds...')
                     await asyncio.sleep(30)
                     return await self.refresh_expired_tokens(retries=retries + 1)
                 raise SplatNetError(f'Could not get account login token (data: {data!r})')
@@ -400,6 +400,13 @@ class SplatNet3:
                 raise SplatNetError(f'Could not get web service token (status code {resp.status})')
 
             data = await resp.json()
+            if 'result' not in data:
+                if data.get('status', None) == 9403 and retries < 5:
+                    log.info('Got an invalid SplatNet 3 web service token error, retrying again in 30 seconds...')
+                    await asyncio.sleep(30)
+                    return await self.refresh_expired_tokens(retries=retries + 1)
+                raise SplatNetError(f'Could not get web service token (status code {resp.status})')
+
             expires_in = data['result']['expiresIn']
             self.expires_in = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
             self.access_token = data['result']['accessToken']
@@ -1441,7 +1448,6 @@ class Splatoon(commands.GroupCog):
         if new_images:
             await self.splat3_data.put('attachments', attachments)
             log.info('Successfully scraped and uploaded %s images from SplatNet 3.', new_images)
-
 
     async def refresh_splatnet_session(self, session_token: Optional[str]) -> None:
         config = self.splat3_data.all()
