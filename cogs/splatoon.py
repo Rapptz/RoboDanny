@@ -20,6 +20,7 @@ import logging
 import pathlib
 import base64
 import yarl
+import math
 import json
 import io
 
@@ -106,6 +107,52 @@ if TYPE_CHECKING:
         rule: Literal['TURF_WAR', 'LOFT', 'GOAL', 'AREA', 'CLAM']
         id: str
 
+    class VsModePayload(TypedDict):
+        mode: Literal['BANKARA', 'REGULAR']
+        id: str
+
+    class ColourPayload(TypedDict):
+        r: int
+        g: int
+        b: int
+        a: NotRequired[int]
+
+    class BadgePayload(TypedDict):
+        id: str
+        image: ImagePayload
+
+    class NameplateBackgroundPayload(TypedDict):
+        id: str
+        image: ImagePayload
+        textColor: ColourPayload
+
+    class NameplatePayload(TypedDict):
+        badges: list[BadgePayload]
+        background: NameplateBackgroundPayload
+
+    class PlayerResultPayload(TypedDict):
+        kill: int
+        death: int
+        assist: int
+        special: int
+        noroshiTry: Optional[int]  # Looks like the tricolour thing
+
+    class PlayerPayload(TypedDict):
+        __isPlayer: Literal['VsPlayer']
+        byname: str
+        isMyself: bool
+        weapon: WeaponPayload
+        species: Literal['INKLING', 'OCTOLING']
+        name: str
+        nameId: str
+        nameplate: NameplatePayload
+        id: str
+        headGear: GearPayload
+        clothingGear: GearPayload
+        shoesGear: GearPayload
+        paint: int
+        result: NotRequired[PlayerResultPayload]
+
     class BaseMatchSettingPayload(TypedDict):
         vsStages: list[StagePayload]
         vsRule: VsRulePayload
@@ -179,10 +226,12 @@ if TYPE_CHECKING:
 
     class GearPayload(TypedDict):
         __typename: Literal['HeadGear', 'ClothesGear', 'ShoesGear']
+        __isGear: NotRequired[Literal['HeadGear', 'ClothesGear', 'ShoesGear']]
         name: str
         primaryGearPower: GearPowerPayload
         additionalGearPowers: list[GearPowerPayload]
         image: ImagePayload
+        originalImage: NotRequired[ImagePayload]
         brand: BrandPayload
 
     class MerchandisePayload(TypedDict):
@@ -201,6 +250,31 @@ if TYPE_CHECKING:
     class SplatNetShopPayload(TypedDict):
         pickupBrand: PickupBrandPayload
         limitedGears: list[MerchandisePayload]
+
+    class TeamPayload(TypedDict):
+        color: ColourPayload
+        judgement: Literal['WIN', 'LOSE', 'DRAW']
+        players: list[PlayerPayload]
+        order: int
+
+    class AwardPayload(TypedDict):
+        name: str
+        rank: Literal['GOLD', 'SILVER']
+
+    # Very partially typed
+    class VsHistoryDetailPayload(TypedDict):
+        __typename: Literal['VsHistoryDetail']
+        id: str
+        vsRule: VsRulePayload
+        vsMode: VsModePayload
+        # player: PlayerPayload # This is technically partial so idc about it
+        judgement: Literal['WIN', 'LOSE', 'DRAW']
+        myTeam: TeamPayload
+        vsStage: StagePayload
+        otherTeams: list[TeamPayload]
+        awards: list[AwardPayload]
+        duration: int
+        playedTime: str
 
 
 log = logging.getLogger(__name__)
@@ -1069,6 +1143,125 @@ class MerchPageSource(menus.ListPageSource):
         return e
 
 
+class SplatNetPlayer:
+    def __init__(self, payload: PlayerPayload) -> None:
+        self.name: str = payload['name']
+        self.discriminator: str = payload['nameId']
+        self.byname: str = payload['byname']
+        self.me: bool = payload.get('isMyself', False)
+        weapon = payload['weapon']
+        self.weapon: str = weapon['name']
+        self.special: str = weapon.get('specialWeapon', {}).get('name', 'Unknown')
+        self.paint: int = payload['paint']
+        results = payload['result']
+        self.kills: Optional[int] = results and results.get('kill')
+        self.deaths: Optional[int] = results and results.get('death')
+        self.assists: Optional[int] = results and results.get('assist')
+        self.specials: Optional[int] = results and results.get('special')
+
+    @property
+    def score(self) -> str:
+        scores = []
+        if self.paint is None:
+            scores.append('0p')
+        else:
+            scores.append(f'{self.paint}p')
+
+        if self.kills is None:
+            scores.append('--')
+        else:
+            if self.assists:
+                scores.append(f'x{self.kills}<{self.assists}>')
+            else:
+                scores.append(f'x{self.kills}')
+
+        if self.deaths is None:
+            scores.append('--')
+        else:
+            scores.append(f'x{self.deaths}')
+
+        if self.specials is None:
+            scores.append('--')
+        else:
+            scores.append(f'[x{self.specials}](https://dis.gd/ "{self.special}")')
+
+        return ' '.join(scores)
+
+    @property
+    def display_name(self) -> str:
+        name = f'({self.weapon}) {self.name}'
+        if self.me:
+            return f'**{name}**'
+        return name
+
+
+def payload_to_colour(payload: ColourPayload) -> discord.Colour:
+    return discord.Colour.from_rgb(
+        math.floor(payload['r'] * 255), math.floor(payload['g'] * 255), math.floor(payload['b'] * 255)
+    )
+
+
+class SplatNetTeam:
+    def __init__(self, payload: TeamPayload) -> None:
+        self.judgement: str = payload['judgement']
+        self.colour: discord.Colour = payload_to_colour(payload['color'])
+        result = payload.get('result', {})
+        self.score: int = result.get('score', 0)
+        self.paint_ratio: Optional[float] = result.get('paintRatio')
+        self.order: int = payload['order']
+        self.players: list[SplatNetPlayer] = [SplatNetPlayer(p) for p in payload['players']]
+
+
+class SplatNetBattleInfo:
+    def __init__(self, payload: VsHistoryDetailPayload) -> None:
+        self.mode: str = payload['vsRule']['name']
+        self.judgement: str = payload['judgement']
+        self.stage: str = payload['vsStage']['name']
+        self.my_team: SplatNetTeam = SplatNetTeam(payload['myTeam'])
+        self.other_teams: list[SplatNetTeam] = [SplatNetTeam(t) for t in payload['otherTeams']]
+        self.timestamp: datetime.datetime = fromisoformat(payload['playedTime'])
+        self.awards: list[AwardPayload] = payload.get('awards', [])
+        bankara_match = payload.get('bankaraMatch')
+        self.ranked_mode: Optional[str] = bankara_match and bankara_match.get('mode')
+
+    def is_recent(self) -> bool:
+        now = discord.utils.utcnow()
+        return self.timestamp + datetime.timedelta(minutes=1) > now
+
+    def to_embed(self) -> discord.Embed:
+        e = discord.Embed(
+            colour=self.my_team.colour,
+            title=f'{self.mode}: {self.judgement}',
+        )
+        e.set_author(name=self.stage)
+        teams = [self.my_team] + self.other_teams
+        teams.sort(key=lambda t: t.order)
+        for team in teams:
+            names = '\n'.join(p.display_name for p in team.players)
+            scores = '\n'.join(p.score for p in team.players)
+            if team.paint_ratio is not None:
+                title = f'{team.judgement} ({team.paint_ratio * 100:.2%})'
+            else:
+                title = team.judgement
+
+            e.add_field(name=title, value=names, inline=True)
+            e.add_field(name='\u200b', value='\u200b', inline=True)
+            e.add_field(name='K/D/S', value=scores, inline=True)
+
+        e.timestamp = self.timestamp
+        if self.ranked_mode is not None:
+            if self.ranked_mode == 'CHALLENGE':
+                e.set_footer(text='Anarchy Battle (Series)')
+            else:
+                e.set_footer(text='Anarchy Battle (Open)')
+
+        if self.awards:
+            medals = '\n'.join(a['name'] if a['rank'] != 'GOLD' else f'\N{SPORTS MEDAL} {a["name"]}' for a in self.awards)
+            e.add_field(name='Awards', value=medals)
+
+        return e
+
+
 class BrandOrAbility:
     def __init__(self, *, name: str, brand: bool) -> None:
         self.name: str = name
@@ -1243,6 +1436,7 @@ class Splatoon(commands.GroupCog):
         self.splatnet: SplatNet3 = discord.utils.MISSING
         self.sp3_map_data: Optional[SplatNetSchedule] = None
         self.sp3_shop: list[Merchandise] = []
+        self._last_battle: Optional[VsHistoryDetailPayload] = None
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -1263,6 +1457,12 @@ class Splatoon(commands.GroupCog):
             return []
         now = discord.utils.utcnow()
         return [s for s in self.sp3_map_data.salmon_run if now < s.end_time]
+
+    @property
+    def last_battle(self) -> Optional[SplatNetBattleInfo]:
+        if self._last_battle is None:
+            return None
+        return SplatNetBattleInfo(self._last_battle)
 
     def random_colour(self) -> int:
         return random.choice([SPLATOON_3_PURPLE, SPLATOON_3_YELLOW])
@@ -1366,6 +1566,8 @@ class Splatoon(commands.GroupCog):
 
         new_entries = 0
         images = []
+        newest_raw_battle_id = None
+        first_battle = True
         for group in groups:
             battles = group.get('historyDetails', {}).get('nodes', [])
             for battle in battles:
@@ -1373,12 +1575,19 @@ class Splatoon(commands.GroupCog):
                 if raw_battle_id is None:
                     continue
 
+                if newest_raw_battle_id is None:
+                    newest_raw_battle_id = raw_battle_id
+
                 battle_id = parse_battle_id(raw_battle_id)
                 if battle_id in previous_battles:
                     continue
 
                 # Sorry for the spam nintendo
                 info = await self.splatnet.battle_info_for(raw_battle_id)
+                if self._last_battle is None or first_battle:
+                    self._last_battle = info.get('vsHistoryDetail')
+
+                first_battle = False
                 file = base_path / f'{battle_id}.json'
                 with file.open('w', encoding='utf-8') as f:
                     json.dump(info, f, indent=2, ensure_ascii=False)
@@ -1388,6 +1597,11 @@ class Splatoon(commands.GroupCog):
 
                 images.extend(self.find_all_images(info))
                 await asyncio.sleep(3)
+
+        # Load the latest battle through cache if it's not found
+        if self._last_battle is None and newest_raw_battle_id is not None:
+            with open(base_path / f'{parse_battle_id(newest_raw_battle_id)}.json', 'r', encoding='utf-8') as f:
+                self._last_battle = json.load(f).get('vsHistoryDetail')
 
         await self.bulk_upload_images(images)
         if new_entries:
@@ -1907,6 +2121,22 @@ class Splatoon(commands.GroupCog):
         e.add_field(name='Last SplatNet 3 Request', value=time.format_dt(self._last_request, 'R'), inline=False)
 
         await ctx.send(embed=e, view=AdminPanel(self))
+
+    @commands.command(hidden=True, aliases=['lastbattle'])
+    @commands.is_owner()
+    async def lastgame(self, ctx: Context):
+        """Shows the last game that was played"""
+
+        async with ctx.typing():
+            last_battle = self.last_battle
+            if last_battle is None or not last_battle.is_recent():
+                await self.scrape_splatnet3_stats_and_images()
+                last_battle = self.last_battle
+
+            if last_battle is None:
+                return await ctx.send('No game has been played yet..?')
+
+            await ctx.send(embed=last_battle.to_embed())
 
 
 async def setup(bot: RoboDanny):
