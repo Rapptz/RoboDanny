@@ -95,13 +95,13 @@ if TYPE_CHECKING:
     class ProfileExtras(TypedDict):
         sp1_rank: str
         sp2_rank: dict[Literal['Rainmaker', 'Tower Control', 'Splat Zones', 'Clam Blitz'], ProfileExtraRank]
-        sp3_rank: dict[Literal['Rainmaker', 'Tower Control', 'Splat Zones', 'Clam Blitz'], ProfileExtraRank]
+        sp3_rank: dict[Literal['All', 'Rainmaker', 'Tower Control', 'Splat Zones', 'Clam Blitz'], ProfileExtraRank]
         sp1_weapon: SplatoonConfigWeapon
         sp2_weapon: SplatoonConfigWeapon
         sp3_weapon: SplatoonConfigWeapon
 
 
-_rank = re.compile(r'^(?P<mode>\w+(?:\s*\w+)?)\s*(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
+_rank = re.compile(r'^(?P<rank>[AaBbCcSsXx][\+-]?)\s*(?P<number>[0-9]{0,4})$')
 
 
 class SplatoonRank:
@@ -114,32 +114,6 @@ class SplatoonRank:
         if m is None:
             raise commands.BadArgument('Could not figure out mode or rank.')
 
-        mode = m.group('mode')
-        valid = {
-            'zones': 'Splat Zones',
-            'splat zones': 'Splat Zones',
-            'sz': 'Splat Zones',
-            'zone': 'Splat Zones',
-            'splat': 'Splat Zones',
-            'tower': 'Tower Control',
-            'control': 'Tower Control',
-            'tc': 'Tower Control',
-            'tower control': 'Tower Control',
-            'rain': 'Rainmaker',
-            'rainmaker': 'Rainmaker',
-            'rain maker': 'Rainmaker',
-            'rm': 'Rainmaker',
-            'clam blitz': 'Clam Blitz',
-            'clam': 'Clam Blitz',
-            'blitz': 'Clam Blitz',
-            'cb': 'Clam Blitz',
-        }
-
-        try:
-            mode = valid[mode.lower()]
-        except KeyError:
-            raise commands.BadArgument(f'Unknown Splatoon 3 mode: {mode}') from None
-
         rank = m.group('rank').upper()
         if rank == 'S-':
             rank = 'S'
@@ -149,10 +123,10 @@ class SplatoonRank:
             value = int(number)
             if value and rank not in ('S+', 'X'):
                 raise commands.BadArgument('Only S+ or X can input numbers.')
-            if rank == 'S+' and value > 10:
-                raise commands.BadArgument('S+10 is the current cap.')
+            if rank == 'S+' and value > 50:
+                raise commands.BadArgument('S+50 is the current cap.')
 
-        self.mode = mode
+        self.mode = 'All'
         self.rank = rank
         self.number = number
 
@@ -413,15 +387,7 @@ class Profile(commands.Cog):
     @profile.command(usage='<mode> <rank>')
     @app_commands.describe(ranking='Your Splatoon 3 ranking')
     async def rank(self, ctx: Context, *, ranking: SplatoonRank):
-        """Sets the Splatoon 3 rank part of your profile.
-
-        You set the rank on a per mode basis, such as
-
-        - tc/tower control
-        - rm/rainmaker
-        - sz/splat zones/zones
-        - cb/clam/blitz/clam blitz
-        """
+        """Sets the Splatoon 3 rank part of your profile."""
 
         query = """INSERT INTO profiles (id, extra)
                    VALUES ($1, $2::jsonb)
@@ -435,7 +401,7 @@ class Profile(commands.Cog):
                 """
 
         await ctx.db.execute(query, ctx.author.id, ranking.to_dict())
-        await ctx.send(f'Successfully set {ranking.mode} rank to {ranking.rank}{ranking.number}.')
+        await ctx.send(f'Successfully set Splatoon 3 rank to {ranking.rank}{ranking.number}.')
 
     @profile.command()
     @app_commands.choices(
@@ -446,11 +412,7 @@ class Profile(commands.Cog):
             app_commands.Choice(value='3ds', name='3DS Friend Code'),
             app_commands.Choice(value='squad', name='Squad'),
             app_commands.Choice(value='weapon', name='Weapon'),
-            app_commands.Choice(value='rank', name='All Rankings'),
-            app_commands.Choice(value='tower control rank', name='Tower Control Rank'),
-            app_commands.Choice(value='splat zones rank', name='Splat Zones Rank'),
-            app_commands.Choice(value='rainmaker rank', name='Rainmaker Rank'),
-            app_commands.Choice(value='clam blitz rank', name='Clam Blitz Rank'),
+            app_commands.Choice(value='rank', name='Rank'),
         ]
     )
     @app_commands.describe(field='The field to delete from your profile. If not given then your entire profile is deleted.')
@@ -466,10 +428,6 @@ class Profile(commands.Cog):
             'squad',
             'weapon',
             'rank',
-            'tower control rank',
-            'splat zones rank',
-            'rainmaker rank',
-            'clam blitz rank',
         ] = 'all',
     ):
         """Deletes a field from your profile.
@@ -483,10 +441,6 @@ class Profile(commands.Cog):
         - squad
         - weapon
         - rank
-        - tower control rank
-        - splat zones rank
-        - rainmaker rank
-        - clam blitz rank
 
         Omitting a field will delete your entire profile.
         """
@@ -522,13 +476,6 @@ class Profile(commands.Cog):
             query = "UPDATE profiles SET extra = extra - $1 WHERE id=$2;"
             await ctx.db.execute(query, key, ctx.author.id)
             return await ctx.send(f'Successfully deleted {field} field.')
-
-        # a little more complicated
-        mode = field.replace(' rank', '').title()
-        query = "UPDATE profiles SET extra = extra #- $1::text[] WHERE id=$2;"
-        key = ['sp3_rank', mode]
-        await ctx.db.execute(query, key, ctx.author.id)
-        await ctx.send(f'Successfully deleted {mode} ranking.')
 
     @profile.command()
     @app_commands.describe(query='The search query, must be at least 3 characters')
@@ -610,26 +557,21 @@ class Profile(commands.Cog):
         e.add_field(name='Top Splatoon 3 Weapons', value=value, inline=False)
 
         # get ranked data
-        for index, mode in enumerate(('Splat Zones', 'Tower Control', 'Rainmaker', 'Clam Blitz')):
-            query = f"""SELECT extra #> '{{sp3_rank,{mode},rank}}' AS "Rank",
-                               COUNT(*) AS "Total"
-                        FROM profiles
-                        WHERE extra #> '{{sp3_rank,{mode},rank}}' IS NOT NULL
-                        GROUP BY extra #> '{{sp3_rank,{mode},rank}}'
-                        ORDER BY "Total" DESC
-                     """
+        query = f"""SELECT extra #> '{{sp3_rank,All,rank}}' AS "Rank",
+                        COUNT(*) AS "Total"
+                    FROM profiles
+                    WHERE extra #> '{{sp3_rank,All,rank}}' IS NOT NULL
+                    GROUP BY extra #> '{{sp3_rank,All,rank}}'
+                    ORDER BY "Total" DESC
+                """
 
-            records = await ctx.db.fetch(query)
-            total = sum(r['Total'] for r in records)
+        records = await ctx.db.fetch(query)
+        total = sum(r['Total'] for r in records)
 
-            value = f'*{total} players*\n' + '\n'.join(
-                f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records
-            )
-            e.add_field(name=mode, value=value, inline=True)
-
-            # add some empty padding so the embed doesn't look ugly
-            if index % 2 == 1:
-                e.add_field(name='\u200b', value='\u200b', inline=True)
+        value = f'*{total} players*\n' + '\n'.join(
+            f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records
+        )
+        e.add_field(name='Splatoon 3 Rank Distribution', value=value, inline=True)
 
         await ctx.send(embed=e)
 
