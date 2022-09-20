@@ -329,6 +329,7 @@ class SplatNet3:
         self.bullet_token: Optional[str] = None
         self.access_token: Optional[str] = None
         self.expires_in: Optional[datetime.datetime] = None
+        self.user_info: Optional[dict[str, Any]] = None
 
     async def get_f_token(self, id_token: str, hash_method: int = 1) -> tuple[str, str, int]:
         """Get the ``f`` token and the timestamp for the request.
@@ -346,7 +347,7 @@ class SplatNet3:
 
         payload = {
             'token': id_token,
-            'hashMethod': hash_method,
+            'hash_method': hash_method,
         }
 
         async with self.session.post('https://api.imink.app/f', json=payload, headers=headers) as resp:
@@ -388,12 +389,15 @@ class SplatNet3:
             'User-Agent': 'NASDKAPI; Android',
         }
 
-        async with self.session.get('https://api.accounts.nintendo.com/2.0.0/users/me', headers=headers) as resp:
-            if resp.status >= 400:
-                raise SplatNetError(f'Could not get user information (status code {resp.status})')
+        if self.user_info is None:
+            async with self.session.get('https://api.accounts.nintendo.com/2.0.0/users/me', headers=headers) as resp:
+                if resp.status >= 400:
+                    raise SplatNetError(f'Could not get user information (status code {resp.status})')
 
-            user_info = await resp.json()
-            log.info('Successfully got user info for account %s', user_info['nickname'])
+                self.user_info = user_info = await resp.json()
+                log.info('Successfully got user info for account %s', user_info['nickname'])
+        else:
+            user_info = self.user_info
 
         url = 'https://api-lp1.znc.srv.nintendo.net/v3/Account/Login'
         headers = {
