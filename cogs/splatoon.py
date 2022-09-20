@@ -1153,11 +1153,11 @@ class SplatNetPlayer:
         self.weapon: str = weapon['name']
         self.special: str = weapon.get('specialWeapon', {}).get('name', 'Unknown')
         self.paint: int = payload['paint']
-        results = payload['result']
-        self.kills: Optional[int] = results and results.get('kill')
-        self.deaths: Optional[int] = results and results.get('death')
-        self.assists: Optional[int] = results and results.get('assist')
-        self.specials: Optional[int] = results and results.get('special')
+        results = payload.get('result') or {}
+        self.kills: Optional[int] = results.get('kill')
+        self.deaths: Optional[int] = results.get('death')
+        self.assists: Optional[int] = results.get('assist')
+        self.specials: Optional[int] = results.get('special')
 
     @property
     def score(self) -> str:
@@ -1205,7 +1205,7 @@ class SplatNetTeam:
     def __init__(self, payload: TeamPayload) -> None:
         self.judgement: str = payload['judgement']
         self.colour: discord.Colour = payload_to_colour(payload['color'])
-        result = payload.get('result', {})
+        result = payload.get('result') or {}
         self.score: int = result.get('score', 0)
         self.paint_ratio: Optional[float] = result.get('paintRatio')
         self.order: int = payload['order']
