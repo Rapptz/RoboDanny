@@ -174,6 +174,10 @@ if TYPE_CHECKING:
         __isVsSetting: Literal['LeagueMatchSetting']
         __typename: Literal['LeagueMatchSetting']
 
+    class FestMatchSettingPayload(BaseMatchSettingPayload):
+        __isVsSetting: Literal['FestMatchSetting']
+        __typename: Literal['FestMatchSetting']
+
     MatchSettingPayload = Union[
         RegularMatchSettingPayload,
         RankedMatchSettingPayload,
@@ -184,7 +188,7 @@ if TYPE_CHECKING:
     class BaseScheduleRotationPayload(TypedDict):
         startTime: str
         endTime: str
-        festMatchSetting: Literal[None]  # Unsure what this is atm
+        festMatchSetting: Optional[FestMatchSettingPayload]
 
     class RegularScheduleRotationPayload(BaseScheduleRotationPayload):
         regularMatchSetting: RegularMatchSettingPayload
@@ -681,6 +685,7 @@ class SplatNetSchedule:
         'league',
         'x_rank',
         'salmon_run',
+        'splatfest',
     )
 
     VALID_NAMES = (
@@ -696,9 +701,21 @@ class SplatNetSchedule:
             start_time = fromisoformat(payload['startTime'])
             end_time = fromisoformat(payload['endTime'])
             inner = payload['regularMatchSetting']
-            stages = inner['vsStages']
-            rule = inner['vsRule']['name']
-            self.regular.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+            if inner is not None:
+                stages = inner['vsStages']
+                rule = inner['vsRule']['name']
+                self.regular.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+
+        splatfest: list[BaseScheduleRotationPayload] = data.get('festSchedules', {}).get('nodes', [])
+        self.splatfest: list[Rotation] = []
+        for payload in splatfest:
+            start_time = fromisoformat(payload['startTime'])
+            end_time = fromisoformat(payload['endTime'])
+            inner = payload.get('festMatchSetting')
+            if inner is not None:
+                stages = inner['vsStages']
+                rule = inner['vsRule']['name']
+                self.splatfest.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
 
         ranked: list[RankedScheduleRotationPayload] = data.get('bankaraSchedules', {}).get('nodes', [])
         self.ranked_series: list[Rotation] = []
@@ -706,7 +723,7 @@ class SplatNetSchedule:
         for payload in ranked:
             start_time = fromisoformat(payload['startTime'])
             end_time = fromisoformat(payload['endTime'])
-            inner = payload['bankaraMatchSettings']
+            inner = payload['bankaraMatchSettings'] or []
             for inner_setting in inner:
                 stages = inner_setting['vsStages']
                 rule = inner_setting['vsRule']['name']
@@ -723,9 +740,10 @@ class SplatNetSchedule:
             start_time = fromisoformat(payload['startTime'])
             end_time = fromisoformat(payload['endTime'])
             inner = payload['leagueMatchSetting']
-            stages = inner['vsStages']
-            rule = inner['vsRule']['name']
-            self.league.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+            if inner is not None:
+                stages = inner['vsStages']
+                rule = inner['vsRule']['name']
+                self.league.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
 
         x_rank: list[XScheduleRotationPayload] = data.get('xSchedules', {}).get('nodes', [])
         self.x_rank: list[Rotation] = []
@@ -733,9 +751,10 @@ class SplatNetSchedule:
             start_time = fromisoformat(payload['startTime'])
             end_time = fromisoformat(payload['endTime'])
             inner = payload['xMatchSetting']
-            stages = inner['vsStages']
-            rule = inner['vsRule']['name']
-            self.x_rank.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+            if inner is not None:
+                stages = inner['vsStages']
+                rule = inner['vsRule']['name']
+                self.x_rank.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
 
         salmon_run: list[SalmonRunRotationPayload] = (
             data.get('coopGroupingSchedule', {}).get('regularSchedules', {}).get('nodes', [])
@@ -743,6 +762,9 @@ class SplatNetSchedule:
         self.salmon_run: list[SalmonRun] = [SalmonRun(data) for data in salmon_run]
 
     def pairs(self) -> tuple[tuple[str, list[Rotation]], ...]:
+        if self.splatfest:
+            return (('Splatfest', self.splatfest),)
+
         return (
             ('Anarchy Battle (Series)', self.ranked_series),
             ('Anarchy Battle (Open)', self.ranked_open),
@@ -1338,10 +1360,14 @@ def mode_key(argument: str) -> str:
         return 'ranked_series'
     elif lower.startswith('turf') or lower.startswith('regular'):
         return 'regular'
+    elif lower.startswith(('fest', 'splatfest')):
+        return 'splatfest'
     # elif lower == 'league':
     #     return 'league'
     else:
-        raise commands.BadArgument('Unknown schedule type, try: "ranked", "series", "turf", "regular", or "league"')
+        raise commands.BadArgument(
+            'Unknown schedule type, try: "ranked", "series", "turf", "regular", "splatfest", or "league"'
+        )
 
 
 class AddWeaponModal(discord.ui.Modal, title='Add New Weapon'):
@@ -1838,6 +1864,7 @@ class Splatoon(commands.GroupCog):
             app_commands.Choice(name='Anarchy Battle (Series)', value='ranked_series'),
             app_commands.Choice(name='Anarchy Battle (Open)', value='ranked_open'),
             app_commands.Choice(name='Turf War', value='regular'),
+            app_commands.Choice(name='Splatfest', value='splatfest'),
         ]
     )
     @app_commands.describe(type='The type of schedule to show')

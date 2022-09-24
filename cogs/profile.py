@@ -568,9 +568,7 @@ class Profile(commands.Cog):
         records = await ctx.db.fetch(query)
         total = sum(r['Total'] for r in records)
 
-        value = f'*{total} players*\n' + '\n'.join(
-            f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records
-        )
+        value = f'*{total} players*\n' + '\n'.join(f'{r["Rank"]}: {r["Total"]} ({r["Total"] / total:.2%})' for r in records)
         e.add_field(name='Splatoon 3 Rank Distribution', value=value, inline=True)
 
         await ctx.send(embed=e)
