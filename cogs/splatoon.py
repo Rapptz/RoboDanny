@@ -325,7 +325,8 @@ class SplatNet3:
         The session to use for making requests.
     """
 
-    APP_VERSION = '2.2.0'  # TODO: get dynamically
+    APP_VERSION = '2.3.0'  # TODO: get dynamically
+    WEB_VIEW_VERSION = '1.0.0-63bad6e1'
 
     def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
         self.session_token = session_token
@@ -508,7 +509,7 @@ class SplatNet3:
             'User-Agent': 'Mozilla/5.0 (Linux; Android 7.1.2; SM-G965N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/92.0.4515.131 Mobile Safari/537.36',
             'X-NACountry': 'US',
             'X-Requested-With': 'com.nintendo.znca',
-            'X-Web-View-Ver': '1.0.0-5e2bcdfb',
+            'X-Web-View-Ver': self.WEB_VIEW_VERSION,
         }
         async with self.session.post(url, headers=headers, cookies=cookies) as resp:
             if resp.status >= 400:
@@ -541,7 +542,7 @@ class SplatNet3:
             'User-Agent': 'Mozilla/5.0 (Linux; Android 7.1.2; SM-G965N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/92.0.4515.131 Mobile Safari/537.36',
             'X-NACountry': 'US',
             'X-Requested-With': 'com.nintendo.znca',
-            'X-Web-View-Ver': '1.0.0-5e2bcdfb',
+            'X-Web-View-Ver': self.WEB_VIEW_VERSION,
         }
 
         payload = {
@@ -562,26 +563,30 @@ class SplatNet3:
             return data
 
     async def schedule(self) -> Optional[SplatNetSchedule]:
-        data = await self.cached_graphql_query('10e1d424391e78d21670227550b3509f')
+        # Called StageScheduleQuery internally
+        data = await self.cached_graphql_query('7d4bb0565342b7385ceb97d109e14897')
         data = data.get('data', {})
         if not data:
             return None
         return SplatNetSchedule(data)
 
     async def shop(self) -> Optional[SplatNetShopPayload]:
-        data = await self.cached_graphql_query('d08dbdd29f31471e61daa978feea697a')
+        # Called GesotownQuery internally
+        data = await self.cached_graphql_query('a43dd44899a09013bcfd29b4b13314ff')
         data = data.get('data', {}).get('gesotown', {})
         if not data:
             return None
         return data
 
     async def latest_battles(self) -> dict[str, Any]:
+        # Called LatestBattleHistoriesQuery internally
         # Too lazy to type this payload
         data = await self.cached_graphql_query('7d8b560e31617e981cf7c8aa1ca13a00')
         return data.get('data', {})
 
     async def battle_info_for(self, id: str) -> dict[str, Any]:
-        data = await self.cached_graphql_query('cd82f2ade8aca7687947c5f3210805a6', variables={'vsResultId': id})
+        # Called VsHistoryDetailQuery internally
+        data = await self.cached_graphql_query('2b085984f729cd51938fc069ceef784a', variables={'vsResultId': id})
         return data.get('data', {})
 
 
