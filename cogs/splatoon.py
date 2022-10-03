@@ -556,6 +556,11 @@ class SplatNet3:
         }
 
         async with self.session.post(url, headers=headers, cookies=cookies, json=payload) as resp:
+            if resp.status == 401:
+                log.info('SplatNet 3 authentication token has expired, refreshing...')
+                await self.refresh_expired_tokens()
+                return await self.cached_graphql_query(query_hash, version=version, variables=variables)
+
             if resp.status >= 400:
                 raise SplatNetError(f'Could not get graphql query (hash: {query_hash} status code {resp.status})')
 
