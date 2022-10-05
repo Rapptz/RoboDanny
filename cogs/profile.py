@@ -233,6 +233,12 @@ class PromptProfileCreationView(discord.ui.View):
         self.cog: Profile = cog
         self.ctx: Context = ctx
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message('Sorry, this button is not meant for you.', ephemeral=True)
+            return False
+        return True
+
     @discord.ui.button(label='Create Profile', style=discord.ButtonStyle.blurple)
     async def create_profile(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ProfileCreateModal(self.cog, self.ctx))
