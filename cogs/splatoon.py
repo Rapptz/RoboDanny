@@ -10,6 +10,7 @@ from .utils.paginator import RoboPages, FieldPageSource
 
 from urllib.parse import quote as urlquote
 from collections import defaultdict
+from lxml.html import fromstring as html_fromstring
 
 import traceback
 import datetime
@@ -325,7 +326,7 @@ class SplatNet3:
         The session to use for making requests.
     """
 
-    APP_VERSION = '2.3.0'  # TODO: get dynamically
+    APP_VERSION = '2.3.1'
     WEB_VIEW_VERSION = '1.0.0-63bad6e1'
 
     def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
@@ -335,6 +336,40 @@ class SplatNet3:
         self.access_token: Optional[str] = None
         self.expires_in: Optional[datetime.datetime] = None
         self.user_info: Optional[dict[str, Any]] = None
+        self.fetched_app_version: Optional[str] = None
+        self.fetched_web_view_version: Optional[str] = None
+
+    async def get_app_version(self) -> str:
+        if self.fetched_app_version is None:
+            # Android app store doesn't make it easy to get the version from it, so use the iOS app store
+            async with self.session.get('https://apps.apple.com/us/app/nintendo-switch-online/id1234806557') as resp:
+                if resp.status != 200:
+                    return self.APP_VERSION
+
+                text = await resp.text()
+                root = html_fromstring(text)
+                nodes = root.find_class('whats-new__latest__version')
+                if nodes:
+                    self.fetched_app_version = nodes[0].text_content().replace('Version ', '')
+                else:
+                    return self.APP_VERSION
+
+        return self.fetched_app_version
+
+    async def get_web_view_version(self) -> str:
+        if self.fetched_web_view_version is None:
+            async with self.session.get(
+                'https://raw.githubusercontent.com/nintendoapis/nintendo-app-versions/main/data/splatnet3-app.json'
+            ) as resp:
+                if resp.status != 200:
+                    return self.WEB_VIEW_VERSION
+
+                text = await resp.text()
+                data = json.loads(text)
+                version = data['version']
+                revision = data['revision'][:8]
+                self.fetched_web_view_version = f'{version}-{revision}'
+        return self.fetched_web_view_version
 
     async def get_f_token(self, id_token: str, hash_method: int = 1) -> tuple[str, str, int]:
         """Get the ``f`` token and the timestamp for the request.
@@ -405,12 +440,13 @@ class SplatNet3:
             user_info = self.user_info
 
         url = 'https://api-lp1.znc.srv.nintendo.net/v3/Account/Login'
+        app_version = await self.get_app_version()
         headers = {
             'Accept-Encoding': 'gzip',
             'Content-Type': 'application/json; charset=utf-8',
-            'User-Agent': f'com.nintendo.znca/{self.APP_VERSION}(Android/7.1.2)',
+            'User-Agent': f'com.nintendo.znca/{app_version}(Android/7.1.2)',
             'X-Platform': 'Android',
-            'X-ProductVersion': self.APP_VERSION,
+            'X-ProductVersion': app_version,
         }
 
         id_token = token_response['id_token']
@@ -461,9 +497,9 @@ class SplatNet3:
             'Accept-Encoding': 'gzip',
             'Authorization': f'Bearer {new_access_token}',
             'Content-Type': 'application/json; charset=utf-8',
-            'User-Agent': f'com.nintendo.znca/{self.APP_VERSION}(Android/7.1.2)',
+            'User-Agent': f'com.nintendo.znca/{app_version}(Android/7.1.2)',
             'X-Platform': 'Android',
-            'X-ProductVersion': self.APP_VERSION,
+            'X-ProductVersion': app_version,
         }
 
         await asyncio.sleep(3)
@@ -495,6 +531,7 @@ class SplatNet3:
             self.access_token = data['result']['accessToken']
 
         url = 'https://api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens'
+        web_view_version = await self.get_web_view_version()
         cookies = {'_gtoken': self.access_token}
         headers = {
             'Accept': '*/*',
@@ -509,7 +546,7 @@ class SplatNet3:
             'User-Agent': 'Mozilla/5.0 (Linux; Android 7.1.2; SM-G965N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/92.0.4515.131 Mobile Safari/537.36',
             'X-NACountry': 'US',
             'X-Requested-With': 'com.nintendo.znca',
-            'X-Web-View-Ver': self.WEB_VIEW_VERSION,
+            'X-Web-View-Ver': web_view_version,
         }
         async with self.session.post(url, headers=headers, cookies=cookies) as resp:
             if resp.status >= 400:
@@ -529,6 +566,7 @@ class SplatNet3:
 
         url = 'https://api.lp1.av5ja.srv.nintendo.net/api/graphql'
         cookies: dict[str, Any] = {'_gtoken': self.access_token}
+        web_view_version = await self.get_web_view_version()
         headers = {
             'Accept': '*/*',
             'Accept-Encoding': 'gzip, deflate',
@@ -542,7 +580,7 @@ class SplatNet3:
             'User-Agent': 'Mozilla/5.0 (Linux; Android 7.1.2; SM-G965N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/92.0.4515.131 Mobile Safari/537.36',
             'X-NACountry': 'US',
             'X-Requested-With': 'com.nintendo.znca',
-            'X-Web-View-Ver': self.WEB_VIEW_VERSION,
+            'X-Web-View-Ver': web_view_version,
         }
 
         payload = {
