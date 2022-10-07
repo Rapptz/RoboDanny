@@ -371,6 +371,11 @@ class SplatNet3:
                 self.fetched_web_view_version = f'{version}-{revision}'
         return self.fetched_web_view_version
 
+    async def get_debug_version_display(self) -> str:
+        version = await self.get_app_version()
+        web_view_version = await self.get_web_view_version()
+        return f'App Version: {version} (Web View: {web_view_version})'
+
     async def get_f_token(self, id_token: str, hash_method: int = 1) -> tuple[str, str, int]:
         """Get the ``f`` token and the timestamp for the request.
 
@@ -2197,6 +2202,7 @@ class Splatoon(commands.GroupCog):
 
         e.add_field(name='SplatNet 3 Running', value=ctx.tick(splatnet), inline=True)
         e.add_field(name='SplatNet 3 Authenticated', value=ctx.tick(not unauthed), inline=True)
+        e.add_field(name='SplatNet 3 Version', value=await self.splatnet.get_debug_version_display(), inline=False)
         e.add_field(name='Last SplatNet 3 Request', value=time.format_dt(self._last_request, 'R'), inline=False)
 
         await ctx.send(embed=e, view=AdminPanel(self))
