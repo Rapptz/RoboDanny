@@ -1724,6 +1724,12 @@ class Mod(commands.Cog):
         after = discord.Object(id=flags.after) if flags.after else None
         await ctx.defer()
 
+        if before is None and ctx.interaction is not None:
+            # If no before: is passed and we're in a slash command,
+            # the deferred message will be deleted by purge and the followup will not show up.
+            # To work around this, we need to get the deferred message's ID and avoid deleting it.
+            before = await ctx.interaction.original_response()
+
         try:
             deleted = await ctx.channel.purge(limit=search, before=before, after=after, check=predicate)
         except discord.Forbidden as e:
