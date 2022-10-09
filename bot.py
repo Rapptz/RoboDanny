@@ -9,7 +9,7 @@ import logging
 import traceback
 import aiohttp
 import sys
-from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Coroutine, Iterable, Optional, Union
 from collections import Counter, defaultdict
 
 import config
@@ -75,6 +75,7 @@ class RoboDanny(commands.AutoShardedBot):
     command_types_used: Counter[bool]
     logging_handler: Any
     bot_app_info: discord.AppInfo
+    old_tree_error = Callable[[discord.Interaction, discord.app_commands.AppCommandError], Coroutine[Any, Any, None]]
 
     def __init__(self):
         allowed_mentions = discord.AllowedMentions(roles=False, everyone=False, users=True)
