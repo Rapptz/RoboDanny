@@ -327,7 +327,7 @@ class SplatNet3:
     """
 
     APP_VERSION = '2.3.1'
-    WEB_VIEW_VERSION = '1.0.0-63bad6e1'
+    WEB_VIEW_VERSION = '1.0.0-216d0219'
 
     def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
         self.session_token = session_token
@@ -376,7 +376,7 @@ class SplatNet3:
         web_view_version = await self.get_web_view_version()
         return f'App Version: {version} (Web View: {web_view_version})'
 
-    async def get_f_token(self, id_token: str, hash_method: int = 1) -> tuple[str, str, int]:
+    async def get_f_token(self, id_token: str, hash_method: int = 1, retries: int = 0) -> tuple[str, str, int]:
         """Get the ``f`` token and the timestamp for the request.
 
         Returns
@@ -397,7 +397,11 @@ class SplatNet3:
 
         async with self.session.post('https://api.imink.app/f', json=payload, headers=headers) as resp:
             if resp.status >= 400:
-                raise SplatNetError(f'Failed to get f token (status code {resp.status})')
+                if retries >= 5:
+                    raise SplatNetError(f'Failed to get f token (status code {resp.status})')
+                else:
+                    log.info('Failed to get f token (status code: %d), retrying...', resp.status)
+                    return await self.get_f_token(id_token, hash_method, retries=retries + 1)
 
             data = await resp.json()
             return data['f'], data['request_id'], data['timestamp']
