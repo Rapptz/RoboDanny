@@ -1841,7 +1841,7 @@ class Splatoon(commands.GroupCog):
         """A nice little easter egg."""
         await ctx.send('http://i.stack.imgur.com/0OT9X.png')
 
-    @commands.hybrid_command()
+    @commands.hybrid_command(aliases=['splatoonwiki', 'inkipedia'])
     @app_commands.describe(title='The title of the page to search for.')
     async def splatwiki(self, ctx: Context, *, title: str):
         """Returns a Inkipedia page."""
