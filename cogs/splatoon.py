@@ -10,6 +10,7 @@ from .utils.paginator import RoboPages, FieldPageSource
 
 from urllib.parse import quote as urlquote
 from collections import defaultdict
+import time as ctime
 from lxml.html import fromstring as html_fromstring
 
 import traceback
@@ -20,6 +21,7 @@ import discord
 import logging
 import pathlib
 import base64
+import mmh3
 import yarl
 import math
 import json
@@ -639,6 +641,11 @@ class SplatNet3:
     async def battle_info_for(self, id: str) -> dict[str, Any]:
         # Called VsHistoryDetailQuery internally
         data = await self.cached_graphql_query('2b085984f729cd51938fc069ceef784a', variables={'vsResultId': id})
+        return data.get('data', {})
+
+    async def outfit_equipment(self) -> dict[str, Any]:
+        # Called MyOutfitCommonDataEquipmentsQuery internally
+        data = await self.cached_graphql_query('d29cd0c2b5e6bac90dd5b817914832f8')
         return data.get('data', {})
 
 
@@ -2226,6 +2233,43 @@ class Splatoon(commands.GroupCog):
                 return await ctx.send('No game has been played yet..?')
 
             await ctx.send(embed=last_battle.to_embed())
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def gearjson(self, ctx: Context):
+        """Uploads a gear JSON file appropriate for Lean's site"""
+
+        gear = await self.splatnet.outfit_equipment()
+        history = await self.splatnet.latest_battles()
+
+        groups = history.get('latestBattleHistories', {}).get('historyGroups', {}).get('nodes', [])
+        if not groups:
+            return await ctx.send('No battle history found')
+
+        last_group = groups[0].get('historyDetails', {}).get('nodes', [])
+        if not last_group:
+            return await ctx.send('No battle history found')
+
+        try:
+            player_id = last_group[0]['player']['id']
+        except (IndexError, KeyError):
+            return await ctx.send('No battle history found')
+
+        decoded = base64.b64decode(player_id).decode()
+        value = decoded.split(':')[-1]
+        h = mmh3.hash(value) & 0xFFFFFFFF
+        key = base64.b64encode(bytes([k ^ (h & 0xFF) for k in value.encode()])).decode()
+
+        data = json.dumps(
+            {
+                'key': key,
+                'h': h,
+                'timestamp': int(ctime.time()),
+                'gear': {'data': gear},
+            }
+        ).encode()
+
+        await ctx.send(file=discord.File(io.BytesIO(data), filename='gear.json'))
 
 
 async def setup(bot: RoboDanny):
