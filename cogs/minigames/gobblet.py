@@ -43,6 +43,7 @@ class Player:
     member: discord.abc.User
     kind: BoardKind
     pieces: set[int]
+    current_selection: Optional[tuple[int, int]] = None
 
     @property
     def available_strength(self) -> int:
@@ -114,10 +115,19 @@ class Button(discord.ui.Button['Gobblers']):
             )
             return
 
+        if player.current_selection is not None:
+            await interaction.response.send_message(
+                "You've already selected a piece, you can't select multiple pieces.", ephemeral=True
+            )
+            return
+
+        player.current_selection = (self.x, self.y)
+
         prompt = PlayerPrompt(player, state)
         await interaction.response.send_message('Select a piece strength', view=prompt)
         await prompt.wait()
 
+        player.current_selection = None
         if prompt.selected_number is None:
             return
 
