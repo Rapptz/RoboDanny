@@ -1706,6 +1706,8 @@ class Mod(commands.Cog):
         if not predicates:
             # If nothing is passed then default to `True` to emulate ?purge all behaviour
             predicates.append(lambda m: True)
+            if not await ctx.prompt(f"Are you sure you want to purge the last {search} messages?", timeout=20):
+                return
 
         op = all if flags.require == 'all' else any
 
