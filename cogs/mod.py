@@ -1703,8 +1703,10 @@ class Mod(commands.Cog):
         if flags.suffix:
             predicates.append(lambda m: m.content.endswith(flags.suffix))  # type: ignore
 
+        require_prompt = False
         if not predicates:
             # If nothing is passed then default to `True` to emulate ?purge all behaviour
+            require_prompt = True
             predicates.append(lambda m: True)
 
         op = all if flags.require == 'all' else any
@@ -1719,6 +1721,11 @@ class Mod(commands.Cog):
 
         if search is None:
             search = 100
+
+        if require_prompt:
+            confirm = await ctx.prompt(f'Are you sure you want to delete {plural(search):message}?', timeout=30)
+            if not confirm:
+                return await ctx.send('Aborting.')
 
         before = discord.Object(id=flags.before) if flags.before else None
         after = discord.Object(id=flags.after) if flags.after else None
