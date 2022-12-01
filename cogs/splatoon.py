@@ -832,9 +832,9 @@ class SplatNetSchedule:
         return (
             ('Anarchy Battle (Series)', self.ranked_series),
             ('Anarchy Battle (Open)', self.ranked_open),
-            ('Regular Battle', self.regular),
             # ('League', self.league),
-            # ('X Rank', self.x_rank),
+            ('X Battle', self.x_rank),
+            ('Regular Battle', self.regular),
         )
 
     @property
@@ -1426,11 +1426,13 @@ def mode_key(argument: str) -> str:
         return 'regular'
     elif lower.startswith(('fest', 'splatfest')):
         return 'splatfest'
+    elif lower in ('x', 'x battle', 'x rank'):
+        return 'x_rank'
     # elif lower == 'league':
     #     return 'league'
     else:
         raise commands.BadArgument(
-            'Unknown schedule type, try: "ranked", "series", "turf", "regular", "splatfest", or "league"'
+            'Unknown schedule type, try: "ranked", "series", "turf", "regular", "splatfest", "x", or "league"'
         )
 
 
@@ -1896,7 +1898,7 @@ class Splatoon(commands.GroupCog):
             'ranked_series': 'Anarchy Battle (Series)',
             'ranked_open': 'Anarchy Battle (Open)',
             'league': 'League Battle',
-            'x_rank': 'X Rank',
+            'x_rank': 'X Battle',
         }
 
         kind = mode_to_kind.get(mode, 'Unknown')
@@ -1915,7 +1917,7 @@ class Splatoon(commands.GroupCog):
             'ranked_series': 0xF54910,
             'ranked_open': 0xF54910,
             'league': 0xF02D7D,
-            'x_rank': 0xF54910,
+            'x_rank': 0x10DB9B,
         }
         p.embed.colour = mode_to_colour.get(mode, 0xCFF622)
         p.embed.title = kind
@@ -1927,6 +1929,7 @@ class Splatoon(commands.GroupCog):
         type=[
             app_commands.Choice(name='Anarchy Battle (Series)', value='ranked_series'),
             app_commands.Choice(name='Anarchy Battle (Open)', value='ranked_open'),
+            app_commands.Choice(name='X Battle', value='x_rank'),
             app_commands.Choice(name='Turf War', value='regular'),
             app_commands.Choice(name='Splatfest', value='splatfest'),
         ]
