@@ -934,7 +934,7 @@ class Gear:
         e = discord.Embed(colour=cog.random_colour(), title=self.name, url=f'https://splatoonwiki.org/wiki/{title}')
 
         if self.image:
-            e.set_thumbnail(url=f'https://app.splatoon2.nintendo.net{self.image}')
+            e.set_thumbnail(url=self.image)
         else:
             e.set_thumbnail(url='https://cdn.discordapp.com/emojis/338815018101506049.png')
 
