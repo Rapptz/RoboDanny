@@ -1447,12 +1447,12 @@ class AddWeaponModal(discord.ui.Modal, title='Add New Weapon'):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         weapons = self.cog.splat3_data.get('weapons', [])
-        entry = {
-            'name': self.name.value,
-            'sub': self.sub.value,
-            'special': self.special.value,
+        entry: SplatoonConfigWeapon = {
+            'name': str(self.name),
+            'sub': str(self.sub),
+            'special': str(self.special),
         }
-        weapons.append(entry)
+        weapons.append(Weapon(entry))
         await self.cog.splat3_data.put('weapons', weapons)
         await interaction.response.send_message(f'Successfully added new weapon {self.name}')
 
