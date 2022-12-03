@@ -34,7 +34,7 @@ class RNG(commands.Cog):
 
     @random.command()
     async def weapon(self, ctx: Context, count: int = 1):
-        """Displays a random Splatoon 2 weapon.
+        """Displays a random Splatoon 3 weapon.
 
         The count parameter is how many to generate. It cannot be
         negative. If it's negative or zero then only one weapon will be
@@ -46,18 +46,18 @@ class RNG(commands.Cog):
             return await ctx.send('Splatoon commands currently disabled.')
 
         count = min(max(count, 1), 8)
-        weapons = splatoon.splat2_data.get('weapons', [])
+        weapons = splatoon.splat3_data.get('weapons', [])
         if weapons:
             if count == 1:
                 weapon = rng.choice(weapons)
-                await ctx.send(f'{weapon["name"]} with {weapon["sub"]} and {weapon["special"]} special.')
+                await ctx.send(f'{weapon.name} with {weapon.sub} and {weapon.special} special.')
             else:
                 sample = rng.sample(weapons, count)
-                await ctx.send('\n'.join(w['name'] for w in sample))
+                await ctx.send('\n'.join(w.name for w in sample))
 
     @random.command()
     async def private(self, ctx: Context):
-        """Displays an all private Splatoon 2 match.
+        """Displays an all private Splatoon 3 match.
 
         The map and mode is randomised along with both team's weapons.
         """
@@ -65,20 +65,20 @@ class RNG(commands.Cog):
         if splatoon is None:
             return await ctx.send('Splatoon commands currently disabled.')
 
-        maps: list[str] = splatoon.splat2_data.get('maps', [])
+        maps: list[str] = splatoon.splat3_data.get('maps', [])
 
         stage = rng.choice(maps) if maps else 'Random Stage'
-        modes = ['Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control']
+        modes = ['Turf War', 'Splat Zones', 'Rainmaker', 'Tower Control', 'Clam Blitz']
         mode = rng.choice(modes)
         result = [f'Playing {mode} on {stage}', '', '**Team Alpha**']
 
-        weapons = rng.sample(splatoon.splat2_data.get('weapons', []), 8)
+        weapons = rng.sample(splatoon.splat3_data.get('weapons', []), 8)
         for i in range(8):
             if i == 4:
                 result.append('')
                 result.append('**Team Bravo**')
 
-            result.append(f'Player {i + 1}: {weapons[i]["name"]}')
+            result.append(f'Player {i + 1}: {weapons[i].name}')
 
         await ctx.send('\n'.join(result))
 
@@ -101,13 +101,13 @@ class RNG(commands.Cog):
 
     @random.command(name='map')
     async def _map(self, ctx: Context):
-        """Displays a random Splatoon 2 map."""
+        """Displays a random Splatoon 3 map."""
         splatoon: Optional[Splatoon] = self.bot.get_cog('Splatoon')  # type: ignore
         if splatoon is None:
             await ctx.send('Splatoon commands currently disabled.')
             return
 
-        maps = splatoon.splat2_data.get('maps', [])
+        maps = splatoon.splat3_data.get('maps', [])
         if maps:
             await ctx.send(rng.choice(maps))
 
@@ -115,7 +115,7 @@ class RNG(commands.Cog):
 
     @random.command()
     async def mode(self, ctx: Context):
-        """Displays a random Splatoon mode."""
+        """Displays a random Splatoon 3 mode."""
         mode = rng.choice(['Turf War', 'Splat Zones', 'Clam Blitz', 'Rainmaker', 'Tower Control'])
         await ctx.send(mode)
 
@@ -127,9 +127,9 @@ class RNG(commands.Cog):
             await ctx.send('Splatoon commands currently disabled.')
             return
 
-        maps = splatoon.splat2_data.get('maps', [])
+        maps = splatoon.splat3_data.get('maps', [])
         if maps:
-            mode = rng.choice(['Splat Zones', 'Tower Control', 'Rainmaker'])
+            mode = rng.choice(['Splat Zones', 'Tower Control', 'Rainmaker', 'Clam Blitz'])
             stage = rng.choice(maps)
             await ctx.send(f'{mode} on {stage}')
 
