@@ -1083,6 +1083,7 @@ class Mod(commands.Cog):
 
     @robomod.command(name='mentions')
     @commands.guild_only()
+    @checks.is_mod()
     @app_commands.describe(count='The maximum amount of mentions before banning.')
     async def robomod_mentions(self, ctx: GuildContext, count: commands.Range[int, 3]):
         """Enables auto-banning accounts that spam more than "count" mentions.
