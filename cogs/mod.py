@@ -531,7 +531,7 @@ class Mod(commands.Cog):
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
-        return discord.PartialEmoji(name='DiscordCertifiedModerator', id=847961544124923945)
+        return discord.PartialEmoji(name='DiscordCertifiedModerator', id=1055367895326130226)
 
     def __repr__(self) -> str:
         return '<cogs.Mod>'
