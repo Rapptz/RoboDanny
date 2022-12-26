@@ -1416,9 +1416,9 @@ def mode_key(argument: str) -> str:
     if lower in SplatNetSchedule.VALID_NAMES:
         return lower
 
-    if lower in ('ranked series', 'rank series', 'anarchy series'):
+    if lower in ('rank', 'ranked', 'ranked series', 'series', 'rank series', 'anarchy series'):
         return 'ranked_series'
-    elif lower in ('ranked open', 'rank open', 'anarchy open', 'anarchy', 'rank', 'ranked'):
+    elif lower in ('ranked open', 'rank open', 'anarchy open', 'anarchy', 'open'):
         return 'ranked_open'
     elif lower.startswith('series'):
         return 'ranked_series'
