@@ -411,7 +411,7 @@ class Reminder(commands.Cog):
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
-        await ctx.send('Successfully deleted reminder.')
+        await ctx.send('Successfully deleted reminder.', ephemeral=True)
 
     @reminder.command(name='clear', ignore_extra=False)
     async def reminder_clear(self, ctx: Context):
