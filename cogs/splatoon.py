@@ -403,6 +403,7 @@ class SplatNet3:
                     raise SplatNetError(f'Failed to get f token (status code {resp.status})')
                 else:
                     log.info('Failed to get f token (status code: %d), retrying...', resp.status)
+                    await asyncio.sleep(5 * (retries + 1))
                     return await self.get_f_token(id_token, hash_method, retries=retries + 1)
 
             data = await resp.json()
