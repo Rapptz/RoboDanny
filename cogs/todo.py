@@ -988,36 +988,36 @@ class Todo(commands.Cog):
     @app_commands.describe(id='The todo item ID')
     @app_commands.autocomplete(id=todo_id_autocomplete)  # type: ignore (dpy bug)
     async def todo_delete(self, ctx: Context, *, id: int):
-        """Removes a todo by its ID"""
+        """Removes a todo by its ID."""
 
         query = 'DELETE FROM todo WHERE id = $1 AND user_id = $2'
         status = await self.bot.pool.execute(query, id, ctx.author.id)
         if status == 'DELETE 0':
             await ctx.send('Could not delete a todo item by this ID, are you sure it\'s yours?', ephemeral=True)
         else:
-            await ctx.send('Successfully deleted todo', ephemeral=True)
+            await ctx.send('Successfully deleted todo.', ephemeral=True)
             self.check_for_task_resync(id)
 
     @todo.command(name='clear')
     async def todo_clear(self, ctx: Context):
-        """Clears all todos you've made"""
+        """Clears all todos you've made."""
 
         await ctx.defer(ephemeral=True)
 
         todos = await self.get_todos(ctx.author.id)
 
         if len(todos) == 0:
-            await ctx.send('You have no todos to clear', ephemeral=True)
+            await ctx.send('You have no todos to clear.', ephemeral=True)
             return
 
         confirm = await ctx.prompt(f'Are you sure you want to delete {plural(len(todos)):todo}?', delete_after=True)
         if not confirm:
-            await ctx.send('Aborting', ephemeral=True, delete_after=15.0)
+            await ctx.send('Aborting.', ephemeral=True, delete_after=15.0)
             return
 
         query = 'DELETE FROM todo WHERE user_id = $1'
         await self.bot.pool.execute(query, ctx.author.id)
-        await ctx.send('Successfully cleared all todos', ephemeral=True)
+        await ctx.send('Successfully cleared all todos.', ephemeral=True)
 
         for todo in todos:
             if self.check_for_task_resync(todo.id):
@@ -1025,7 +1025,7 @@ class Todo(commands.Cog):
 
     @todo.command(name='list', aliases=['brief', 'compact'])
     async def todo_list(self, ctx: Context, *, flags: ListFlags):
-        """List your todos
+        """List your todos.
 
         This command uses a syntax similar to Discord's search bar.
 
