@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from discord.ext import commands
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union, Sequence
 from cogs.utils.formats import human_join
 from cogs.utils.paginator import FieldPageSource, RoboPages
 import binascii
@@ -18,6 +18,7 @@ DISCORD_PY_BOTS_ROLE = 381980817125015563
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELP_FORUM = 985299059441025044
+DISCORD_PY_SOLVED_TAG = 985309124285837312
 
 GITHUB_TODO_COLUMN = 9341868
 GITHUB_PROGRESS_COLUMN = 9341869
@@ -442,7 +443,15 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         assert isinstance(ctx.channel, discord.Thread)
         await ctx.message.add_reaction(ctx.tick(True))
-        await ctx.channel.edit(locked=True, archived=True, reason=f'Marked as solved by {ctx.author} (ID: {ctx.author.id})')
+        tags: Sequence[discord.abc.Snowflake] = ctx.channel.applied_tags
+        tags.append(discord.Object(id=DISCORD_PY_SOLVED_TAG))  # type: ignore
+
+        await ctx.channel.edit(
+            locked=True,
+            archived=True,
+            applied_tags=tags[:5],
+            reason=f'Marked as solved by {ctx.author} (ID: {ctx.author.id})',
+        )
 
 
 async def setup(bot: RoboDanny):
