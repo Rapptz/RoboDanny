@@ -444,7 +444,9 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         assert isinstance(ctx.channel, discord.Thread)
         await ctx.message.add_reaction(ctx.tick(True))
         tags: Sequence[discord.abc.Snowflake] = ctx.channel.applied_tags
-        tags.append(discord.Object(id=DISCORD_PY_SOLVED_TAG))  # type: ignore
+
+        if not any(tag.id == DISCORD_PY_SOLVED_TAG for tag in tags):
+            tags.append(discord.Object(id=DISCORD_PY_SOLVED_TAG))  # type: ignore
 
         await ctx.channel.edit(
             locked=True,
