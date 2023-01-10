@@ -443,7 +443,7 @@ class Reminder(commands.Cog):
             self._task.cancel()
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
-        await ctx.send(f'Successfully deleted {formats.plural(total):reminder}.')
+        await ctx.send(f'Successfully deleted {formats.plural(total):reminder}.', ephemeral=True)
 
     @commands.Cog.listener()
     async def on_reminder_timer_complete(self, timer: Timer):
