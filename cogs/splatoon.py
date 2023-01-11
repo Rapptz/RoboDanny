@@ -397,7 +397,9 @@ class SplatNet3:
             'hash_method': hash_method,
         }
 
-        async with self.session.post('https://api.imink.app/f', json=payload, headers=headers) as resp:
+        async with self.session.post(
+            'https://nxapi-znca-api.fancy.org.uk/api/znca/f', json=payload, headers=headers
+        ) as resp:
             if resp.status >= 400:
                 if retries >= 5:
                     raise SplatNetError(f'Failed to get f token (status code {resp.status})')
