@@ -685,6 +685,9 @@ class Tags(commands.Cog):
                 ctx.interaction = modal.interaction
                 content = modal.text
 
+        if len(content) > 2000:
+            return await ctx.send('Tag content can only be up to 2000 characters')
+
         query = "UPDATE tags SET content=$1 WHERE LOWER(name)=$2 AND location_id=$3 AND owner_id=$4;"
         status = await ctx.db.execute(query, content, name, ctx.guild.id, ctx.author.id)
 
