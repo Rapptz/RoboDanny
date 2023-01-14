@@ -39,6 +39,7 @@ the bot is with the following template:
 ```py
 client_id   = '' # your bot's client ID
 token = '' # your bot's token
+debug = False # used to disable certain features
 carbon_key = '' # your bot's key on carbon's site
 bots_key = '' # your key on bots.discord.pw
 postgresql = 'postgresql://user:password@host/database' # your postgresql info from above
@@ -46,7 +47,13 @@ challonge_api_key = '...' # for tournament cog
 stat_webhook = ('<webhook_id>','<webhook_token>') # a webhook to a channel for bot stats.
 # when you generate your webhook, take the token and ID from the URL like so:
 # https://discord.com/api/webhooks/<id>/<token>
+github_token = '' # your github API personal token
+open_collective_token = '' # your open collective personal token
+oc_discord_client_id = '' # the client ID of the Open Collective Discord Integration application
+oc_discord_client_secret = '' # the client secret of the Open Collective Discord Integration application
 ```
+
+A lot of these configuration variables are undocumented precisely because the bot is meant for personal use.
 
 6. **Configuration of database**
 

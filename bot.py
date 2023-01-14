@@ -47,6 +47,7 @@ initial_extensions = (
     'cogs.funhouse',
     'cogs.todo',
     'cogs.minigames',
+    'cogs.opencollective',
 )
 
 
