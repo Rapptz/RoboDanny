@@ -1122,25 +1122,28 @@ class Stars(commands.Cog):
 
     @star.command(name='random')
     @requires_starboard()
-    async def star_random(self, ctx: StarboardContext):
+    @app_commands.describe(member='The member to show random stars of, if not given then shows a random star in the server')
+    async def star_random(self, ctx: StarboardContext, member: discord.Member = None):
         """Shows a random starred message."""
 
-        query = """SELECT bot_message_id
-                   FROM starboard_entries
-                   WHERE guild_id=$1
-                   AND bot_message_id IS NOT NULL
-                   OFFSET FLOOR(RANDOM() * (
-                       SELECT COUNT(*)
-                       FROM starboard_entries
-                       WHERE guild_id=$1
-                       AND bot_message_id IS NOT NULL
-                   ))
-                   LIMIT 1
-                """
-
         await ctx.defer()
-        record = await ctx.db.fetchrow(query, ctx.guild.id)
+        where_condition = 'WHERE guild_id=$1 AND bot_message_id IS NOT NULL'
+        args: list[int] = [ctx.guild.id]
+        if member is not None:
+            where_condition += ' AND author_id=$2'
+            args.append(member.id)
 
+        query = f"""SELECT bot_message_id
+                    FROM starboard_entries
+                    {where_condition}
+                    OFFSET FLOOR(RANDOM() * (
+                        SELECT COUNT(*)
+                        FROM starboard_entries
+                        {where_condition}
+                    ))
+                    LIMIT 1
+                """
+        record = await ctx.db.fetchrow(query, *args)
         if record is None:
             return await ctx.send('Could not find anything.')
 
