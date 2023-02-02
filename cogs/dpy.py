@@ -213,7 +213,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         now = discord.utils.utcnow()
         for thread in forum.threads:
-            if thread.archived:
+            if thread.archived or thread.flags.pinned:
                 continue
 
             if thread.last_message_id is None:
