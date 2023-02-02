@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from discord.ext import commands
+from discord.ext import commands, tasks
 from typing import TYPE_CHECKING, Any, Optional, Union, Sequence
 from cogs.utils.formats import human_join
 from cogs.utils.paginator import FieldPageSource, RoboPages
 import binascii
+import datetime
 import discord
 import asyncio
 import base64
@@ -116,6 +117,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         self._invite_cache: dict[str, int] = {}
         self.bot.loop.create_task(self._prepare_invites())
         self._req_lock = asyncio.Lock()
+        self.auto_archive_old_forum_threads.start()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -198,6 +200,33 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         js = await self.github_request('POST', 'gists', data=data, headers=headers)
         return js['html_url']
+
+    @tasks.loop(hours=1)
+    async def auto_archive_old_forum_threads(self):
+        guild = self.bot.get_guild(DISCORD_PY_GUILD_ID)
+        if guild is None:
+            return
+
+        forum: discord.ForumChannel = guild.get_channel(DISCORD_PY_HELP_FORUM)  # type: ignore
+        if forum is None:
+            return
+
+        now = discord.utils.utcnow()
+        for thread in forum.threads:
+            if thread.archived:
+                continue
+
+            if thread.last_message_id is None:
+                continue
+
+            last_message = discord.utils.snowflake_time(thread.last_message_id)
+            expires = last_message + datetime.timedelta(minutes=thread.auto_archive_duration)
+            if now > expires:
+                await thread.edit(archived=True, reason='Auto-archived due to inactivity.')
+
+    @auto_archive_old_forum_threads.before_loop
+    async def before_auto_archive_old_forum_threads(self):
+        await self.bot.wait_until_ready()
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
