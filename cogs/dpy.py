@@ -123,6 +123,9 @@ class DPYExclusive(commands.Cog, name='discord.py'):
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='dpy', id=596577034537402378)
 
+    def cog_unload(self) -> None:
+        self.auto_archive_old_forum_threads.cancel()
+
     async def _prepare_invites(self):
         await self.bot.wait_until_ready()
         guild = self.bot.get_guild(DISCORD_PY_GUILD_ID)
