@@ -302,7 +302,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             'Please be patient while you wait for a response from someone helping. Please do not unnecessarily ping people for help.\n\n'
             'If your question has been answered, please use the **?solved** command to close your thread and mark it as solved. Thanks!'
         )
-        await thread.send(tutorial)
+        await message.reply(tutorial)
 
     async def toggle_role(self, ctx: GuildContext, role_id: int) -> None:
         if any(r.id == role_id for r in ctx.author.roles):
