@@ -299,10 +299,21 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             pass
 
         tutorial = (
-            'Please be patient while you wait for a response from someone helping. Please do not unnecessarily ping people for help.\n\n'
-            'If your question has been answered, please use the **?solved** command to close your thread and mark it as solved. Thanks!'
+            'Please remember the following rules:\n'
+            '- Do not unnecessarily ping people to help you.\n'
+            '- Ensure your title is proper and descriptive of the problem.\n'
+            '- Be patient while waiting for a response.\n'
+            '- If your question has been answered, please use the **?solved** command to close your thread and mark it as solved.\n\n'
+            '__**Failure to follow these rules can result in being blocked from using the forum.**__'
         )
-        await message.reply(tutorial)
+
+        try:
+            await message.reply(tutorial)
+        except discord.Forbidden as e:
+            # Race condition with Discord...
+            if e.code == 40058:
+                await asyncio.sleep(2)
+                await message.reply(tutorial)
 
     async def toggle_role(self, ctx: GuildContext, role_id: int) -> None:
         if any(r.id == role_id for r in ctx.author.roles):
