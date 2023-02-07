@@ -297,6 +297,7 @@ class Admin(commands.Cog):
                 return
 
             executor = exec
+            code = ''
             if cleaned.count('\n') == 0:
                 # single statement, potentially 'eval'
                 try:
@@ -317,7 +318,6 @@ class Admin(commands.Cog):
 
             fmt = None
             stdout = io.StringIO()
-            code = ''
 
             try:
                 with redirect_stdout(stdout):
