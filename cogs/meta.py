@@ -24,6 +24,8 @@ class Prefix(commands.Converter):
         user_id = ctx.bot.user.id
         if argument.startswith((f'<@{user_id}>', f'<@!{user_id}>')):
             raise commands.BadArgument('That is a reserved prefix already in use.')
+        if len(argument) > 150:
+            raise commands.BadArgument('That prefix is too long.')
         return argument
 
 
