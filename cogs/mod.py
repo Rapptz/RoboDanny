@@ -1174,7 +1174,7 @@ class Mod(commands.Cog):
         """Lists what channels, roles, and members are in the RoboMod ignore list"""
 
         config = await self.get_guild_config(ctx.guild.id)
-        if config is None:
+        if config is None or not config.safe_automod_entity_ids:
             return await ctx.send('Nothing is ignored!')
 
         def resolve_entity_id(x: int, *, guild=ctx.guild):
