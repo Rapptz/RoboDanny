@@ -63,17 +63,21 @@ def is_doc_helper():
     return commands.check(predicate)
 
 
-def can_close_threads():
+def is_help_thread():
     def predicate(ctx: GuildContext) -> bool:
-        if not isinstance(ctx.channel, discord.Thread):
-            return False
-
-        permissions = ctx.channel.permissions_for(ctx.author)
-        return ctx.channel.parent_id == DISCORD_PY_HELP_FORUM and (
-            permissions.manage_threads or ctx.channel.owner_id == ctx.author.id
-        )
+        return isinstance(ctx.channel, discord.Thread) and ctx.channel.parent_id == DISCORD_PY_HELP_FORUM
 
     return commands.check(predicate)
+
+
+def can_close_threads(ctx: GuildContext) -> bool:
+    if not isinstance(ctx.channel, discord.Thread):
+        return False
+
+    permissions = ctx.channel.permissions_for(ctx.author)
+    return ctx.channel.parent_id == DISCORD_PY_HELP_FORUM and (
+        permissions.manage_threads or ctx.channel.owner_id == ctx.author.id
+    )
 
 
 class GistContent:
@@ -485,24 +489,45 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         await ctx.send(f'<{url}>')
 
-    @commands.command(name='solved')
-    @can_close_threads()
-    async def solved(self, ctx: GuildContext):
-        """Marks a thread as solved."""
-
-        assert isinstance(ctx.channel, discord.Thread)
-        await ctx.message.add_reaction(ctx.tick(True))
-        tags: Sequence[discord.abc.Snowflake] = ctx.channel.applied_tags
+    async def mark_as_solved(self, thread: discord.Thread, user: discord.abc.User) -> None:
+        tags: Sequence[discord.abc.Snowflake] = thread.applied_tags
 
         if not any(tag.id == DISCORD_PY_SOLVED_TAG for tag in tags):
             tags.append(discord.Object(id=DISCORD_PY_SOLVED_TAG))  # type: ignore
 
-        await ctx.channel.edit(
+        await thread.edit(
             locked=True,
             archived=True,
             applied_tags=tags[:5],
-            reason=f'Marked as solved by {ctx.author} (ID: {ctx.author.id})',
+            reason=f'Marked as solved by {user} (ID: {user.id})',
         )
+
+    @commands.command(name='solved')
+    @commands.cooldown(1, 20, commands.BucketType.channel)
+    @is_help_thread()
+    async def solved(self, ctx: GuildContext):
+        """Marks a thread as solved."""
+
+        assert isinstance(ctx.channel, discord.Thread)
+
+        if can_close_threads(ctx):
+            await ctx.message.add_reaction(ctx.tick(True))
+            await self.mark_as_solved(ctx.channel, ctx.author)
+        else:
+            msg = f"<@!{ctx.channel.owner_id}>, would you like to mark this thread as solved? This has been requested by {ctx.author.mention}."
+            confirm = await ctx.prompt(msg, author_id=ctx.channel.owner_id, timeout=120.0)
+            if confirm:
+                await ctx.send(
+                    f'Marking as solved. Note that next time, you can mark the thread as solved yourself with `?solved`.'
+                )
+                await self.mark_as_solved(ctx.channel, ctx.channel.owner or ctx.author)
+            else:
+                await ctx.send('Not marking as solved.')
+
+    @solved.error
+    async def on_solved_error(self, ctx: GuildContext, error: Exception):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f'This command is on cooldown. Try again in {error.retry_after:.2f}s')
 
 
 async def setup(bot: RoboDanny):
