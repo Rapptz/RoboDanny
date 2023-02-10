@@ -521,6 +521,8 @@ class DPYExclusive(commands.Cog, name='discord.py'):
                     f'Marking as solved. Note that next time, you can mark the thread as solved yourself with `?solved`.'
                 )
                 await self.mark_as_solved(ctx.channel, ctx.channel.owner or ctx.author)
+            elif confirm is None:
+                await ctx.send('Timed out waiting for a response. Not marking as solved.')
             else:
                 await ctx.send('Not marking as solved.')
 
