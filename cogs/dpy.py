@@ -296,28 +296,28 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         if thread.parent_id != DISCORD_PY_HELP_FORUM:
             return
 
+        if len(thread.name) <= 20:
+            low_quality_title = (
+                'This thread has been automatically closed due to a potentially low quality title. '
+                'Your title should be descriptive of the problem you are having.\n\n'
+                'Please remake your thread with a new and more descriptive title.'
+            )
+            try:
+                await thread.send(low_quality_title)
+            except discord.Forbidden as e:
+                # Race condition with Discord...
+                if e.code == 40058:
+                    await asyncio.sleep(2)
+                    await thread.send(low_quality_title)
+
+            await thread.edit(archived=True, locked=True, reason='Low quality title.')
+            return
+
         message = thread.get_partial_message(thread.id)
         try:
             await message.pin()
         except discord.HTTPException:
             pass
-
-        tutorial = (
-            'Please remember the following rules:\n'
-            '- Do not unnecessarily ping people to help you.\n'
-            '- Ensure your title is proper and descriptive of the problem.\n'
-            '- Be patient while waiting for a response.\n'
-            '- If your question has been answered, please use the **?solved** command to close your thread and mark it as solved.\n\n'
-            '__**Failure to follow these rules can result in being blocked from using the forum.**__'
-        )
-
-        try:
-            await message.reply(tutorial)
-        except discord.Forbidden as e:
-            # Race condition with Discord...
-            if e.code == 40058:
-                await asyncio.sleep(2)
-                await message.reply(tutorial)
 
     async def toggle_role(self, ctx: GuildContext, role_id: int) -> None:
         if any(r.id == role_id for r in ctx.author.roles):
