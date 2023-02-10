@@ -502,7 +502,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             reason=f'Marked as solved by {user} (ID: {user.id})',
         )
 
-    @commands.command(name='solved')
+    @commands.command(name='solved', aliases=['is_solved'])
     @commands.cooldown(1, 20, commands.BucketType.channel)
     @is_help_thread()
     async def solved(self, ctx: GuildContext):
@@ -510,7 +510,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         assert isinstance(ctx.channel, discord.Thread)
 
-        if can_close_threads(ctx):
+        if can_close_threads(ctx) and ctx.invoked_with == 'solved':
             await ctx.message.add_reaction(ctx.tick(True))
             await self.mark_as_solved(ctx.channel, ctx.author)
         else:
