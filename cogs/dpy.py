@@ -223,7 +223,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             if thread.archived or thread.flags.pinned:
                 continue
 
-            if thread.owner not in thread.members: # shouldnt need to check cache
+            if thread.owner not in thread.members or thread.owner is None: # shouldnt need to check cache
                 await thread.edit(archived=True, reason='Auto-archived because OP left the thread.')
 
             if thread.last_message_id is None:
