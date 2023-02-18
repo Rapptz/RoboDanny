@@ -236,6 +236,7 @@ class OpenCollective(commands.Cog):
                 return
             else:
                 access_token = tokens['access_token']
+                await self.update_contributor_access_tokens(tokens, record['id'])
 
         metadata = contributor.to_metadata()
         url = f'https://discord.com/api/v10/users/@me/applications/{self.bot.config.oc_discord_client_id}/role-connection'
