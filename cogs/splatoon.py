@@ -1079,7 +1079,7 @@ class SalmonRun:
         stage = setting['coopStage']
         weapons = setting['weapons']
         self.stage: str = stage.get('name')
-        self.weapons: list[str] = [weapon.get('name', 'Unknown') for weapon in weapons]
+        self.weapons: list[WeaponPayload] = weapons
         self.image: Optional[str] = stage.get('image', {}).get('url')
 
 
@@ -1089,11 +1089,13 @@ class SalmonRunPageSource(menus.ListPageSource):
         self.cog: Splatoon = cog
 
     async def format_page(self, menu: RoboPages, salmon: SalmonRun):
-        e = discord.Embed(colour=0xFF7500, title='Salmon Run')
+        url = 'https://splatoonwiki.org/wiki/Salmon_Run_Next_Wave'
+        e = discord.Embed(colour=0xFF7500, title='Salmon Run', url=url)
+        embeds: list[discord.Embed] = [e]
 
         image = self.cog.get_image_url_for(salmon.stage) or salmon.image
         if image:
-            e.set_image(url=image)
+            e.set_thumbnail(url=image)
 
         now = discord.utils.utcnow()
         if now <= salmon.start_time:
@@ -1103,14 +1105,25 @@ class SalmonRunPageSource(menus.ListPageSource):
             e.set_footer(text='Ends').timestamp = salmon.end_time
             e.description = f'Ends in {time.human_timedelta(salmon.end_time)}'
 
-        e.add_field(name='Weapons', value='\n'.join(salmon.weapons) or 'Unknown')
+        e.add_field(name='Weapons', value='\n'.join([w.get('name', 'Unknown') for w in salmon.weapons]) or 'Unknown')
         e.add_field(name='Map', value=salmon.stage or 'Unknown')
+        if salmon.weapons:
+            image_url = salmon.weapons[0].get('image', {}).get('url')
+            if image_url:
+                e.set_image(url=image_url)
+
+            for weapon in salmon.weapons[1:]:
+                weapon_embed = discord.Embed(url=url)
+                image_url = weapon.get('image', {}).get('url')
+                if image_url:
+                    weapon_embed.set_image(url=image_url)
+                    embeds.append(weapon_embed)
 
         maximum = self.get_max_pages()
         if maximum > 1:
             e.title = f'Salmon Run {menu.current_page + 1} out of {maximum}'
 
-        return e
+        return {'embeds': embeds}
 
 
 class Splatfest:
