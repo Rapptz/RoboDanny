@@ -515,7 +515,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             await self.mark_as_solved(ctx.channel, ctx.author)
         else:
             msg = f"<@!{ctx.channel.owner_id}>, would you like to mark this thread as solved? This has been requested by {ctx.author.mention}."
-            confirm = await ctx.prompt(msg, author_id=ctx.channel.owner_id, timeout=120.0)
+            confirm = await ctx.prompt(msg, author_id=ctx.channel.owner_id, timeout=300.0)
             if confirm:
                 await ctx.send(
                     f'Marking as solved. Note that next time, you can mark the thread as solved yourself with `?solved`.'
