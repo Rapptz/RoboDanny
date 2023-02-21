@@ -1498,6 +1498,11 @@ class Mod(commands.Cog):
 
         await ctx.send(f'Banned {count}/{len(members)}')
 
+    @massban.error
+    async def massban_error(self, ctx: GuildContext, error: commands.CommandError):
+        if isinstance(error, commands.FlagError):
+            await ctx.send(str(error), ephemeral=True)
+
     @commands.command()
     @commands.guild_only()
     @checks.has_permissions(kick_members=True)
