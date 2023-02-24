@@ -91,7 +91,7 @@ def can_use_tempblock():
             return (
                 guild_level.manage_roles
                 or (
-                    ctx.channel.id in DISCORD_PY_HELP_CHANNEL
+                    ctx.channel.id == DISCORD_PY_HELP_CHANNEL
                     and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
                 )
                 or (ctx.channel.category_id == DISCORD_PY_JP_CATEGORY and ctx.author._roles.has(DISCORD_PY_JP_STAFF_ROLE))
