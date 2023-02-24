@@ -91,7 +91,7 @@ def can_use_tempblock():
             return (
                 guild_level.manage_roles
                 or (
-                    ctx.channel.id == DISCORD_PY_HELP_CHANNEL
+                    ctx.channel.parent.id == DISCORD_PY_HELP_CHANNEL
                     and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
                 )
                 or (ctx.channel.category_id == DISCORD_PY_JP_CATEGORY and ctx.author._roles.has(DISCORD_PY_JP_STAFF_ROLE))
@@ -435,7 +435,7 @@ class API(commands.Cog):
         return name.replace('-', '.')
 
     def get_block_channel(self, guild: discord.Guild, channel: discord.abc.GuildChannel) -> discord.abc.GuildChannel:
-        if guild.id == DISCORD_PY_GUILD and channel.id == DISCORD_PY_HELP_CHANNEL:
+        if guild.id == DISCORD_PY_GUILD and channel.parent.id == DISCORD_PY_HELP_CHANNEL:
             return channel  # type: ignore  # Not None
         return channel
 
