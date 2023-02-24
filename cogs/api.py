@@ -31,7 +31,7 @@ DISCORD_PY_JP_CATEGORY = 490287576670928914
 DISCORD_PY_JP_STAFF_ROLE = 490320652230852629
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELPER_ROLE = 558559632637952010
-DISCORD_PY_HELP_CHANNELS = (381965515721146390, 738572311107469354, 985299059441025044)
+DISCORD_PY_HELP_CHANNEL = 985299059441025044
 
 RTFM_PAGE_TYPES = {
     'stable': 'https://discordpy.readthedocs.io/en/stable',
@@ -91,7 +91,7 @@ def can_use_tempblock():
             return (
                 guild_level.manage_roles
                 or (
-                    ctx.channel.id in DISCORD_PY_HELP_CHANNELS
+                    ctx.channel.id in DISCORD_PY_HELP_CHANNEL
                     and (ctx.author._roles.has(DISCORD_PY_PROF_ROLE) or ctx.author._roles.has(DISCORD_PY_HELPER_ROLE))
                 )
                 or (ctx.channel.category_id == DISCORD_PY_JP_CATEGORY and ctx.author._roles.has(DISCORD_PY_JP_STAFF_ROLE))
@@ -434,10 +434,10 @@ class API(commands.Cog):
             name = name[index + 1 :]
         return name.replace('-', '.')
 
-    def get_block_channels(self, guild: discord.Guild, channel: discord.abc.GuildChannel) -> list[discord.abc.GuildChannel]:
-        if guild.id == DISCORD_PY_GUILD and channel.id in DISCORD_PY_HELP_CHANNELS:
-            return [guild.get_channel(x) for x in DISCORD_PY_HELP_CHANNELS]  # type: ignore  # Not None
-        return [channel]
+    def get_block_channel(self, guild: discord.Guild, channel: discord.abc.GuildChannel) -> discord.abc.GuildChannel:
+        if guild.id == DISCORD_PY_GUILD and channel.id == DISCORD_PY_HELP_CHANNEL:
+            return channel  # type: ignore  # Not None
+        return channel
 
     @commands.command()
     @can_use_block()
@@ -459,18 +459,17 @@ class API(commands.Cog):
 
             return
 
-        channels = self.get_block_channels(ctx.guild, ctx.channel)
+        channel = self.get_block_channel(ctx.guild, ctx.channel)
 
         try:
-            for channel in channels:
-                await channel.set_permissions(
-                    member,
-                    send_messages=False,
-                    add_reactions=False,
-                    create_public_threads=False,
-                    send_messages_in_threads=False,
-                    reason=reason,
-                )
+            await channel.set_permissions(
+                member,
+                send_messages=False,
+                add_reactions=False,
+                create_public_threads=False,
+                send_messages_in_threads=False,
+                reason=reason,
+            )
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -489,18 +488,17 @@ class API(commands.Cog):
         if isinstance(ctx.channel, discord.Thread):
             return await ctx.send('\N{THUMBS DOWN SIGN} Unblocking does not make sense for threads')
 
-        channels = self.get_block_channels(ctx.guild, ctx.channel)
+        channel = self.get_block_channel(ctx.guild, ctx.channel)
 
         try:
-            for channel in channels:
-                await channel.set_permissions(
-                    member,
-                    send_messages=None,
-                    add_reactions=None,
-                    create_public_threads=None,
-                    send_messages_in_threads=None,
-                    reason=reason,
-                )
+            await channel.set_permissions(
+                member,
+                send_messages=None,
+                add_reactions=None,
+                create_public_threads=None,
+                send_messages_in_threads=None,
+                reason=reason,
+            )
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -529,7 +527,7 @@ class API(commands.Cog):
         if reminder is None:
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
-        channels = self.get_block_channels(ctx.guild, ctx.channel)  # type: ignore  # Threads are disallowed
+        channel = self.get_block_channel(ctx.guild, ctx.channel)  # type: ignore  # Threads are disallowed
         timer = await reminder.create_timer(
             duration.dt,
             'tempblock',
@@ -543,15 +541,14 @@ class API(commands.Cog):
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
 
         try:
-            for channel in channels:
-                await channel.set_permissions(
-                    member,
-                    send_messages=False,
-                    add_reactions=False,
-                    create_public_threads=False,
-                    send_messages_in_threads=False,
-                    reason=reason,
-                )
+            await channel.set_permissions(
+                member,
+                send_messages=False,
+                add_reactions=False,
+                create_public_threads=False,
+                send_messages_in_threads=False,
+                reason=reason,
+            )
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
@@ -590,9 +587,9 @@ class API(commands.Cog):
 
         reason = f'Automatic unblock from timer made on {timer.created_at} by {moderator}.'
 
-        for ch in self.get_block_channels(guild, channel):
+        channel = self.get_block_channel(guild, channel)
             try:
-                await ch.set_permissions(
+                await channel.set_permissions(
                     to_unblock,
                     send_messages=None,
                     add_reactions=None,
