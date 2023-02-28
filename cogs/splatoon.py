@@ -621,7 +621,7 @@ class SplatNet3:
 
     async def schedule(self) -> Optional[SplatNetSchedule]:
         # Called StageScheduleQuery internally
-        data = await self.cached_graphql_query('730cd98e84f1030d3e9ac86b6f1aae13')
+        data = await self.cached_graphql_query('011e394c0e384d77a0701474c8c11a20')
         data = data.get('data', {})
         if not data:
             return None
@@ -1783,35 +1783,47 @@ class Splatoon(commands.GroupCog):
         self._splatnet3 = self.bot.loop.create_task(self.splatnet3())
 
     async def splatnet3(self) -> None:
-        try:
-            session_token = self.splat3_data.get('session_token')
-            if session_token is None:
-                raise Unauthenticated()
+        # Retry at most 5 times.
+        for i in range(5):
+            try:
+                session_token = self.splat3_data.get('session_token')
+                if session_token is None:
+                    raise Unauthenticated()
 
-            self.splatnet = SplatNet3(session_token, session=self.bot.session)
-            await self.splatnet.refresh_expired_tokens()
+                self.splatnet = SplatNet3(session_token, session=self.bot.session)
+                await self.splatnet.refresh_expired_tokens()
 
-            while not self.bot.is_closed():
-                seconds = []
-                seconds.append((await self.parse_splatnet3_schedule()) or 3600.0)
-                seconds.append((await self.parse_splatnet3_onlineshop()) or 3600.0)
-                seconds.append((await self.scrape_splatnet3_stats_and_images()) or 3600.0)
-                self._last_request = discord.utils.utcnow()
-                log.info('SplatNet 3 sleeping for %s seconds.', min(seconds))
-                await asyncio.sleep(min(seconds))
-        except Unauthenticated:
-            await self.log_error(extra=f'Unauthenticated for SplatNet')
-            raise
-        except SplatNetError:
-            await self.log_error(extra=f'Unauthenticated for SplatNet (internal error)')
-            raise Unauthenticated()
-        except asyncio.CancelledError:
-            raise
-        except (OSError, discord.ConnectionClosed):
-            self._splatnet3.cancel()
-            self._splatnet3 = self.bot.loop.create_task(self.splatnet3())
-        except Exception:
-            await self.log_error(extra='SplatNet 3 Error')
+                while not self.bot.is_closed():
+                    seconds = []
+                    seconds.append((await self.parse_splatnet3_schedule()) or 3600.0)
+                    seconds.append((await self.parse_splatnet3_onlineshop()) or 3600.0)
+                    seconds.append((await self.scrape_splatnet3_stats_and_images()) or 3600.0)
+                    self._last_request = discord.utils.utcnow()
+                    log.info('SplatNet 3 sleeping for %s seconds.', min(seconds))
+                    await asyncio.sleep(min(seconds))
+            except Unauthenticated:
+                await self.log_error(extra=f'Unauthenticated for SplatNet')
+                raise
+            except SplatNetError:
+                delta = (i + 1) * 60
+                extra = 'Unauthenticated for SplatNet (internal error)'
+                if i != 4:
+                    extra += f', retrying in {delta} seconds'
+
+                await self.log_error(extra=extra)
+                await asyncio.sleep(delta)
+
+                if i == 4:
+                    raise Unauthenticated()
+
+                continue
+            except asyncio.CancelledError:
+                raise
+            except (OSError, discord.ConnectionClosed):
+                self._splatnet3.cancel()
+                self._splatnet3 = self.bot.loop.create_task(self.splatnet3())
+            except Exception:
+                await self.log_error(extra='SplatNet 3 Error')
 
     def get_weapons_named(self, name: str) -> list[Weapon]:
         data: list[Weapon] = self.splat3_data.get('weapons', [])
