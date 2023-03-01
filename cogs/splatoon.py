@@ -1783,8 +1783,6 @@ class Splatoon(commands.GroupCog):
         self._splatnet3 = self.bot.loop.create_task(self.splatnet3())
 
     async def splatnet3(self) -> None:
-        # Retry at most 5 times.
-        for i in range(5):
             try:
                 session_token = self.splat3_data.get('session_token')
                 if session_token is None:
@@ -1805,18 +1803,8 @@ class Splatoon(commands.GroupCog):
                 await self.log_error(extra=f'Unauthenticated for SplatNet')
                 raise
             except SplatNetError:
-                delta = (i + 1) * 60
-                extra = 'Unauthenticated for SplatNet (internal error)'
-                if i != 4:
-                    extra += f', retrying in {delta} seconds'
-
-                await self.log_error(extra=extra)
-                await asyncio.sleep(delta)
-
-                if i == 4:
-                    raise Unauthenticated()
-
-                continue
+                await self.log_error(extra='Unauthenticated for SplatNet (internal error)')
+                raise
             except asyncio.CancelledError:
                 raise
             except (OSError, discord.ConnectionClosed):
