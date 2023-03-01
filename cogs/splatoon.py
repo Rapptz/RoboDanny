@@ -486,8 +486,9 @@ class SplatNet3:
             data = await resp.json()
             if 'result' not in data:
                 if data.get('status', None) == 9403 and retries < 5:
-                    log.info('Got an invalid SplatNet 3 token error, retrying again in 30 seconds...')
-                    await asyncio.sleep(30)
+                    delta = (retries + 1) * 30
+                    log.info('Got an invalid SplatNet 3 token error, retrying again in %s seconds...', delta)
+                    await asyncio.sleep(delta)
                     return await self.refresh_expired_tokens(retries=retries + 1)
                 raise SplatNetError(f'Could not get account login token (data: {data!r})')
 
