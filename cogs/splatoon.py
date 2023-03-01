@@ -328,8 +328,8 @@ class SplatNet3:
         The session to use for making requests.
     """
 
-    APP_VERSION = '2.3.1'
-    WEB_VIEW_VERSION = '2.0.0-8a061f6c'
+    APP_VERSION = '2.5.0'
+    WEB_VIEW_VERSION = '3.0.0-2857bc50'
 
     def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
         self.session_token = session_token
