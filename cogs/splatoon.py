@@ -6,6 +6,7 @@ from discord.ext import commands, menus, tasks
 from discord import app_commands
 from .utils import config, fuzzy, time
 from .utils.formats import plural
+from .utils.context import ConfirmationView
 from .utils.paginator import RoboPages, FieldPageSource
 
 from urllib.parse import quote as urlquote
@@ -19,6 +20,7 @@ import random
 import asyncio
 import discord
 import logging
+import hashlib
 import pathlib
 import base64
 import mmh3
@@ -30,7 +32,16 @@ import io
 if TYPE_CHECKING:
     from bot import RoboDanny
     from .utils.context import Context
+    from cogs.reminder import Timer
     import aiohttp
+
+    # Internal type dicts
+
+    class NotifyReminderData(TypedDict):
+        embed: dict[str, Any]
+        user_id: str
+        is_salmon: bool
+        nonce: str
 
     # Splatoon 2 Config schema
 
@@ -900,17 +911,23 @@ class Rotation:
 
 class SchedulePageSource(menus.ListPageSource):
     def __init__(self, data: dict[datetime.datetime, list[Rotation]]):
-        super().__init__(list(data.values()), per_page=1)
+        super().__init__(list(data.items()), per_page=1)
 
-    async def format_page(self, menu: menus.MenuPages, entries: list[Rotation]) -> discord.Embed:
+    def is_expired(self, page_number: int) -> bool:
+        start_time, _ = self.entries[page_number]
+        return start_time <= discord.utils.utcnow()
+
+    async def format_page(self, menu: menus.MenuPages, page: tuple[datetime.datetime, list[Rotation]]) -> discord.Embed:
         embed = discord.Embed(color=SPLATOON_3_PURPLE)
 
+        _, entries = page
         try:
             first = entries[0]
         except IndexError:
             embed.description = 'No rotations found...'
             return embed
 
+        embed.timestamp = first.start_time
         if first.current:
             embed.title = f'Ends {discord.utils.format_dt(first.end_time, "R")}'
         else:
@@ -919,7 +936,7 @@ class SchedulePageSource(menus.ListPageSource):
         for rotation in entries:
             embed.add_field(
                 name=f'{rotation.label}: {rotation.rule}',
-                value=f'{rotation.stage_a} vs {rotation.stage_b}',
+                value=f'{rotation.stage_a} and {rotation.stage_b}',
                 inline=False,
             )
 
@@ -1146,6 +1163,10 @@ class SalmonRunPageSource(menus.ListPageSource):
     def __init__(self, cog: Splatoon, entries: list[SalmonRun]):
         super().__init__(entries=entries, per_page=1)
         self.cog: Splatoon = cog
+
+    def is_expired(self, page_number: int) -> bool:
+        rotation: SalmonRun = self.entries[page_number]
+        return rotation.start_time <= discord.utils.utcnow()
 
     async def format_page(self, menu: RoboPages, salmon: SalmonRun):
         url = 'https://splatoonwiki.org/wiki/Salmon_Run_Next_Wave'
@@ -1462,6 +1483,130 @@ class BrandOrAbility:
         return cls.get(argument)
 
 
+class NotifyRotationButton(discord.ui.Button):
+    """This button is only really meant to be used by the embeds output from
+    either ?salmonrun, ?schedule, or ?nextmaps.
+
+    This means that it removes footers, titles, images, and descriptions from the embed.
+    """
+
+    def __init__(self, *, bot: RoboDanny, salmon: bool):
+        super().__init__(style=discord.ButtonStyle.green, label='Remind me when this rotation starts', row=0)
+        self.bot = bot
+        self.salmon = salmon
+
+    def compute_nonce(self, remind_at: datetime.datetime, embed: discord.Embed) -> str:
+        m = hashlib.sha256()
+        m.update(remind_at.isoformat().encode())
+        for field in embed.fields:
+            if field.name is not None:
+                m.update(field.name.encode())
+            if field.value is not None:
+                m.update(field.value.encode())
+        return m.hexdigest()
+
+    async def callback(self, interaction: discord.Interaction) -> Any:
+        await interaction.response.defer(ephemeral=True)
+
+        assert interaction.message is not None
+        embed = interaction.message.embeds[0]
+        remind_at = embed.timestamp
+        key = 'Salmon Run' if self.salmon else 'stage'
+        reminder = self.bot.reminder
+
+        if remind_at is None or remind_at < discord.utils.utcnow():
+            await interaction.followup.send(
+                f"Sorry, I can't remind you of this {key} rotation. It already started!", ephemeral=True
+            )
+            return
+
+        if reminder is None:
+            await interaction.followup.send(
+                'Sorry, this functionality is not currently available. Try again later', ephemeral=True
+            )
+            return
+
+        user_id = str(interaction.user.id)
+        nonce = self.compute_nonce(remind_at, embed)
+        old_timer = await reminder.get_timer('splatoon_rotation_reminder', user_id=user_id, nonce=nonce)
+
+        if old_timer is not None:
+            view = ConfirmationView(timeout=180.0, author_id=interaction.user.id, delete_after=True)
+            msg = await interaction.followup.send(
+                'You are already being reminded of this rotation. Do you want to cancel it?',
+                view=view,
+                ephemeral=True,
+                wait=True,
+            )
+
+            await view.wait()
+            if view.value:
+                await reminder.delete_timer('splatoon_rotation_reminder', user_id=user_id, nonce=nonce)
+                await interaction.followup.send('Ok, I have cancelled your reminder.', ephemeral=True)
+            else:
+                await msg.delete()
+
+            return
+
+        msg = f'Are you sure you want to be reminded of this {key} rotation? You will be reminded {discord.utils.format_dt(remind_at, "R")}.'
+
+        view = ConfirmationView(timeout=180.0, author_id=interaction.user.id, delete_after=True)
+        await interaction.followup.send(msg, view=view, ephemeral=True)
+        await view.wait()
+
+        if not view.value:
+            await interaction.followup.send('Ok, I will not remind you of this rotation.', ephemeral=True)
+            return
+
+        await reminder.create_timer(
+            remind_at,
+            'splatoon_rotation_reminder',
+            user_id=user_id,
+            nonce=nonce,
+            embed=embed.to_dict(),
+            is_salmon=self.salmon,
+        )
+
+        await interaction.followup.send(
+            f'Ok, I will remind you of this rotation in DMs {discord.utils.format_dt(remind_at, "R")}.', ephemeral=True
+        )
+
+
+class NotifyRotationView(discord.ui.View):
+    def __init__(self, *, bot: RoboDanny, salmon: bool):
+        super().__init__(timeout=180.0)
+        self.add_item(NotifyRotationButton(bot=bot, salmon=salmon))
+        self.message: Optional[discord.Message] = None
+
+    async def on_timeout(self) -> None:
+        if self.message is not None:
+            await self.message.edit(view=None)
+
+
+class NotificationPages(RoboPages):
+    def __init__(self, source: menus.PageSource, *, ctx: Context, salmon: bool) -> None:
+        super().__init__(source, ctx=ctx, compact=True)
+        self.notify_button = NotifyRotationButton(bot=ctx.bot, salmon=salmon)
+
+        for children in self.children:
+            children.row = 1
+
+        self.notify_button.disabled = self.is_expired(0)
+        self.clear_items()
+        self.add_item(self.notify_button)
+        self.fill_items()
+
+    def is_expired(self, page_number: int, /) -> bool:
+        try:
+            return self.source.is_expired(page_number)  # type: ignore
+        except IndexError:
+            return True
+
+    async def show_page(self, interaction: discord.Interaction, page_number: int) -> None:
+        self.notify_button.disabled = self.is_expired(page_number)
+        return await super().show_page(interaction, page_number)
+
+
 # JSON stuff
 
 
@@ -1621,6 +1766,30 @@ class Splatoon(commands.GroupCog):
             return await ctx.send(str(error))
         if isinstance(error, InvalidBrandOrAbility):
             return await ctx.send('Could not find a brand or ability with that name')
+
+    @commands.Cog.listener()
+    async def on_splatoon_rotation_reminder_timer_complete(self, timer: Timer):
+        data: NotifyReminderData = timer.kwargs  # type: ignore
+
+        key = 'Salmon Run' if data['is_salmon'] else 'stage'
+        msg = f'You asked to be reminded of this {key} rotation {discord.utils.format_dt(timer.created_at, "R")}.'
+
+        try:
+            channel = await self.bot.create_dm(discord.Object(id=data['user_id']))
+        except discord.HTTPException:
+            return
+
+        embed = discord.Embed.from_dict(data['embed'])
+        embed.set_image(url=None)
+        embed.description = None
+        embed.timestamp = None
+        embed.title = None
+        embed.set_footer(text=None)
+
+        try:
+            await channel.send(msg, embed=embed)
+        except discord.HTTPException:
+            pass
 
     @property
     def salmon_run(self) -> list[SalmonRun]:
@@ -1947,7 +2116,7 @@ class Splatoon(commands.GroupCog):
 
         grouped = self.sp3_map_data.grouped_by_date()
         source = SchedulePageSource(grouped)
-        menu = RoboPages(source, ctx=ctx, compact=True)
+        menu = NotificationPages(source, ctx=ctx, salmon=False)
         await menu.start()
 
     async def paginated_splatoon3_schedule(self, ctx: Context, mode: str):
@@ -2026,8 +2195,10 @@ class Splatoon(commands.GroupCog):
 
         if start_time is not None:
             e.title = f'Starts {discord.utils.format_dt(start_time, "R")}'
+            e.timestamp = start_time
 
-        await ctx.send(embed=e)
+        view = NotifyRotationView(bot=self.bot, salmon=False)
+        view.message = await ctx.send(embed=e, view=view)
 
     @commands.hybrid_command()
     async def salmonrun(self, ctx: Context):
@@ -2036,7 +2207,7 @@ class Splatoon(commands.GroupCog):
         if not salmon:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        pages = RoboPages(SalmonRunPageSource(self, salmon), ctx=ctx, compact=True)
+        pages = NotificationPages(SalmonRunPageSource(self, salmon), ctx=ctx, salmon=True)
         await pages.start()
 
     @commands.hybrid_command(aliases=['splatnetshop'])
