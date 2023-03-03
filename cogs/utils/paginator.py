@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, Dict, Optional
 import discord
+import traceback
 from discord.ext import commands
 from discord.ext.commands import Paginator as CommandPaginator
 from discord.ext import menus
@@ -141,6 +142,21 @@ class RoboPages(discord.ui.View):
             await interaction.followup.send('An unknown error occurred, sorry', ephemeral=True)
         else:
             await interaction.response.send_message('An unknown error occurred, sorry', ephemeral=True)
+
+        try:
+            exc = ''.join(traceback.format_exception(type(error), error, error.__traceback__, chain=False))
+            embed = discord.Embed(
+                title=f'{self.source.__class__.__name__} Error',
+                description=f'```py\n{exc}\n```',
+                timestamp=interaction.created_at,
+                colour=0xCC3366,
+            )
+            embed.add_field(name='User', value=f'{interaction.user} ({interaction.user.id})')
+            embed.add_field(name='Guild', value=f'{interaction.guild} ({interaction.guild_id})')
+            embed.add_field(name='Channel', value=f'{interaction.channel} ({interaction.channel_id})')
+            await self.ctx.bot.stats_webhook.send(embed=embed)
+        except discord.HTTPException:
+            pass
 
     async def start(self, *, content: Optional[str] = None, ephemeral: bool = False) -> None:
         if self.check_embeds and not self.ctx.channel.permissions_for(self.ctx.me).embed_links:  # type: ignore
