@@ -773,7 +773,9 @@ class SplatNetSchedule:
             if inner is not None:
                 stages = inner['vsStages']
                 rule = inner['vsRule']['name']
-                self.regular.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+                self.regular.append(
+                    Rotation(label='Regular Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                )
 
         splatfest: list[BaseScheduleRotationPayload] = data.get('festSchedules', {}).get('nodes', [])
         self.splatfest: list[Rotation] = []
@@ -784,7 +786,9 @@ class SplatNetSchedule:
             if inner is not None:
                 stages = inner['vsStages']
                 rule = inner['vsRule']['name']
-                self.splatfest.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+                self.splatfest.append(
+                    Rotation(label='Splatfest', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                )
 
         ranked: list[RankedScheduleRotationPayload] = data.get('bankaraSchedules', {}).get('nodes', [])
         self.ranked_series: list[Rotation] = []
@@ -799,8 +803,10 @@ class SplatNetSchedule:
                 mode = inner_setting['mode']
                 rotation = Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages)
                 if mode == 'OPEN':
+                    rotation.label = 'Anarchy Battle (Open)'
                     self.ranked_open.append(rotation)
                 elif mode == 'CHALLENGE':
+                    rotation.label = 'Anarchy Battle (Series)'
                     self.ranked_series.append(rotation)
 
         league: list[LeagueScheduleRotationPayload] = data.get('leagueSchedules', {}).get('nodes', [])
@@ -812,7 +818,9 @@ class SplatNetSchedule:
             if inner is not None:
                 stages = inner['vsStages']
                 rule = inner['vsRule']['name']
-                self.league.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+                self.league.append(
+                    Rotation(label='League', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                )
 
         x_rank: list[XScheduleRotationPayload] = data.get('xSchedules', {}).get('nodes', [])
         self.x_rank: list[Rotation] = []
@@ -823,7 +831,9 @@ class SplatNetSchedule:
             if inner is not None:
                 stages = inner['vsStages']
                 rule = inner['vsRule']['name']
-                self.x_rank.append(Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages))
+                self.x_rank.append(
+                    Rotation(label='X Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                )
 
         salmon_run: list[SalmonRunRotationPayload] = (
             data.get('coopGroupingSchedule', {}).get('regularSchedules', {}).get('nodes', [])
@@ -842,6 +852,13 @@ class SplatNetSchedule:
             ('Regular Battle', self.regular),
         )
 
+    def grouped_by_date(self) -> dict[datetime.datetime, list[Rotation]]:
+        grouped: dict[datetime.datetime, list[Rotation]] = {}
+        for _, rotations in self.pairs():
+            for rotation in rotations:
+                grouped.setdefault(rotation.start_time, []).append(rotation)
+        return grouped
+
     @property
     def soonest_expiry(self) -> Optional[datetime.datetime]:
         expiry_times = []
@@ -857,13 +874,20 @@ class SplatNetSchedule:
 
 class Rotation:
     def __init__(
-        self, *, start_time: datetime.datetime, end_time: datetime.datetime, rule: str, stages: list[StagePayload]
+        self,
+        *,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime,
+        rule: str,
+        stages: list[StagePayload],
+        label: str = 'Unknown',
     ) -> None:
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
         self.stage_a: str = stages[0]['name']
         self.stage_b: str = stages[1]['name']
         self.rule: str = rule
+        self.label: str = label
 
     @property
     def current(self) -> bool:
@@ -872,6 +896,39 @@ class Rotation:
 
     def __repr__(self) -> str:
         return f'<Rotation start={self.start_time} end={self.end_time} rule={self.rule} stage_a={self.stage_a!r} stage_b={self.stage_b!r}>'
+
+
+class SchedulePageSource(menus.ListPageSource):
+    def __init__(self, data: dict[datetime.datetime, list[Rotation]]):
+        super().__init__(list(data.values()), per_page=1)
+
+    async def format_page(self, menu: menus.MenuPages, entries: list[Rotation]) -> discord.Embed:
+        embed = discord.Embed(color=SPLATOON_3_PURPLE)
+
+        try:
+            first = entries[0]
+        except IndexError:
+            embed.description = 'No rotations found...'
+            return embed
+
+        if first.current:
+            embed.title = f'Ends {discord.utils.format_dt(first.end_time, "R")}'
+        else:
+            embed.title = f'Starts {discord.utils.format_dt(first.start_time, "R")}'
+
+        for rotation in entries:
+            embed.add_field(
+                name=f'{rotation.label}: {rotation.rule}',
+                value=f'{rotation.stage_a} vs {rotation.stage_b}',
+                inline=False,
+            )
+
+        maximum = self.get_max_pages()
+        if maximum > 1:
+            text = f'Page {menu.current_page + 1}/{maximum}'
+            embed.set_footer(text=text)
+
+        return embed
 
 
 class Gear:
@@ -1884,27 +1941,14 @@ class Splatoon(commands.GroupCog):
             else:
                 await ctx.send(f'An error has occurred of status code {resp.status} happened.')
 
-    async def generic_splatoon3_schedule(self, ctx: Context):
+    async def paginated_generic_splatoon3_schedule(self, ctx: Context):
         if self.sp3_map_data is None:
             return await ctx.send('Sorry, no map data has been found yet.')
 
-        end_time = None
-        e = discord.Embed(colour=SPLATOON_3_PURPLE)
-
-        for name, rotations in self.sp3_map_data.pairs():
-            if not rotations:
-                e.add_field(name=name, value='Nothing found...')
-                continue
-
-            rotation = rotations[0]
-            end_time = rotation.end_time
-
-            e.add_field(name=f'{name}: {rotation.rule}', value=f'{rotation.stage_a} and {rotation.stage_b}', inline=False)
-
-        if end_time:
-            e.title = f'Ends {discord.utils.format_dt(end_time, "R")}'
-
-        await ctx.send(embed=e)
+        grouped = self.sp3_map_data.grouped_by_date()
+        source = SchedulePageSource(grouped)
+        menu = RoboPages(source, ctx=ctx, compact=True)
+        await menu.start()
 
     async def paginated_splatoon3_schedule(self, ctx: Context, mode: str):
         rotations: list[Rotation] = getattr(self.sp3_map_data, mode, [])
@@ -1956,7 +2000,7 @@ class Splatoon(commands.GroupCog):
     async def schedule(self, ctx, *, type: Annotated[Optional[str], mode_key] = None):
         """Shows the current Splatoon 3 schedule."""
         if type is None:
-            await self.generic_splatoon3_schedule(ctx)
+            await self.paginated_generic_splatoon3_schedule(ctx)
         else:
             await self.paginated_splatoon3_schedule(ctx, type)
 
