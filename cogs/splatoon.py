@@ -231,6 +231,15 @@ if TYPE_CHECKING:
     class SalmonRunRotationPayload(BaseScheduleRotationPayload):
         setting: SalmonRunSettingPayload
 
+    class BigRunSettingPayload(TypedDict):
+        __typename: Literal['CoopBigRunSetting']
+        rule: Literal['BIG_RUN']
+        coopStage: StagePayload
+        weapons: list[WeaponPayload]
+
+    class BigRunRotationPayload(BaseScheduleRotationPayload):
+        setting: BigRunSettingPayload
+
     class GearPowerPayload(TypedDict):
         name: str
         image: ImagePayload
@@ -846,10 +855,16 @@ class SplatNetSchedule:
                     Rotation(label='X Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
                 )
 
+        salmon_run_schedules = data.get('coopGroupingSchedule', {})
         salmon_run: list[SalmonRunRotationPayload] = (
-            data.get('coopGroupingSchedule', {}).get('regularSchedules', {}).get('nodes', [])
+            salmon_run_schedules.get('regularSchedules', {}).get('nodes', [])
         )
         self.salmon_run: list[SalmonRun] = [SalmonRun(data) for data in salmon_run]
+        big_run: list[BigRunRotationPayload] = salmon_run_schedules.get('bigRunSchedules', {}).get('nodes', [])
+
+        if big_run:
+            self.salmon_run.extend([SalmonRun(data) for data in big_run])
+            self.salmon_run.sort(key=lambda s: s.start_time)
 
     def pairs(self) -> tuple[tuple[str, list[Rotation]], ...]:
         if self.splatfest:
@@ -1147,7 +1162,7 @@ class WeaponSelect(discord.ui.Select):
 
 
 class SalmonRun:
-    def __init__(self, data: SalmonRunRotationPayload):
+    def __init__(self, data: Union[SalmonRunRotationPayload, BigRunRotationPayload]):
         self.start_time: datetime.datetime = fromisoformat(data['startTime'])
         self.end_time: datetime.datetime = fromisoformat(data['endTime'])
 
@@ -1157,6 +1172,7 @@ class SalmonRun:
         self.stage: str = stage.get('name')
         self.weapons: list[WeaponPayload] = weapons
         self.image: Optional[str] = stage.get('image', {}).get('url')
+        self.big_run = setting.get('rule') == 'BIG_RUN'
 
 
 class SalmonRunPageSource(menus.ListPageSource):
@@ -1170,10 +1186,15 @@ class SalmonRunPageSource(menus.ListPageSource):
 
     async def format_page(self, menu: RoboPages, salmon: SalmonRun):
         url = 'https://splatoonwiki.org/wiki/Salmon_Run_Next_Wave'
-        e = discord.Embed(colour=0xFF7500, title='Salmon Run', url=url)
+        if salmon.big_run:
+            kind = 'Big Run'
+            e = discord.Embed(colour=0xB322FF, title=kind, url=url)
+        else:
+            kind = 'Salmon Run'
+            e = discord.Embed(colour=0xFF7500, title=kind, url=url)
         embeds: list[discord.Embed] = [e]
 
-        image = self.cog.get_image_url_for(salmon.stage) or salmon.image
+        image = salmon.image
         if image:
             e.set_thumbnail(url=image)
 
@@ -1201,7 +1222,7 @@ class SalmonRunPageSource(menus.ListPageSource):
 
         maximum = self.get_max_pages()
         if maximum > 1:
-            e.title = f'Salmon Run {menu.current_page + 1} out of {maximum}'
+            e.title = f'{kind} {menu.current_page + 1} out of {maximum}'
 
         return {'embeds': embeds}
 
