@@ -509,7 +509,7 @@ class Meta(commands.Cog):
             badges.append('<:owner:585789630800986114>')  # Discord Bots
 
         if isinstance(user, discord.Member) and user.premium_since is not None:
-            e.add_field(name='Booster Since', value=format_date(user.premium_since), inline=False)
+            e.add_field(name='Boosted', value=format_date(user.premium_since), inline=False)
             badges.append('<:booster:1087022965775925288>')  # R. Danny
 
         if badges:
