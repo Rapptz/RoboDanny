@@ -478,6 +478,43 @@ class Meta(commands.Cog):
         e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)
         e.add_field(name='Created', value=format_date(user.created_at), inline=False)
 
+        badges_to_emoji = {
+            'partner': '<:partnernew:754032603081998336>',  # Discord Bots
+            'verified_bot_developer': '<:verifiedbotdev:853277205264859156>',  # Discord Bots
+            'hypesquad_balance': '<:balance:585763004574859273>',  # Discord Bots
+            'hypesquad_bravery': '<:bravery:585763004218343426>',  # Discord Bots
+            'hypesquad_brilliance': '<:brilliance:585763004495298575>',  # Discord Bots
+            'bug_hunter': '<:bughunter:585765206769139723>',  # Discord Bots
+            'hypesquad': '<:hypesquad_events:585765895939424258>',  # Discord Bots
+            'early_supporter': ' <:supporter:585763690868113455> ',  # Discord Bots
+            'bug_hunter_level_2': '<:goldbughunter:853274684337946648>',  # Discord Bots
+            'staff': '<:staff_badge:1087023029105725481>',  # R. Danny
+            'discord_certified_moderator': '<:certified_mod_badge:1087023030431129641>',  # R. Danny
+            'active_developer': '<:active_developer:1087023031332900894>',  # R. Danny
+        }
+
+        misc_flags_descriptions = {
+            'team_user': 'Application Team User',
+            'system': 'System User',
+            'spammer': 'Spammer',
+            'verified_bot': 'Verified Bot',
+            'bot_http_interactions': 'HTTP Interactions Bot',
+        }
+
+        set_flags = {flag for flag, value in user.public_flags if value}
+        subset_flags = set_flags & badges_to_emoji.keys()
+        badges = [badges_to_emoji[flag] for flag in subset_flags]
+
+        if ctx.guild is not None and ctx.guild.owner_id == user.id:
+            badges.append('<:owner:585789630800986114>')  # Discord Bots
+
+        if isinstance(user, discord.Member) and user.premium_since is not None:
+            e.add_field(name='Booster Since', value=format_date(user.premium_since), inline=False)
+            badges.append('<:booster:1087022965775925288>')  # R. Danny
+
+        if badges:
+            e.description = ''.join(badges)
+
         voice = getattr(user, 'voice', None)
         if voice is not None:
             vc = voice.channel
@@ -487,6 +524,14 @@ class Meta(commands.Cog):
 
         if roles:
             e.add_field(name='Roles', value=', '.join(roles) if len(roles) < 10 else f'{len(roles)} roles', inline=False)
+
+        remaining_flags = (set_flags - subset_flags) & misc_flags_descriptions.keys()
+        if remaining_flags:
+            e.add_field(
+                name='Public Flags',
+                value='\n'.join(misc_flags_descriptions[flag] for flag in remaining_flags),
+                inline=False,
+            )
 
         colour = user.colour
         if colour.value:
