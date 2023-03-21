@@ -56,6 +56,29 @@ class ShortTime:
         return cls(argument, now=ctx.message.created_at)
 
 
+class RelativeDelta(app_commands.Transformer, commands.Converter):
+    @classmethod
+    def __do_conversion(cls, argument: str) -> relativedelta:
+        match = ShortTime.compiled.fullmatch(argument)
+        if match is None or not match.group(0):
+            raise ValueError('invalid time provided')
+
+        data = {k: int(v) for k, v in match.groupdict(default=0).items()}
+        return relativedelta(**data)
+
+    async def convert(self, ctx: Context, argument: str) -> relativedelta:
+        try:
+            return self.__do_conversion(argument)
+        except ValueError as e:
+            raise commands.BadArgument(str(e)) from None
+
+    async def transform(self, interaction, value: str) -> relativedelta:
+        try:
+            return self.__do_conversion(value)
+        except ValueError as e:
+            raise app_commands.AppCommandError(str(e)) from None
+
+
 class HumanTime:
     calendar = pdt.Calendar(version=pdt.VERSION_CONTEXT_STYLE)
 

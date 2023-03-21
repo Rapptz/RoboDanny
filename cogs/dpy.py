@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from discord.ext import commands, tasks
 from typing import TYPE_CHECKING, Any, Optional, Union, Sequence
+from dateutil.relativedelta import relativedelta
 from cogs.utils.formats import human_join
-from cogs.utils.paginator import FieldPageSource, RoboPages
+from cogs.utils.time import RelativeDelta
+from cogs.utils.paginator import FieldPageSource, RoboPages, SimplePageSource
 import binascii
 import datetime
 import discord
@@ -97,6 +99,18 @@ class GistContent:
             else:
                 self.language = block[3:]
                 self.source = code.rstrip('`').replace('```', '')
+
+
+class UnsolvedFlags(commands.FlagConverter):
+    messages: int = commands.flag(
+        default=0,
+        description='The minimum number of messages the thread needs to be considered active. Defaults to 0.',
+    )
+    threshold: relativedelta = commands.flag(
+        default=relativedelta(minutes=5),
+        description='How old the thread needs to be (e.g. "5m" or "20m"). Defaults to 5 minutes.',
+        converter=RelativeDelta(),
+    )
 
 
 def make_field_from_note(data: dict[str, Any], column_id: int) -> tuple[str, str]:
@@ -534,6 +548,44 @@ class DPYExclusive(commands.Cog, name='discord.py'):
     async def on_solved_error(self, ctx: GuildContext, error: Exception):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(f'This command is on cooldown. Try again in {error.retry_after:.2f}s')
+
+    @commands.hybrid_command(name='unsolved')
+    @discord.app_commands.guilds(DISCORD_PY_GUILD_ID)
+    async def unsolved(self, ctx: GuildContext, *, flags: UnsolvedFlags):
+        """Searches for threads that need attention.
+
+        This command uses a syntax similar to Discord's search bar.
+
+        The following flags are valid.
+
+        `messages:` The minimum number of messages needed to be considered unsolved.
+        `threshold:` How old the thread needs to be to be considered unsolved (e.g. "5m", "20m")
+        """
+
+        forum: discord.ForumChannel = ctx.guild.get_channel(DISCORD_PY_HELP_FORUM)  # type: ignore
+        now = ctx.message.created_at
+        threshold = now - flags.threshold
+
+        # First element of the tuple is used for a finalising sort
+        unsolved_threads: list[tuple[datetime.datetime, str]] = []
+        for thread in forum.threads:
+            dt = discord.utils.snowflake_time(thread.last_message_id) if thread.last_message_id else thread.created_at or now
+            if not thread.archived and not thread.locked and thread.message_count <= flags.messages and dt < threshold:
+                unsolved_threads.append(
+                    (
+                        dt,
+                        f'{thread.mention} <:_:824240882697633812> {thread.message_count}・{discord.utils.format_dt(dt, "R")}',
+                    )
+                )
+
+        unsolved_threads.sort(key=lambda t: t[0])
+        to_paginate = [t[1] for t in unsolved_threads]
+        if not to_paginate:
+            return await ctx.send('No threads found.', ephemeral=True)
+
+        pages = RoboPages(SimplePageSource(to_paginate, per_page=12), ctx=ctx, compact=True)
+        pages.embed = discord.Embed(title='Unsolved Threads', colour=discord.Colour.blurple())  # type: ignore
+        await pages.start(ephemeral=True)
 
 
 async def setup(bot: RoboDanny):
