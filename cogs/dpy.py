@@ -104,7 +104,7 @@ class GistContent:
 class UnsolvedFlags(commands.FlagConverter):
     messages: int = commands.flag(
         default=0,
-        description='The minimum number of messages the thread needs to be considered active. Defaults to 0.',
+        description='The maximum number of messages the thread needs to be considered active. Defaults to 0.',
     )
     threshold: relativedelta = commands.flag(
         default=relativedelta(minutes=5),
@@ -558,7 +558,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         The following flags are valid.
 
-        `messages:` The minimum number of messages needed to be considered unsolved.
+        `messages:` The maximum number of messages needed to be considered unsolved.
         `threshold:` How old the thread needs to be to be considered unsolved (e.g. "5m", "20m")
         """
 
