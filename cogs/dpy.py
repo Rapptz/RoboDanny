@@ -103,8 +103,8 @@ class GistContent:
 
 class UnsolvedFlags(commands.FlagConverter):
     messages: int = commands.flag(
-        default=0,
-        description='The maximum number of messages the thread needs to be considered active. Defaults to 0.',
+        default=5,
+        description='The maximum number of messages the thread needs to be considered active. Defaults to 5.',
     )
     threshold: relativedelta = commands.flag(
         default=relativedelta(minutes=5),
@@ -562,15 +562,22 @@ class DPYExclusive(commands.Cog, name='discord.py'):
         `threshold:` How old the thread needs to be to be considered unsolved (e.g. "5m", "20m")
         """
 
-        forum: discord.ForumChannel = ctx.guild.get_channel(DISCORD_PY_HELP_FORUM)  # type: ignore
+        # Need to use this API call to get updated message count numbers
+        threads = await ctx.guild.active_threads()
         now = ctx.message.created_at
         threshold = now - flags.threshold
 
         # First element of the tuple is used for a finalising sort
         unsolved_threads: list[tuple[datetime.datetime, str]] = []
-        for thread in forum.threads:
+        for thread in threads:
             dt = discord.utils.snowflake_time(thread.last_message_id) if thread.last_message_id else thread.created_at or now
-            if not thread.archived and not thread.locked and thread.message_count <= flags.messages and dt < threshold:
+            if (
+                thread.parent_id == DISCORD_PY_HELP_FORUM
+                and not thread.archived
+                and not thread.locked
+                and thread.message_count <= flags.messages
+                and dt < threshold
+            ):
                 unsolved_threads.append(
                     (
                         dt,
