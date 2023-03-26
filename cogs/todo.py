@@ -7,6 +7,9 @@ from discord.ext import commands, tasks, menus
 from discord.utils import MISSING
 from discord import app_commands, ui
 
+# TODO: replace with ZoneInfo when using 3.9+
+from dateutil.tz import gettz
+
 import asyncpg
 
 from cogs.utils import fuzzy
@@ -25,6 +28,8 @@ import re
 if TYPE_CHECKING:
     from bot import RoboDanny
     from .utils.context import GuildContext, Context
+    from .reminder import Reminder
+
 
 log = logging.getLogger(__name__)
 MESSAGE_URL_REGEX = re.compile(
@@ -64,12 +69,11 @@ def get_shortened_string(length: int, start: int, string: str) -> str:
     return f'{todo_id} - …{string[start + excess:end]}'
 
 
-def ensure_future_time(argument: str, now: datetime.datetime) -> datetime.datetime:
-    if now.tzinfo is not None:
-        now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-
+def ensure_future_time(
+    argument: str, now: datetime.datetime, tzinfo: datetime.tzinfo = datetime.timezone.utc
+) -> datetime.datetime:
     try:
-        converter = time.Time(argument, now=now)
+        converter = time.Time(argument, now=now, tzinfo=tzinfo)
     except commands.BadArgument:
         random_future = now + datetime.timedelta(days=random.randint(3, 60))
         raise InvalidTime(f'Due date could not be parsed, sorry. Try something like "tomorrow" or "{random_future.date()}".')
@@ -78,7 +82,22 @@ def ensure_future_time(argument: str, now: datetime.datetime) -> datetime.dateti
     if converter.dt < minimum_time:
         raise InvalidTime('Due date must be at least 5 minutes in the future.')
 
-    return converter.dt.replace(tzinfo=None)
+    return converter.dt
+
+
+async def future_time_from_interaction(argument: str, interaction: discord.Interaction) -> tuple[str, datetime.datetime]:
+    reminder: Optional[Reminder] = interaction.client.get_cog('Reminder')  # type: ignore
+    timezone = 'UTC'
+    tzinfo = datetime.timezone.utc
+    if reminder is not None:
+        timezone = await reminder.get_timezone(interaction.user.id)
+        if timezone is not None:
+            tzinfo = gettz(timezone) or datetime.timezone.utc
+        else:
+            timezone = 'UTC'
+
+    dt = ensure_future_time(argument, interaction.created_at, tzinfo)
+    return timezone, dt
 
 
 def state_emoji(opt: Optional[bool]) -> str:
@@ -105,6 +124,7 @@ class TodoItem:
     cached_content: Optional[str]
     reminder_triggered: bool
     message: Optional[discord.Message]
+    timezone: str
 
     def __init__(self, cog: Todo, record: Any) -> None:
         self.cog = cog
@@ -120,6 +140,11 @@ class TodoItem:
         self.completed_at = record.get('completed_at')
         self.message = None
         self.reminder_triggered = record.get('reminder_triggered', False)
+        self.timezone = record.get('timezone', 'UTC')
+
+        if self.due_date:
+            utc = datetime.timezone.utc
+            self.due_date = self.due_date.replace(tzinfo=utc).astimezone(gettz(self.timezone) or utc)
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} id={self.id} user_id={self.user_id} due_date={self.due_date} content={self.content} completed_at={self.completed_at} triggered={self.reminder_triggered}>'
@@ -168,7 +193,7 @@ class TodoItem:
         False => overdue
         """
         state = None
-        if self.due_date is not None and self.due_date <= datetime.datetime.utcnow():
+        if self.due_date is not None and self.due_date <= discord.utils.utcnow():
             state = False
         if self.completed_at:
             state = True
@@ -237,7 +262,7 @@ class TodoItem:
 
         if self.due_date:
             embed.set_footer(text='Due').timestamp = self.due_date
-            if datetime.datetime.utcnow() > self.due_date:
+            if discord.utils.utcnow() > self.due_date:
                 embed.colour = 0xFE5944
                 embed.set_footer(text='Overdue')
 
@@ -269,6 +294,7 @@ class TodoItem:
         due_date: Optional[datetime.datetime] = MISSING,
         message: Optional[discord.Message] = MISSING,
         completed_at: Optional[datetime.datetime] = MISSING,
+        timezone: Optional[str] = MISSING,
     ) -> None:
         # This is taking advantage of the fact dicts are ordered.
         columns: dict[str, Any] = {}
@@ -279,6 +305,9 @@ class TodoItem:
         if due_date is not MISSING:
             columns['due_date'] = due_date
             columns['reminder_triggered'] = False
+
+        if timezone is not MISSING:
+            columns['timezone'] = timezone or 'UTC'
 
         if message is not MISSING:
             if message is None:
@@ -315,6 +344,7 @@ class TodoItem:
     async def delete(self) -> None:
         query = 'DELETE FROM todo WHERE id = $1'
         await self.bot.pool.execute(query, self.id)
+        self.cog.check_for_task_resync(self.id)
 
 
 class ActiveDueTodo(TodoItem):
@@ -334,15 +364,16 @@ class EditDueDateModal(ui.Modal, title='Edit Due Date'):
         value = self.due_date.value
         if not value:
             due_date = None
+            timezone = MISSING
         else:
             try:
-                due_date = ensure_future_time(value, interaction.created_at)
+                timezone, due_date = await future_time_from_interaction(value, interaction)
             except InvalidTime as e:
                 await interaction.response.send_message(str(e), ephemeral=True)
                 return
 
         await interaction.response.defer(ephemeral=True)
-        await self.item.edit(due_date=due_date)
+        await self.item.edit(due_date=due_date, timezone=timezone)
         if due_date is None:
             msg = 'Removed due date.'
         else:
@@ -386,10 +417,12 @@ class EditTodoModal(ui.Modal, title='Edit Todo'):
                 due_date = None
             else:
                 try:
-                    due_date = ensure_future_time(due_date, interaction.created_at)
+                    timezone, due_date = await future_time_from_interaction(due_date, interaction)
                 except InvalidTime as e:
                     await interaction.response.send_message(str(e), ephemeral=True)
                     return
+                else:
+                    kwargs['timezone'] = timezone
 
             kwargs['due_date'] = due_date
 
@@ -443,18 +476,21 @@ class AddTodoModal(ui.Modal, title='Add Todo'):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         due_date = self.due_date.value
+        timezone = 'UTC'
         if not due_date:
             due_date = None
         else:
             try:
-                due_date = ensure_future_time(due_date, interaction.created_at)
+                timezone, due_date = await future_time_from_interaction(due_date, interaction)
             except InvalidTime as e:
                 await interaction.response.send_message(str(e), ephemeral=True)
                 return
 
         note = self.content.value or None
         await interaction.response.defer(ephemeral=True)
-        item = await self.cog.add_todo(user_id=interaction.user.id, message=self.message, due_date=due_date, content=note)
+        item = await self.cog.add_todo(
+            user_id=interaction.user.id, message=self.message, due_date=due_date, content=note, timezone=timezone
+        )
         await interaction.followup.send(
             content=f'<a:agreenTick:1011968947949666324> Added todo item {item.id}.',
             embed=item.embed,
@@ -809,7 +845,7 @@ class Todo(commands.Cog):
     async def get_earliest_due_todo(self) -> Optional[ActiveDueTodo]:
         query = """SELECT * FROM todo
                    WHERE completed_at IS NULL AND due_date IS NOT NULL AND NOT reminder_triggered
-                   ORDER BY due_date LIMIT 1
+                   ORDER BY due_date AT TIME ZONE timezone LIMIT 1
                 """
         record = await self.bot.pool.fetchrow(query)
         if record is None:
@@ -825,7 +861,7 @@ class Todo(commands.Cog):
                     await asyncio.sleep(300)
                 else:
                     assert todo.due_date is not None  # This is asserted by the earlier query
-                    await discord.utils.sleep_until(todo.due_date.replace(tzinfo=datetime.timezone.utc))
+                    await discord.utils.sleep_until(todo.due_date)
                     await self.send_due_date_reminder(todo)
         except (OSError, asyncpg.PostgresConnectionError):
             self._task.cancel()
@@ -862,6 +898,7 @@ class Todo(commands.Cog):
         content: Optional[str] = None,
         message: Optional[discord.Message] = None,
         due_date: Optional[datetime.datetime] = None,
+        timezone: str = 'UTC',
     ) -> TodoItem:
         parameters: list[Any] = [user_id]
         query = """INSERT INTO todo (
@@ -871,8 +908,9 @@ class Todo(commands.Cog):
                     guild_id,
                     cached_content,
                     due_date,
-                    content
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    content,
+                    timezone
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING *
                 """
 
@@ -885,8 +923,12 @@ class Todo(commands.Cog):
         else:
             parameters.extend([None, None, None, None])
 
+        if due_date is not None and due_date.tzinfo is not None:
+            due_date = due_date.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
         parameters.append(due_date)
         parameters.append(content)
+        parameters.append(timezone)
         record = await self.bot.pool.fetchrow(query, *parameters)
         result = TodoItem(self, record)
         result.message = message
@@ -901,6 +943,13 @@ class Todo(commands.Cog):
     async def get_todo_for_message(self, user_id: int, message_id: int, /) -> list[TodoItem]:
         query = 'SELECT * FROM todo WHERE user_id = $1 AND message_id = $2'
         return [TodoItem(self, r) for r in await self.bot.pool.fetch(query, user_id, message_id)]
+
+    async def get_timezone(self, user_id, /) -> str:
+        query = 'SELECT timezone FROM user_settings WHERE id = $1;'
+        record = await self.bot.pool.fetchrow(query, user_id)
+        if record is not None and record[0] is not None:
+            return record[0]
+        return 'UTC'
 
     @commands.hybrid_group()
     async def todo(self, ctx: Context) -> None:
@@ -945,7 +994,8 @@ class Todo(commands.Cog):
         """
 
         await interaction.response.defer(ephemeral=True)
-        item = await self.add_todo(user_id=interaction.user.id, content=content, due_date=due_date)
+        timezone = await self.get_timezone(interaction.user.id)
+        item = await self.add_todo(user_id=interaction.user.id, content=content, due_date=due_date, timezone=timezone)
         if due_date is None:
             view = discord.ui.View()
             view.add_item(EditDueDateButton(item))

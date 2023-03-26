@@ -1577,7 +1577,8 @@ class Mod(commands.Cog):
         duration such as "until thursday at 3PM" or a more concrete time
         such as "2024-12-31".
 
-        Note that times are in UTC.
+        Note that times are in UTC unless the timezone is
+        specified using the "timezone set" command.
 
         You can also ban from ID to ban regardless whether they're
         in the server or not.
@@ -1605,6 +1606,7 @@ class Mod(commands.Cog):
 
         reason = safe_reason_append(reason, until)
         await ctx.guild.ban(member, reason=reason)
+        zone = await reminder.get_timezone(ctx.author.id)
         timer = await reminder.create_timer(
             duration.dt,
             'tempban',
@@ -1612,6 +1614,7 @@ class Mod(commands.Cog):
             ctx.author.id,
             member.id,
             created=ctx.message.created_at,
+            timezone=zone or 'UTC',
         )
         await ctx.send(f'Banned {member} for {time.format_relative(duration.dt)}.')
 
@@ -1935,7 +1938,8 @@ class Mod(commands.Cog):
         duration such as "until thursday at 3PM" or a more concrete time
         such as "2024-12-31".
 
-        Note that times are in UTC.
+        Note that times are in UTC unless a timezone is specified
+        using the "timezone set" command.
 
         This has the same permissions as the `mute` command.
         """
@@ -1950,8 +1954,16 @@ class Mod(commands.Cog):
         assert ctx.guild_config.mute_role_id is not None
         role_id = ctx.guild_config.mute_role_id
         await member.add_roles(discord.Object(id=role_id), reason=reason)
+        zone = await reminder.get_timezone(ctx.author.id)
         timer = await reminder.create_timer(
-            duration.dt, 'tempmute', ctx.guild.id, ctx.author.id, member.id, role_id, created=ctx.message.created_at
+            duration.dt,
+            'tempmute',
+            ctx.guild.id,
+            ctx.author.id,
+            member.id,
+            role_id,
+            created=ctx.message.created_at,
+            timezone=zone or 'UTC',
         )
         await ctx.send(f'Muted {discord.utils.escape_mentions(str(member))} for {time.format_relative(duration.dt)}.')
 

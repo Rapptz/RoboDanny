@@ -1,10 +1,16 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+import random
+from typing import TYPE_CHECKING, Any, Optional, Sequence, NamedTuple
 from typing_extensions import Annotated
 
-from .utils import time, formats
+from .utils import time, formats, cache, fuzzy
 from discord.ext import commands
 from discord import app_commands
+from lxml import etree
+
+# TODO: replace with ZoneInfo when upgrading to 3.9
+import dateutil.tz
+from dateutil.zoneinfo import get_zonefile_instance
 import discord
 import asyncio
 import asyncpg
@@ -98,8 +104,34 @@ class ReminderView(discord.ui.View):
         await self.message.edit(view=self)
 
 
+class TimeZone(NamedTuple):
+    label: str
+    key: str
+
+    @classmethod
+    async def convert(cls, ctx: Context, argument: str) -> Self:
+        assert isinstance(ctx.cog, Reminder)
+
+        # Prioritise aliases because they handle short codes slightly better
+        if argument in ctx.cog._timezone_aliases:
+            return cls(key=argument, label=ctx.cog._timezone_aliases[argument])
+
+        if argument in ctx.cog.valid_timezones:
+            return cls(key=argument, label=argument)
+
+        timezones = ctx.cog.find_timezones(argument)
+
+        try:
+            return await ctx.disambiguate(timezones, lambda t: t[0], ephemeral=True)
+        except ValueError:
+            raise commands.BadArgument(f'Could not find timezone for {argument!r}')
+
+    def to_choice(self) -> app_commands.Choice[str]:
+        return app_commands.Choice(name=self.label, value=self.key)
+
+
 class Timer:
-    __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires')
+    __slots__ = ('args', 'kwargs', 'event', 'id', 'created_at', 'expires', 'timezone')
 
     def __init__(self, *, record: asyncpg.Record):
         self.id: int = record['id']
@@ -110,6 +142,7 @@ class Timer:
         self.event: str = record['event']
         self.created_at: datetime.datetime = record['created']
         self.expires: datetime.datetime = record['expires']
+        self.timezone: str = record['timezone']
 
     @classmethod
     def temporary(
@@ -120,6 +153,7 @@ class Timer:
         event: str,
         args: Sequence[Any],
         kwargs: dict[str, Any],
+        timezone: str,
     ) -> Self:
         pseudo = {
             'id': None,
@@ -127,6 +161,7 @@ class Timer:
             'event': event,
             'created': created,
             'expires': expires,
+            'timezone': timezone,
         }
         return cls(record=pseudo)
 
@@ -153,14 +188,77 @@ class Timer:
         return f'<Timer created={self.created_at} expires={self.expires} event={self.event}>'
 
 
+class CLDRDataEntry(NamedTuple):
+    description: str
+    aliases: list[str]
+    deprecated: bool
+    preferred: Optional[str]
+
+
 class Reminder(commands.Cog):
     """Reminders to do something."""
+
+    # CLDR identifiers for most common timezones for the default autocomplete drop down
+    # n.b. limited to 25 choices
+    DEFAULT_POPULAR_TIMEZONE_IDS = (
+        # America
+        'usnyc',  # America/New_York
+        'uslax',  # America/Los_Angeles
+        'uschi',  # America/Chicago
+        'usden',  # America/Denver
+        # India
+        'inccu',  # Asia/Kolkata
+        # Europe
+        'trist',  # Europe/Istanbul
+        'rumow',  # Europe/Moscow
+        'gblon',  # Europe/London
+        'frpar',  # Europe/Paris
+        'esmad',  # Europe/Madrid
+        'deber',  # Europe/Berlin
+        'grath',  # Europe/Athens
+        'uaiev',  # Europe/Kyev
+        'itrom',  # Europe/Rome
+        'nlams',  # Europe/Amsterdam
+        'plwaw',  # Europe/Warsaw
+        # Canada
+        'cator',  # America/Toronto
+        # Australia
+        'aubne',  # Australia/Brisbane
+        'ausyd',  # Australia/Sydney
+        # Brazil
+        'brsao',  # America/Sao_Paulo
+        # Japan
+        'jptyo',  # Asia/Tokyo
+        # China
+        'cnsha',  # Asia/Shanghai
+    )
 
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self._have_data = asyncio.Event()
         self._current_timer: Optional[Timer] = None
         self._task = bot.loop.create_task(self.dispatch_timers())
+        self.valid_timezones: set[str] = set(get_zonefile_instance().zones)
+        # User-friendly timezone names, some manual and most from the CLDR database.
+        self._timezone_aliases: dict[str, str] = {
+            'Eastern Time': 'America/New_York',
+            'Central Time': 'America/Chicago',
+            'Mountain Time': 'America/Denver',
+            'Pacific Time': 'America/Los_Angeles',
+            # (Unfortunately) special case American timezone abbreviations
+            'EST': 'America/New_York',
+            'CST': 'America/Chicago',
+            'MST': 'America/Denver',
+            'PST': 'America/Los_Angeles',
+            'EDT': 'America/New_York',
+            'CDT': 'America/Chicago',
+            'MDT': 'America/Denver',
+            'PDT': 'America/Los_Angeles',
+        }
+        self._default_timezones: list[app_commands.Choice[str]] = []
+
+    async def cog_load(self) -> None:
+        await self.parse_bcp47_timezones()
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -175,8 +273,76 @@ class Reminder(commands.Cog):
         if isinstance(error, commands.TooManyArguments):
             await ctx.send(f'You called the {ctx.command.name} command with too many arguments.')
 
+    async def parse_bcp47_timezones(self) -> None:
+        async with self.bot.session.get(
+            'https://raw.githubusercontent.com/unicode-org/cldr/main/common/bcp47/timezone.xml'
+        ) as resp:
+            if resp.status != 200:
+                return
+
+            parser = etree.XMLParser(ns_clean=True, recover=True, encoding='utf-8')
+            tree = etree.fromstring(await resp.read(), parser=parser)
+
+            # Build a temporary dictionary to resolve "preferred" mappings
+            entries: dict[str, CLDRDataEntry] = {
+                node.attrib['name']: CLDRDataEntry(
+                    description=node.attrib['description'],
+                    aliases=node.get('alias', 'Etc/Unknown').split(' '),
+                    deprecated=node.get('deprecated', 'false') == 'true',
+                    preferred=node.get('preferred'),
+                )
+                for node in tree.iter('type')
+                # Filter the Etc/ entries (except UTC)
+                if not node.attrib['name'].startswith(('utcw', 'utce', 'unk'))
+                and not node.attrib['description'].startswith('POSIX')
+            }
+
+            for entry in entries.values():
+                # These use the first entry in the alias list as the "canonical" name to use when mapping the
+                # timezone to the IANA database.
+                # The CLDR database is not particularly correct when it comes to these, but neither is the IANA database.
+                # It turns out the notion of a "canonical" name is a bit of a mess. This works fine for users where
+                # this is only used for display purposes, but it's not ideal.
+                if entry.preferred is not None:
+                    preferred = entries.get(entry.preferred)
+                    if preferred is not None:
+                        self._timezone_aliases[entry.description] = preferred.aliases[0]
+                else:
+                    self._timezone_aliases[entry.description] = entry.aliases[0]
+
+            for key in self.DEFAULT_POPULAR_TIMEZONE_IDS:
+                entry = entries.get(key)
+                if entry is not None:
+                    self._default_timezones.append(app_commands.Choice(name=entry.description, value=entry.aliases[0]))
+
+    @cache.cache()
+    async def get_timezone(self, user_id: int, /) -> Optional[str]:
+        query = "SELECT timezone from user_settings WHERE id = $1;"
+        record = await self.bot.pool.fetchrow(query, user_id)
+        return record['timezone'] if record else None
+
+    async def get_tzinfo(self, user_id: int, /) -> datetime.tzinfo:
+        tz = await self.get_timezone(user_id)
+        if tz is None:
+            return datetime.timezone.utc
+        return dateutil.tz.gettz(tz) or datetime.timezone.utc
+
+    def find_timezones(self, query: str) -> list[TimeZone]:
+        # A bit hacky, but if '/' is in the query then it's looking for a raw identifier
+        # otherwise it's looking for a CLDR alias
+        if '/' in query:
+            return [TimeZone(key=a, label=a) for a in fuzzy.finder(query, self.valid_timezones)]
+
+        keys = fuzzy.finder(query, self._timezone_aliases.keys())
+        return [TimeZone(label=k, key=self._timezone_aliases[k]) for k in keys]
+
     async def get_active_timer(self, *, connection: Optional[asyncpg.Connection] = None, days: int = 7) -> Optional[Timer]:
-        query = "SELECT * FROM reminders WHERE expires < (CURRENT_DATE + $1::interval) ORDER BY expires LIMIT 1;"
+        query = """
+            SELECT * FROM reminders
+            WHERE (expires AT TIME ZONE 'UTC' AT TIME ZONE timezone) < (CURRENT_TIMESTAMP + $1::interval)
+            ORDER BY expires
+            LIMIT 1;
+        """
         con = connection or self.bot.pool
 
         record = await con.fetchrow(query, datetime.timedelta(days=days))
@@ -296,6 +462,10 @@ class Reminder(commands.Cog):
         created: datetime.datetime
             Special keyword-only argument to use as the creation time.
             Should make the timedeltas a bit more consistent.
+        timezone: str
+            Special keyword-only argument to use as the timezone for the
+            expiry time. This automatically adjusts the expiry time to be
+            in the future, should it be in the past.
 
         Note
         ------
@@ -313,23 +483,24 @@ class Reminder(commands.Cog):
         except KeyError:
             now = discord.utils.utcnow()
 
+        timezone_name = kwargs.pop('timezone', 'UTC')
         # Remove timezone information since the database does not deal with it
         when = when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
         now = now.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
-        timer = Timer.temporary(event=event, args=args, kwargs=kwargs, expires=when, created=now)
+        timer = Timer.temporary(event=event, args=args, kwargs=kwargs, expires=when, created=now, timezone=timezone_name)
         delta = (when - now).total_seconds()
         if delta <= 60:
             # a shortcut for small timers
             self.bot.loop.create_task(self.short_timer_optimisation(delta, timer))
             return timer
 
-        query = """INSERT INTO reminders (event, extra, expires, created)
-                   VALUES ($1, $2::jsonb, $3, $4)
+        query = """INSERT INTO reminders (event, extra, expires, created, timezone)
+                   VALUES ($1, $2::jsonb, $3, $4, $5)
                    RETURNING id;
                 """
 
-        row = await pool.fetchrow(query, event, {'args': args, 'kwargs': kwargs}, when, now)
+        row = await pool.fetchrow(query, event, {'args': args, 'kwargs': kwargs}, when, now, timezone_name)
         timer.id = row[0]
 
         # only set the data check if it can be waited on
@@ -361,9 +532,11 @@ class Reminder(commands.Cog):
         - "in 3 days do the thing"
         - "2d unmute someone"
 
-        Times are in UTC.
+        Times are in UTC unless a timezone is specified
+        using the "timezone set" command.
         """
 
+        zone = await self.get_timezone(ctx.author.id)
         timer = await self.create_timer(
             when.dt,
             'reminder',
@@ -372,12 +545,18 @@ class Reminder(commands.Cog):
             when.arg,
             created=ctx.message.created_at,
             message_id=ctx.message.id,
+            timezone=zone or 'UTC',
         )
         delta = time.human_timedelta(when.dt, source=timer.created_at)
-        await ctx.send(f"Alright {ctx.author.mention}, in {delta}: {when.arg}")
+        msg = f"Alright {ctx.author.mention}, in {delta}: {when.arg}"
+        # 10% chance of advertising timezone support (temporarily...?)
+        if zone is None and random.randint(0, 10) == 5:
+            msg = f'{msg}\n\n\N{ELECTRIC LIGHT BULB} Did you know you can set your timezone with "{ctx.prefix}timezone set"?'
+
+        await ctx.send(msg)
 
     @reminder.app_command.command(name='set')
-    @app_commands.describe(when='When to be reminded of something, in UTC.', text='What to be reminded of')
+    @app_commands.describe(when='When to be reminded of something.', text='What to be reminded of')
     async def reminder_set(
         self,
         interaction: discord.Interaction,
@@ -386,6 +565,7 @@ class Reminder(commands.Cog):
     ):
         """Sets a reminder to remind you of something at a specific time."""
 
+        zone = await self.get_timezone(interaction.user.id)
         timer = await self.create_timer(
             when,
             'reminder',
@@ -394,6 +574,7 @@ class Reminder(commands.Cog):
             text,
             created=interaction.created_at,
             message_id=None,
+            timezone=zone or 'UTC',
         )
         delta = time.human_timedelta(when, source=timer.created_at)
         await interaction.response.send_message(f"Alright {interaction.user.mention}, in {delta}: {text}")
@@ -490,6 +671,66 @@ class Reminder(commands.Cog):
             self._task = self.bot.loop.create_task(self.dispatch_timers())
 
         await ctx.send(f'Successfully deleted {formats.plural(total):reminder}.', ephemeral=True)
+
+    @commands.hybrid_group()
+    async def timezone(self, ctx: Context):
+        """Commands related to managing or retrieving timezone info."""
+        await ctx.send_help(ctx.command)
+
+    @timezone.command(name='set')
+    @app_commands.describe(tz='The timezone to change to.')
+    async def timezone_set(self, ctx: Context, *, tz: TimeZone):
+        """Sets your timezone.
+
+        This is used to convert times to your local timezone when
+        using the reminder command and other miscellaneous commands
+        such as tempblock, tempmute, etc.
+        """
+
+        await ctx.db.execute(
+            """INSERT INTO user_settings (id, timezone)
+               VALUES ($1, $2)
+               ON CONFLICT (id) DO UPDATE SET timezone = $2;
+            """,
+            ctx.author.id,
+            tz.key,
+        )
+
+        self.get_timezone.invalidate(self, ctx.author.id)
+        await ctx.send(f'Your timezone has been set to {tz.label} (IANA ID: {tz.key}).', ephemeral=True, delete_after=10)
+
+    @timezone_set.autocomplete('tz')
+    async def timezone_set_autocomplete(
+        self, interaction: discord.Interaction, argument: str
+    ) -> list[app_commands.Choice[str]]:
+        if not argument:
+            return self._default_timezones
+        matches = self.find_timezones(argument)
+        return [tz.to_choice() for tz in matches[:25]]
+
+    @timezone.command(name='get')
+    @app_commands.describe(user='The member to get the timezone of. Defaults to yourself.')
+    async def timezone_get(self, ctx: Context, *, user: discord.User = commands.Author):
+        """Shows the timezone of a user."""
+        self_query = user.id == ctx.author.id
+        tz = await self.get_timezone(user.id)
+        if tz is None:
+            return await ctx.send(f'{user} has not set their timezone.')
+
+        time = discord.utils.utcnow().astimezone(dateutil.tz.gettz(tz)).strftime('%Y-%m-%d %I:%M %p')
+        if self_query:
+            msg = await ctx.send(f'Your timezone is {tz!r}. The current time is {time}.')
+            await asyncio.sleep(5)
+            await msg.edit(content=f'Your current time is {time}.')
+        else:
+            await ctx.send(f'The current time for {user} is {time}.')
+
+    @timezone.command(name='clear')
+    async def timezone_clear(self, ctx: Context):
+        """Clears your timezone."""
+        await ctx.db.execute("UPDATE user_settings SET timezone = NULL WHERE id=$1", ctx.author.id)
+        self.get_timezone.invalidate(self, ctx.author.id)
+        await ctx.send('Your timezone has been cleared.', ephemeral=True)
 
     @commands.Cog.listener()
     async def on_reminder_timer_complete(self, timer: Timer):

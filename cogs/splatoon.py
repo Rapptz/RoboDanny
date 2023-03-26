@@ -856,9 +856,7 @@ class SplatNetSchedule:
                 )
 
         salmon_run_schedules = data.get('coopGroupingSchedule', {})
-        salmon_run: list[SalmonRunRotationPayload] = (
-            salmon_run_schedules.get('regularSchedules', {}).get('nodes', [])
-        )
+        salmon_run: list[SalmonRunRotationPayload] = salmon_run_schedules.get('regularSchedules', {}).get('nodes', [])
         self.salmon_run: list[SalmonRun] = [SalmonRun(data) for data in salmon_run]
         big_run: list[BigRunRotationPayload] = salmon_run_schedules.get('bigRunSchedules', {}).get('nodes', [])
 

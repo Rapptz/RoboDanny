@@ -515,7 +515,8 @@ class API(commands.Cog):
         duration such as "until thursday at 3PM" or a more concrete time
         such as "2017-12-31".
 
-        Note that times are in UTC.
+        Note that times are in UTC unless the timezone specified
+        using the "timezone set" command.
         """
 
         if member.top_role >= ctx.author.top_role:
@@ -530,6 +531,7 @@ class API(commands.Cog):
             return await ctx.send('Sorry, this functionality is currently unavailable. Try again later?')
 
         channels = self.get_block_channels(ctx.guild, ctx.channel)  # type: ignore  # Threads are disallowed
+        zone = await reminder.get_timezone(ctx.author.id)
         timer = await reminder.create_timer(
             duration.dt,
             'tempblock',
@@ -538,6 +540,7 @@ class API(commands.Cog):
             ctx.channel.id,
             member.id,
             created=created_at,
+            timezone=zone or 'UTC',
         )
 
         reason = f'Tempblock by {ctx.author} (ID: {ctx.author.id}) until {duration.dt}'
