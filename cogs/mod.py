@@ -767,7 +767,7 @@ class Mod(commands.Cog):
         if config.broadcast_webhook:
             try:
                 await config.broadcast_webhook.send(embed=e)
-            except discord.Forbidden:
+            except (discord.Forbidden, discord.NotFound):
                 async with self._disable_lock:
                     await self.disable_automod_broadcast(guild_id)
 
