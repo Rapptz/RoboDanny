@@ -546,7 +546,11 @@ class Meta(commands.Cog):
 
     @info.error
     async def on_info_error(self, ctx: Context, error: commands.CommandError):
-        await ctx.send(str(error))
+        if isinstance(error, commands.BadUnionArgument):
+            error = error.errors[-1]
+            await ctx.send(str(error))
+        else:
+            await ctx.send(str(error))
 
     @commands.command(aliases=['guildinfo'], usage='')
     @commands.guild_only()
