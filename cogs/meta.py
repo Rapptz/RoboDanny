@@ -544,6 +544,10 @@ class Meta(commands.Cog):
 
         await ctx.send(embed=e)
 
+    @info.error
+    async def on_info_error(self, ctx: Context, error: commands.CommandError):
+        await ctx.send(str(error))
+
     @commands.command(aliases=['guildinfo'], usage='')
     @commands.guild_only()
     async def serverinfo(self, ctx: GuildContext, *, guild_id: int = None):
