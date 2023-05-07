@@ -1560,6 +1560,49 @@ class Mod(commands.Cog):
         else:
             await ctx.send(f'Unbanned {member.user} (ID: {member.user.id}).')
 
+    @commands.command(hidden=True)
+    @commands.guild_only()
+    @commands.is_owner()
+    async def syncban(
+        self,
+        ctx: GuildContext,
+        member: Annotated[discord.abc.Snowflake, MemberID],
+        *,
+        reason: Annotated[str, ActionReason],
+    ):
+        """Bans a member from a few other servers."""
+
+        guilds_to_ban: set[int] = {
+            81384788765712384,  # Discord API
+            336642139381301249,  # discord.py
+            182325885867786241,  # R. Danny
+            149998214810959872,  # Dannyware
+        }
+
+        if ctx.guild.id not in guilds_to_ban:
+            confirm = await ctx.prompt('This guild is not in the sync list, are you sure you want to sync these bans?')
+            if not confirm:
+                return await ctx.send('Aborting.')
+
+        await ctx.guild.ban(member, reason=reason)
+        guilds_to_ban.discard(ctx.guild.id)
+
+        reason = safe_reason_append(reason, 'synced ban')
+        bans = 1
+        for guild_id in guilds_to_ban:
+            guild = self.bot.get_guild(guild_id)
+            if guild is None:
+                continue
+
+            try:
+                await guild.ban(member, reason=reason)
+            except discord.HTTPException:
+                pass
+            else:
+                bans += 1
+
+        await ctx.send(f'Banned from {bans}/{len(guilds_to_ban) + 1} guilds.')
+
     @commands.command()
     @commands.guild_only()
     @checks.has_permissions(ban_members=True)
