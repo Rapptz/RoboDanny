@@ -113,7 +113,9 @@ class HumanTime:
             dt = dt.replace(hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond)
 
         self.dt: datetime.datetime = dt.replace(tzinfo=tzinfo)
-        self._past: bool = dt < now
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=datetime.timezone.utc)
+        self._past: bool = self.dt < now
 
     @classmethod
     async def convert(cls, ctx: Context, argument: str) -> Self:
