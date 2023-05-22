@@ -296,7 +296,7 @@ class IgnoreEntity(commands.Converter):
 
 
 def safe_reason_append(base: str, to_append: str) -> str:
-    appended = base + f'({to_append})'
+    appended = f'{base} ({to_append})'
     if len(appended) > 512:
         return base
     return appended
