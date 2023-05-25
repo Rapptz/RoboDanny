@@ -348,8 +348,8 @@ class SplatNet3:
         The session to use for making requests.
     """
 
-    APP_VERSION = '2.5.0'
-    WEB_VIEW_VERSION = '3.0.0-2857bc50'
+    APP_VERSION = '2.5.1'
+    WEB_VIEW_VERSION = '3.0.0-0742bda0'
 
     def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
         self.session_token = session_token
@@ -358,6 +358,7 @@ class SplatNet3:
         self.access_token: Optional[str] = None
         self.expires_in: Optional[datetime.datetime] = None
         self.user_info: Optional[dict[str, Any]] = None
+        self.coral_user_id: Optional[str] = None
         self.fetched_app_version: Optional[str] = None
         self.fetched_web_view_version: Optional[str] = None
 
@@ -398,7 +399,15 @@ class SplatNet3:
         web_view_version = await self.get_web_view_version()
         return f'App Version: {version} (Web View: {web_view_version})'
 
-    async def get_f_token(self, id_token: str, hash_method: int = 1, retries: int = 0) -> tuple[str, str, int]:
+    async def get_f_token(
+        self,
+        id_token: str,
+        *,
+        hash_method: int = 1,
+        na_id: Optional[str] = None,
+        coral_user_id: Optional[str] = None,
+        retries: int = 0,
+    ) -> tuple[str, str, int]:
         """Get the ``f`` token and the timestamp for the request.
 
         Returns
@@ -417,8 +426,14 @@ class SplatNet3:
             'hash_method': hash_method,
         }
 
-        # url = 'https://nxapi-znca-api.fancy.org.uk/api/znca/f'
-        url = 'https://api.imink.app/f'
+        if na_id is not None:
+            payload['na_id'] = na_id
+
+        if hash_method == 2 and coral_user_id is not None:
+            payload['coral_user_id'] = coral_user_id
+
+        url = 'https://nxapi-znca-api.fancy.org.uk/api/znca/f'
+        # url = 'https://api.imink.app/f'
 
         async with self.session.post(url, json=payload, headers=headers) as resp:
             if resp.status >= 400:
@@ -427,13 +442,25 @@ class SplatNet3:
                 else:
                     log.info('Failed to get f token (status code: %d), retrying...', resp.status)
                     await asyncio.sleep(5 * (retries + 1))
-                    return await self.get_f_token(id_token, hash_method, retries=retries + 1)
+                    return await self.get_f_token(
+                        id_token,
+                        na_id=na_id,
+                        coral_user_id=coral_user_id,
+                        hash_method=hash_method,
+                        retries=retries + 1,
+                    )
 
             data = await resp.json()
             return data['f'], data['request_id'], data['timestamp']
 
     def is_expired(self) -> bool:
         return self.expires_in is None or self.expires_in < datetime.datetime.utcnow()
+
+    @property
+    def na_id(self) -> Optional[str]:
+        if self.user_info is None:
+            return None
+        return self.user_info['id']
 
     async def refresh_expired_tokens(self, *, retries: int = 0) -> None:
         payload = {
@@ -474,6 +501,7 @@ class SplatNet3:
         else:
             user_info = self.user_info
 
+        na_id = self.na_id
         url = 'https://api-lp1.znc.srv.nintendo.net/v3/Account/Login'
         app_version = await self.get_app_version()
         headers = {
@@ -486,7 +514,7 @@ class SplatNet3:
 
         id_token = token_response['id_token']
         await asyncio.sleep(3)
-        f, request_id, timestamp = await self.get_f_token(id_token)
+        f, request_id, timestamp = await self.get_f_token(id_token, na_id=na_id)
 
         payload = {
             'parameter': {
@@ -514,6 +542,7 @@ class SplatNet3:
                 raise SplatNetError(f'Could not get account login token (data: {data!r})')
 
             new_access_token = data['result']['webApiServerCredential']['accessToken']
+            self.coral_user_id = str(data['result']['user']['id'])
 
         # if self.registration_token is None:
         #     headers.pop('X-Platform', None)
@@ -539,7 +568,12 @@ class SplatNet3:
         }
 
         await asyncio.sleep(3)
-        f, request_id, timestamp = await self.get_f_token(new_access_token, hash_method=2)
+        f, request_id, timestamp = await self.get_f_token(
+            new_access_token,
+            hash_method=2,
+            na_id=na_id,
+            coral_user_id=self.coral_user_id,
+        )
         payload = {
             'parameter': {
                 'id': '4834290508791808',
