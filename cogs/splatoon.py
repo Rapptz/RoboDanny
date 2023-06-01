@@ -677,7 +677,7 @@ class SplatNet3:
 
     async def schedule(self) -> Optional[SplatNetSchedule]:
         # Called StageScheduleQuery internally
-        data = await self.cached_graphql_query('011e394c0e384d77a0701474c8c11a20')
+        data = await self.cached_graphql_query('d1f062c14f74f758658b2703a5799002')
         data = data.get('data', {})
         if not data:
             return None
@@ -694,12 +694,12 @@ class SplatNet3:
     async def latest_battles(self) -> dict[str, Any]:
         # Called LatestBattleHistoriesQuery internally
         # Too lazy to type this payload
-        data = await self.cached_graphql_query('4f5f26e64bca394b45345a65a2f383bd')
+        data = await self.cached_graphql_query('0d90c7576f1916469b2ae69f64292c02')
         return data.get('data', {})
 
     async def battle_info_for(self, id: str) -> dict[str, Any]:
         # Called VsHistoryDetailQuery internally
-        data = await self.cached_graphql_query('291295ad311b99a6288fc95a5c4cb2d2', variables={'vsResultId': id})
+        data = await self.cached_graphql_query('9ee0099fbe3d8db2a838a75cf42856dd', variables={'vsResultId': id})
         return data.get('data', {})
 
     async def outfit_equipment(self) -> dict[str, Any]:
