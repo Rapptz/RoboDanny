@@ -5,7 +5,7 @@ from typing_extensions import Annotated, NotRequired, Self
 from discord.ext import commands, menus, tasks
 from discord import app_commands
 from .utils import config, fuzzy, time
-from .utils.formats import plural
+from .utils.formats import plural, human_join
 from .utils.context import ConfirmationView
 from .utils.paginator import RoboPages, FieldPageSource
 
@@ -184,9 +184,19 @@ if TYPE_CHECKING:
         __isVsSetting: Literal['XMatchSetting']
         __typename: Literal['XMatchSetting']
 
+    class LeagueMatchEventPayload(TypedDict):
+        leagueMatchEventId: str
+        name: str
+        desc: str
+        regulationUrl: Optional[str]
+        regulation: str  # Note: this has HTML
+        id: str
+
+    # Got repurposed for "Challenges" lol
     class LeagueMatchSettingPayload(BaseMatchSettingPayload):
         __isVsSetting: Literal['LeagueMatchSetting']
         __typename: Literal['LeagueMatchSetting']
+        leagueMatchEvent: LeagueMatchEventPayload
 
     class FestMatchSettingPayload(BaseMatchSettingPayload):
         __isVsSetting: Literal['FestMatchSetting']
@@ -199,7 +209,11 @@ if TYPE_CHECKING:
         LeagueMatchSettingPayload,
     ]
 
-    class BaseScheduleRotationPayload(TypedDict):
+    class RotationTimePeriodPayload(TypedDict):
+        startTime: str
+        endTime: str
+
+    class BaseScheduleRotationPayload(RotationTimePeriodPayload):
         startTime: str
         endTime: str
         festMatchSetting: Optional[FestMatchSettingPayload]
@@ -213,14 +227,15 @@ if TYPE_CHECKING:
     class XScheduleRotationPayload(BaseScheduleRotationPayload):
         xMatchSetting: XMatchSettingPayload
 
-    class LeagueScheduleRotationPayload(BaseScheduleRotationPayload):
+    class EventScheduleRotationPayload(TypedDict):
+        timePeriods: list[RotationTimePeriodPayload]
         leagueMatchSetting: LeagueMatchSettingPayload
 
     ScheduleRotationPayload = Union[
         RegularScheduleRotationPayload,
         RankedScheduleRotationPayload,
         XScheduleRotationPayload,
-        LeagueScheduleRotationPayload,
+        EventScheduleRotationPayload,
     ]
 
     class SalmonRunSettingPayload(TypedDict):
@@ -809,6 +824,7 @@ class SplatNetSchedule:
         'x_rank',
         'salmon_run',
         'splatfest',
+        'challenge',
     )
 
     VALID_NAMES = (
@@ -863,19 +879,7 @@ class SplatNetSchedule:
                     rotation.label = 'Anarchy Battle (Series)'
                     self.ranked_series.append(rotation)
 
-        league: list[LeagueScheduleRotationPayload] = data.get('leagueSchedules', {}).get('nodes', [])
         self.league: list[Rotation] = []
-        for payload in league:
-            start_time = fromisoformat(payload['startTime'])
-            end_time = fromisoformat(payload['endTime'])
-            inner = payload['leagueMatchSetting']
-            if inner is not None:
-                stages = inner['vsStages']
-                rule = inner['vsRule']['name']
-                self.league.append(
-                    Rotation(label='League', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
-                )
-
         x_rank: list[XScheduleRotationPayload] = data.get('xSchedules', {}).get('nodes', [])
         self.x_rank: list[Rotation] = []
         for payload in x_rank:
@@ -888,6 +892,11 @@ class SplatNetSchedule:
                 self.x_rank.append(
                     Rotation(label='X Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
                 )
+
+        self.challenge: list[ChallengeRotation] = []
+        challenge: list[EventScheduleRotationPayload] = data.get('eventSchedules', {}).get('nodes', [])
+        for payload in challenge:
+            self.challenge.append(ChallengeRotation(payload['leagueMatchSetting'], payload.get('timePeriods', [])))
 
         salmon_run_schedules = data.get('coopGroupingSchedule', {})
         salmon_run: list[SalmonRunRotationPayload] = salmon_run_schedules.get('regularSchedules', {}).get('nodes', [])
@@ -905,7 +914,6 @@ class SplatNetSchedule:
         return (
             ('Anarchy Battle (Series)', self.ranked_series),
             ('Anarchy Battle (Open)', self.ranked_open),
-            # ('League', self.league),
             ('X Battle', self.x_rank),
             ('Regular Battle', self.regular),
         )
@@ -920,7 +928,7 @@ class SplatNetSchedule:
     @property
     def soonest_expiry(self) -> Optional[datetime.datetime]:
         expiry_times = []
-        for sequence in (self.regular, self.ranked_series, self.ranked_open, self.league, self.x_rank, self.salmon_run):
+        for sequence in (self.regular, self.ranked_series, self.ranked_open, self.x_rank, self.salmon_run):
             if sequence:
                 expiry_times.append(sequence[0].end_time)
 
@@ -954,6 +962,45 @@ class Rotation:
 
     def __repr__(self) -> str:
         return f'<Rotation start={self.start_time} end={self.end_time} rule={self.rule} stage_a={self.stage_a!r} stage_b={self.stage_b!r}>'
+
+
+class RotationTime(NamedTuple):
+    start_time: datetime.datetime
+    end_time: datetime.datetime
+
+    @classmethod
+    def from_json(cls, data: RotationTimePeriodPayload) -> Self:
+        return cls(
+            start_time=fromisoformat(data['startTime']),
+            end_time=fromisoformat(data['endTime']),
+        )
+
+
+class ChallengeRotation:
+    def __init__(self, data: LeagueMatchSettingPayload, periods: list[RotationTimePeriodPayload]) -> None:
+        event = data['leagueMatchEvent']
+        self.name: str = event['name']
+        self.description: str = event['desc']
+        self.rules: str = self._strip_html(event['regulation'])
+        self.stages: list[str] = [stage['name'] for stage in data['vsStages']]
+        self.mode: str = data['vsRule']['name']
+        self.times: list[RotationTime] = [RotationTime.from_json(time) for time in periods]
+
+    @staticmethod
+    def _strip_html(text: str) -> str:
+        """Strips HTML from the regulations key in the challenge payload.
+
+        Currently this is just <br /> tags but I suspect in the future they'll expand this.
+        """
+        return text.replace('<br />', '\n')
+
+    @property
+    def current(self) -> bool:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for time in self.times:
+            if time.start_time <= now <= time.end_time:
+                return True
+        return False
 
 
 class SchedulePageSource(menus.ListPageSource):
@@ -992,6 +1039,40 @@ class SchedulePageSource(menus.ListPageSource):
             text = f'Page {menu.current_page + 1}/{maximum}'
             embed.set_footer(text=text)
 
+        return embed
+
+
+class ChallengeSchedulePageSource(menus.ListPageSource):
+    def __init__(self, data: list[ChallengeRotation]):
+        super().__init__(list(data), per_page=1)
+
+    def is_expired(self, page_number: int) -> bool:
+        challenge: ChallengeRotation = self.entries[page_number]
+        now = discord.utils.utcnow()
+        return all(t.start_time <= now for t in challenge.times)
+
+    async def format_page(self, menu: menus.MenuPages, challenge: ChallengeRotation) -> discord.Embed:
+        embed = discord.Embed(colour=SPLATOON_3_YELLOW)
+        embed.title = challenge.name
+        embed.description = challenge.rules
+        embed.set_author(name=challenge.mode)
+        embed.set_footer(text=challenge.description)
+        embed.add_field(name='Stages', value=human_join(challenge.stages, final='and') or 'Unknown', inline=False)
+        times: list[str] = []
+        now = discord.utils.utcnow()
+        for time in challenge.times:
+            fmt = f'{discord.utils.format_dt(time.start_time, "f")} to {discord.utils.format_dt(time.end_time, "f")}'
+            if time.start_time <= now <= time.end_time:
+                fmt = f'{fmt} (ends {discord.utils.format_dt(time.end_time, "R")})'
+                embed.timestamp = time.end_time
+            else:
+                if embed.timestamp is None:
+                    embed.timestamp = time.start_time
+
+                fmt = f'{fmt} ({discord.utils.format_dt(time.start_time, "R")})'
+            times.append(fmt)
+
+        embed.add_field(name='Times', value='\n'.join(times), inline=False)
         return embed
 
 
@@ -1701,11 +1782,11 @@ def mode_key(argument: str) -> str:
         return 'splatfest'
     elif lower in ('x', 'x battle', 'x rank'):
         return 'x_rank'
-    # elif lower == 'league':
-    #     return 'league'
+    elif lower in ('challenge', 'challenges'):
+        return 'challenge'
     else:
         raise commands.BadArgument(
-            'Unknown schedule type, try: "ranked", "series", "turf", "regular", "splatfest", "x", or "league"'
+            'Unknown schedule type, try: "ranked", "series", "turf", "regular", "splatfest", "x", or "challenge"'
         )
 
 
@@ -2172,7 +2253,22 @@ class Splatoon(commands.GroupCog):
         menu = NotificationPages(source, ctx=ctx, salmon=False)
         await menu.start()
 
+    async def paginated_splatoon3_challenge_schedule(self, ctx: Context):
+        if self.sp3_map_data is None:
+            return await ctx.send('Sorry, no map data has been found yet.')
+
+        challenges = self.sp3_map_data.challenge
+        if not challenges:
+            return await ctx.send('No challenges found...')
+
+        source = ChallengeSchedulePageSource(challenges)
+        menu = RoboPages(source, ctx=ctx, compact=True)
+        await menu.start()
+
     async def paginated_splatoon3_schedule(self, ctx: Context, mode: str):
+        if mode == 'challenge':
+            return await self.paginated_splatoon3_challenge_schedule(ctx)
+
         rotations: list[Rotation] = getattr(self.sp3_map_data, mode, [])
         if not rotations:
             return await ctx.send('Sorry, no map data found...')
@@ -2216,6 +2312,7 @@ class Splatoon(commands.GroupCog):
             app_commands.Choice(name='X Battle', value='x_rank'),
             app_commands.Choice(name='Turf War', value='regular'),
             app_commands.Choice(name='Splatfest', value='splatfest'),
+            app_commands.Choice(name='Challenge', value='challenge'),
         ]
     )
     @app_commands.describe(type='The type of schedule to show')
