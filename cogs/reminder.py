@@ -62,8 +62,14 @@ class SnoozeModal(discord.ui.Modal, title='Snooze'):
         self.parent.snooze.disabled = True
         await interaction.response.edit_message(view=self.parent)
 
+        zone = await self.cog.get_timezone(interaction.user.id)
         refreshed = await self.cog.create_timer(
-            when, self.timer.event, *self.timer.args, **self.timer.kwargs, created=interaction.created_at
+            when,
+            self.timer.event,
+            *self.timer.args,
+            **self.timer.kwargs,
+            created=interaction.created_at,
+            timezone=zone or 'UTC',
         )
         author_id, _, message = self.timer.args
         delta = time.human_timedelta(when, source=refreshed.created_at)
