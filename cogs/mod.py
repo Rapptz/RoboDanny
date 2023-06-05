@@ -1600,8 +1600,6 @@ class Mod(commands.Cog):
                 continue
             else:
                 bans += 1
-                # Superfluous sleep just in case
-                await asyncio.sleep(2)
 
         await ctx.send(f'Banned from {bans}/{len(guilds_to_ban) + 1} guilds.')
 
