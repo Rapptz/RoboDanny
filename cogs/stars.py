@@ -621,7 +621,8 @@ class Stars(commands.Cog):
 
         starboard = await self.get_starboard(ctx.guild.id)
         if starboard.channel is not None:
-            return await ctx.send(f'This server already has a starboard ({starboard.channel.mention}).')
+            setattr(ctx, 'starboard', starboard)
+            return await self.starboard_info(ctx)
 
         if hasattr(starboard, 'locked'):
             try:
