@@ -37,10 +37,13 @@ if TYPE_CHECKING:
 
     # Internal type dicts
 
+    NotifyReminderKind = Literal['salmon', 'challenge', 'stage']
+
     class NotifyReminderData(TypedDict):
         embed: dict[str, Any]
         user_id: str
         is_salmon: bool
+        kind: NotifyReminderKind
         nonce: str
 
     # Splatoon 2 Config schema
@@ -1054,23 +1057,30 @@ class ChallengeSchedulePageSource(menus.ListPageSource):
     async def format_page(self, menu: menus.MenuPages, challenge: ChallengeRotation) -> discord.Embed:
         embed = discord.Embed(colour=SPLATOON_3_YELLOW)
         embed.title = challenge.name
-        embed.description = challenge.rules
+        embed.description = f'> {challenge.description}\n\n{challenge.rules}'
         embed.set_author(name=challenge.mode)
-        embed.set_footer(text=challenge.description)
+        embed.set_footer(text='Starts')
         embed.add_field(name='Stages', value=human_join(challenge.stages, final='and') or 'Unknown', inline=False)
         times: list[str] = []
         now = discord.utils.utcnow()
+        is_next = False
         for time in challenge.times:
             fmt = f'{discord.utils.format_dt(time.start_time, "f")} to {discord.utils.format_dt(time.end_time, "f")}'
             if time.start_time <= now <= time.end_time:
                 fmt = f'{fmt} (ends {discord.utils.format_dt(time.end_time, "R")})'
-                embed.timestamp = time.end_time
+                is_next = True
             else:
                 if embed.timestamp is None:
                     embed.timestamp = time.start_time
+                    if is_next:
+                        embed.set_footer(text='Next')
 
                 fmt = f'{fmt} ({discord.utils.format_dt(time.start_time, "R")})'
             times.append(fmt)
+
+        # Unsure how this can happen but just in case
+        if embed.footer.text == 'Starts' and embed.timestamp is None:
+            embed.set_footer(text=None)
 
         embed.add_field(name='Times', value='\n'.join(times), inline=False)
         return embed
@@ -1617,6 +1627,15 @@ class BrandOrAbility:
         return cls.get(argument)
 
 
+def notify_kind_to_key(kind: NotifyReminderKind) -> str:
+    if kind == 'challenge':
+        return 'challenge'
+    elif kind == 'salmon':
+        return 'Salmon Run'
+    elif kind == 'stage':
+        return 'stage'
+
+
 class NotifyRotationButton(discord.ui.Button):
     """This button is only really meant to be used by the embeds output from
     either ?salmonrun, ?schedule, or ?nextmaps.
@@ -1624,10 +1643,10 @@ class NotifyRotationButton(discord.ui.Button):
     This means that it removes footers, titles, images, and descriptions from the embed.
     """
 
-    def __init__(self, *, bot: RoboDanny, salmon: bool):
+    def __init__(self, *, bot: RoboDanny, kind: NotifyReminderKind):
         super().__init__(style=discord.ButtonStyle.green, label='Remind me when this rotation starts', row=0)
         self.bot = bot
-        self.salmon = salmon
+        self.kind: NotifyReminderKind = kind
 
     def compute_nonce(self, remind_at: datetime.datetime, embed: discord.Embed) -> str:
         m = hashlib.sha256()
@@ -1645,7 +1664,7 @@ class NotifyRotationButton(discord.ui.Button):
         assert interaction.message is not None
         embed = interaction.message.embeds[0]
         remind_at = embed.timestamp
-        key = 'Salmon Run' if self.salmon else 'stage'
+        key = notify_kind_to_key(self.kind)
         reminder = self.bot.reminder
 
         if remind_at is None or remind_at < discord.utils.utcnow():
@@ -1698,7 +1717,8 @@ class NotifyRotationButton(discord.ui.Button):
             user_id=user_id,
             nonce=nonce,
             embed=embed.to_dict(),
-            is_salmon=self.salmon,
+            kind=self.kind,
+            is_salmon=self.kind == 'salmon',  # Compatibility: will be removed in a future date
         )
 
         await interaction.followup.send(
@@ -1707,9 +1727,9 @@ class NotifyRotationButton(discord.ui.Button):
 
 
 class NotifyRotationView(discord.ui.View):
-    def __init__(self, *, bot: RoboDanny, salmon: bool):
+    def __init__(self, *, bot: RoboDanny, kind: NotifyReminderKind):
         super().__init__(timeout=180.0)
-        self.add_item(NotifyRotationButton(bot=bot, salmon=salmon))
+        self.add_item(NotifyRotationButton(bot=bot, kind=kind))
         self.message: Optional[discord.Message] = None
 
     async def on_timeout(self) -> None:
@@ -1718,9 +1738,9 @@ class NotifyRotationView(discord.ui.View):
 
 
 class NotificationPages(RoboPages):
-    def __init__(self, source: menus.PageSource, *, ctx: Context, salmon: bool) -> None:
+    def __init__(self, source: menus.PageSource, *, ctx: Context, kind: NotifyReminderKind) -> None:
         super().__init__(source, ctx=ctx, compact=True)
-        self.notify_button = NotifyRotationButton(bot=ctx.bot, salmon=salmon)
+        self.notify_button = NotifyRotationButton(bot=ctx.bot, kind=kind)
 
         for children in self.children:
             children.row = 1
@@ -1905,7 +1925,11 @@ class Splatoon(commands.GroupCog):
     async def on_splatoon_rotation_reminder_timer_complete(self, timer: Timer):
         data: NotifyReminderData = timer.kwargs  # type: ignore
 
-        key = 'Salmon Run' if data['is_salmon'] else 'stage'
+        if 'kind' not in data:
+            key = 'Salmon Run' if data['is_salmon'] else 'stage'
+        else:
+            key = notify_kind_to_key(data['kind'])
+
         msg = f'You asked to be reminded of this {key} rotation {discord.utils.format_dt(timer.created_at, "R")}.'
 
         try:
@@ -2250,7 +2274,7 @@ class Splatoon(commands.GroupCog):
 
         grouped = self.sp3_map_data.grouped_by_date()
         source = SchedulePageSource(grouped)
-        menu = NotificationPages(source, ctx=ctx, salmon=False)
+        menu = NotificationPages(source, ctx=ctx, kind='stage')
         await menu.start()
 
     async def paginated_splatoon3_challenge_schedule(self, ctx: Context):
@@ -2262,7 +2286,7 @@ class Splatoon(commands.GroupCog):
             return await ctx.send('No challenges found...')
 
         source = ChallengeSchedulePageSource(challenges)
-        menu = RoboPages(source, ctx=ctx, compact=True)
+        menu = NotificationPages(source, ctx=ctx, kind='challenge')
         await menu.start()
 
     async def paginated_splatoon3_schedule(self, ctx: Context, mode: str):
@@ -2347,7 +2371,7 @@ class Splatoon(commands.GroupCog):
             e.title = f'Starts {discord.utils.format_dt(start_time, "R")}'
             e.timestamp = start_time
 
-        view = NotifyRotationView(bot=self.bot, salmon=False)
+        view = NotifyRotationView(bot=self.bot, kind='stage')
         view.message = await ctx.send(embed=e, view=view)
 
     @commands.hybrid_command()
@@ -2357,7 +2381,7 @@ class Splatoon(commands.GroupCog):
         if not salmon:
             return await ctx.send('No Salmon Run schedule reported.')
 
-        pages = NotificationPages(SalmonRunPageSource(self, salmon), ctx=ctx, salmon=True)
+        pages = NotificationPages(SalmonRunPageSource(self, salmon), ctx=ctx, kind='salmon')
         await pages.start()
 
     @commands.hybrid_command(aliases=['splatnetshop'])
