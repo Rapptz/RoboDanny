@@ -705,7 +705,18 @@ class Reminder(commands.Cog):
         self.get_timezone.invalidate(self, ctx.author.id)
         await ctx.send(f'Your timezone has been set to {tz.label} (IANA ID: {tz.key}).', ephemeral=True, delete_after=10)
 
+    @timezone.command(name='info')
+    @app_commands.describe(tz='The timezone to get info about.')
+    async def timezone_info(self, ctx: Context, *, tz: TimeZone):
+        """Retrieves info about a timezone."""
+
+        embed = discord.Embed(title='Timezone Info', colour=discord.Colour.blurple())
+        embed.description = discord.utils.utcnow().astimezone(dateutil.tz.gettz(tz.key)).strftime('%Y-%m-%d %I:%M %p')
+        embed.add_field(name='IANA ID', value=tz.key)
+        await ctx.send(embed=embed)
+
     @timezone_set.autocomplete('tz')
+    @timezone_info.autocomplete('tz')
     async def timezone_set_autocomplete(
         self, interaction: discord.Interaction, argument: str
     ) -> list[app_commands.Choice[str]]:
