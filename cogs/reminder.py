@@ -710,9 +710,17 @@ class Reminder(commands.Cog):
     async def timezone_info(self, ctx: Context, *, tz: TimeZone):
         """Retrieves info about a timezone."""
 
-        embed = discord.Embed(title='Current Time', colour=discord.Colour.blurple())
-        embed.description = discord.utils.utcnow().astimezone(dateutil.tz.gettz(tz.key)).strftime('%Y-%m-%d %I:%M %p')
-        embed.add_field(name='IANA ID', value=tz.key)
+        embed = discord.Embed(title=tz.key, colour=discord.Colour.blurple())
+        dt = discord.utils.utcnow().astimezone(dateutil.tz.gettz(tz.key))
+        time = dt.strftime('%Y-%m-%d %I:%M %p')
+        embed.add_field(name='Current Time', value=time)
+
+        offset = dt.utcoffset()
+        if offset is not None:
+            minutes, _ = divmod(int(offset.total_seconds()), 60)
+            hours, minutes = divmod(minutes, 60)
+            embed.add_field(name='UTC Offset', value=f'{hours:+03d}:{minutes:02d}')
+
         await ctx.send(embed=embed)
 
     @timezone_set.autocomplete('tz')
