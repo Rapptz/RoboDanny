@@ -1740,7 +1740,7 @@ class Mod(commands.Cog):
             predicates.append(lambda m: len(m.reactions))
 
         if flags.emoji:
-            custom_emoji = re.compile(r'<:(\w+):(\d+)>')
+            custom_emoji = re.compile(r'<a?:(\w+):(\d+)>')
             predicates.append(lambda m: custom_emoji.search(m.content))
 
         if flags.user:
