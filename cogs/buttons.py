@@ -376,7 +376,7 @@ class Buttons(commands.Cog):
 
         fmt = (
             content + '\n\n*This is a DM sent because you had previously requested feedback or I found a bug'
-            ' in a command you used, I do not monitor this DM.*'
+            ' in a command you used, I do not monitor this DM. Responses to this DM are not mirrored anywhere.*'
         )
         try:
             await user.send(fmt)
