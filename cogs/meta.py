@@ -466,7 +466,12 @@ class Meta(commands.Cog):
 
         user = user or ctx.author
         e = discord.Embed()
-        roles = [role.name.replace('@', '@\u200b') for role in getattr(user, 'roles', [])]
+
+        if ctx.guild is not None and isinstance(user, discord.Member):
+            roles = [role.name.replace('@', '@\u200b') for role in user.roles]
+        else:
+            roles = []
+
         e.set_author(name=str(user))
 
         def format_date(dt: Optional[datetime.datetime]):
@@ -475,7 +480,10 @@ class Meta(commands.Cog):
             return f'{time.format_dt(dt, "F")} ({time.format_relative(dt)})'
 
         e.add_field(name='ID', value=user.id, inline=False)
-        e.add_field(name='Joined', value=format_date(getattr(user, 'joined_at', None)), inline=False)
+
+        if ctx.guild is not None and isinstance(user, discord.Member):
+            e.add_field(name='Joined', value=format_date(user.joined_at), inline=False)
+
         e.add_field(name='Created', value=format_date(user.created_at), inline=False)
 
         badges_to_emoji = {
@@ -508,16 +516,20 @@ class Meta(commands.Cog):
         if ctx.guild is not None and ctx.guild.owner_id == user.id:
             badges.append('<:owner:585789630800986114>')  # Discord Bots
 
-        if isinstance(user, discord.Member) and user.premium_since is not None:
+        if ctx.guild is not None and isinstance(user, discord.Member) and user.premium_since is not None:
             e.add_field(name='Boosted', value=format_date(user.premium_since), inline=False)
             badges.append('<:booster:1087022965775925288>')  # R. Danny
 
         if badges:
             e.description = ''.join(badges)
 
-        voice = getattr(user, 'voice', None)
-        if voice is not None:
-            vc = voice.channel
+        if (
+            ctx.guild is not None
+            and isinstance(user, discord.Member)
+            and user.voice is not None
+            and user.voice.channel is not None
+        ):
+            vc = user.voice.channel
             other_people = len(vc.members) - 1
             voice = f'{vc.name} with {other_people} others' if other_people else f'{vc.name} by themselves'
             e.add_field(name='Voice', value=voice, inline=False)
@@ -539,7 +551,7 @@ class Meta(commands.Cog):
 
         e.set_thumbnail(url=user.display_avatar.url)
 
-        if isinstance(user, discord.User):
+        if ctx.guild is not None and isinstance(user, discord.User):
             e.set_footer(text='This member is not in this server.')
 
         await ctx.send(embed=e)
