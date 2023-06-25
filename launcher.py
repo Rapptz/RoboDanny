@@ -211,7 +211,7 @@ async def create_pool() -> asyncpg.Pool:
     return await asyncpg.create_pool(
         config.postgresql,
         init=init,
-        command_timeout=60,
+        command_timeout=300,
         max_size=20,
         min_size=20,
     )  # type: ignore
