@@ -462,6 +462,23 @@ class Admin(commands.Cog):
 
         await self.send_sql_results(ctx, results)
 
+    @sql.command(name='explain', aliases=['analyze'], hidden=True)
+    async def sql_explain(self, ctx: Context, *, query: str):
+        """Explain an SQL query."""
+        query = self.cleanup_code(query)
+        analyze = ctx.invoked_with == 'analyze'
+        if analyze:
+            query = f'EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)\n{query}'
+        else:
+            query = f'EXPLAIN (COSTS, VERBOSE, FORMAT JSON)\n{query}'
+
+        json = await ctx.db.fetchrow(query)
+        if json is None:
+            return await ctx.send('Somehow nothing returned.')
+
+        file = discord.File(io.BytesIO(json[0].encode('utf-8')), filename='explain.json')
+        await ctx.send(file=file)
+
     @commands.command(hidden=True)
     async def sudo(
         self,
