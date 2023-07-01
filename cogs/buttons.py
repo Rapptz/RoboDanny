@@ -979,18 +979,12 @@ class Buttons(commands.Cog):
 
         Supported unit conversions:
 
-        - km -> mi
-        - m -> ft
-        - ft -> m
-        - cm -> in
-        - in -> cm
-        - mi -> km
-        - kg -> lb
-        - lb -> kg
-        - L -> gal
-        - gal -> L
-        - °C -> °F
-        - °F -> °C
+        - km <-> mi
+        - m <-> ft
+        - cm <-> in
+        - kg <-> lb
+        - L <-> gal
+        - °C <-> °F
         """
 
         if values is None:
