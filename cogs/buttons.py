@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, MutableMapping, NamedTuple, Optional, TypedDict
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any, Callable, MutableMapping, NamedTuple, Optional, TypedDict
+from typing_extensions import Self, Annotated
 from discord.ext import commands, menus
 from discord import app_commands
 from lxml import html
@@ -381,6 +381,78 @@ class UrbanDictionaryPageSource(menus.ListPageSource):
             embed.timestamp = date
 
         return embed
+
+
+class ConvertibleUnit(NamedTuple):
+    # (value) -> (converted, unit)
+    formula: Callable[[float], tuple[float, str]]
+    capture: str
+
+
+UNIT_CONVERSIONS: dict[str, ConvertibleUnit] = {
+    'km': ConvertibleUnit(lambda v: (v * 0.621371, 'mi'), r'km|(?:kilometer|kilometre)s?'),
+    'm': ConvertibleUnit(lambda v: (v * 3.28084, 'ft'), r'm|(?:meter|metre)s?'),
+    'ft': ConvertibleUnit(lambda v: (v * 0.3048, 'm'), r'ft|feet|foot'),
+    'cm': ConvertibleUnit(lambda v: (v * 0.393701, 'in'), r'cm|(?:centimeter|centimetre)s?'),
+    'in': ConvertibleUnit(lambda v: (v * 2.54, 'cm'), r'in|inches?'),
+    'mi': ConvertibleUnit(lambda v: (v * 1.60934, 'km'), r'mi|miles?'),
+    'kg': ConvertibleUnit(lambda v: (v * 2.20462, 'lb'), r'kg|kilograms?'),
+    'lb': ConvertibleUnit(lambda v: (v * 0.453592, 'kg'), r'(?:lb|pound)s?'),
+    'L': ConvertibleUnit(lambda v: (v * 0.264172, 'gal'), r'l|(?:liter|litre)s?'),
+    'gal': ConvertibleUnit(lambda v: (v * 3.78541, 'L'), r'gal|gallons?'),
+    'C': ConvertibleUnit(lambda v: (v * 1.8 + 32, 'F'), r'c|°c|celcius'),
+    'F': ConvertibleUnit(lambda v: ((v - 32) / 1.8, 'C'), r'f|°f|fahrenheit'),
+}
+
+UNIT_CONVERSION_REGEX_COMPONENT = '|'.join(f'(?P<{name}>{unit.capture})' for name, unit in UNIT_CONVERSIONS.items())
+UNIT_CONVERSION_REGEX = re.compile(
+    rf'(?P<value>[0-9]+(?:[,.][0-9]+)?)\s*(?:{UNIT_CONVERSION_REGEX_COMPONENT})\b', re.IGNORECASE
+)
+
+
+class Unit(NamedTuple):
+    value: float
+    unit: str
+
+    @classmethod
+    async def convert(cls, ctx: Context, argument: str) -> Self:
+        match = UNIT_CONVERSION_REGEX.match(argument)
+        if match is None:
+            raise commands.BadArgument('Could not find a unit')
+
+        value = float(match.group('value'))
+        unit = match.lastgroup
+        if unit is None:
+            raise commands.BadArgument('Could not find a unit')
+
+        return cls(value, unit)
+
+    def converted(self) -> Self:
+        return Unit(*UNIT_CONVERSIONS[self.unit].formula(self.value))
+
+    @property
+    def display_unit(self) -> str:
+        # Work around the fact that ° can't be used in group names
+        if self.unit in ('F', 'C'):
+            return f'°{self.unit}'
+        return f' {self.unit}'
+
+
+class UnitCollector(commands.Converter):
+    async def convert(self, ctx: Context, argument: str) -> list[Unit]:
+        units = []
+        for match in UNIT_CONVERSION_REGEX.finditer(argument):
+            value = float(match.group('value'))
+            unit = match.lastgroup
+            if unit is None:
+                raise commands.BadArgument('Could not find a unit')
+
+            units.append(Unit(value, unit))
+
+        if not units:
+            raise commands.BadArgument('Could not find a unit')
+
+        return units
 
 
 class RedditMediaURL:
@@ -901,6 +973,32 @@ class Buttons(commands.Cog):
         result = await free_dictionary_autocomplete_query(self.bot.session, query=query)
         return [app_commands.Choice(name=word, value=word) for word in result][:25]
 
+    @commands.command(name='convert')
+    async def _convert(self, ctx: Context, *, values: Annotated[list[Unit], UnitCollector] = None):
+        """Converts between various units."""
+
+        if values is None:
+            reply = ctx.replied_message
+            if reply is None:
+                return await ctx.send('You need to provide some values to convert or reply to a message with values.')
+
+            values = await UnitCollector().convert(ctx, reply.content)
+
+        pairs: list[tuple[str, str]] = []
+        for value in values:
+            original = f'{value.value:.2g}{value.display_unit}'
+            converted = value.converted()
+            pairs.append((original, f'{converted.value:.2g}{converted.display_unit}'))
+
+        # Pad for width since this is monospace
+        width = max(len(original) for original, _ in pairs)
+        fmt = '\n'.join(f'{original:<{width}} -> {converted}' for original, converted in pairs)
+        await ctx.send(f'```\n{fmt}\n```')
+
+    @_convert.error
+    async def on_convert_error(self, ctx: Context, error: commands.CommandError):
+        if isinstance(error, commands.BadArgument):
+            await ctx.send(str(error))
 
 async def setup(bot: RoboDanny):
     await bot.add_cog(Buttons(bot))
