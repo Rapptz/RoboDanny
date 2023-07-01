@@ -400,13 +400,13 @@ UNIT_CONVERSIONS: dict[str, ConvertibleUnit] = {
     'lb': ConvertibleUnit(lambda v: (v * 0.453592, 'kg'), r'(?:lb|pound)s?'),
     'L': ConvertibleUnit(lambda v: (v * 0.264172, 'gal'), r'l|(?:liter|litre)s?'),
     'gal': ConvertibleUnit(lambda v: (v * 3.78541, 'L'), r'gal|gallons?'),
-    'C': ConvertibleUnit(lambda v: (v * 1.8 + 32, 'F'), r'c|°c|celcius'),
+    'C': ConvertibleUnit(lambda v: (v * 1.8 + 32, 'F'), r'c|°c|celsius'),
     'F': ConvertibleUnit(lambda v: ((v - 32) / 1.8, 'C'), r'f|°f|fahrenheit'),
 }
 
 UNIT_CONVERSION_REGEX_COMPONENT = '|'.join(f'(?P<{name}>{unit.capture})' for name, unit in UNIT_CONVERSIONS.items())
 UNIT_CONVERSION_REGEX = re.compile(
-    rf'(?P<value>[0-9]+(?:[,.][0-9]+)?)\s*(?:{UNIT_CONVERSION_REGEX_COMPONENT})\b', re.IGNORECASE
+    rf'(?P<value>\-?[0-9]+(?:[,.][0-9]+)?)\s*(?:{UNIT_CONVERSION_REGEX_COMPONENT})\b', re.IGNORECASE
 )
 
 
@@ -986,9 +986,9 @@ class Buttons(commands.Cog):
 
         pairs: list[tuple[str, str]] = []
         for value in values:
-            original = f'{value.value:.2g}{value.display_unit}'
+            original = f'{value.value:g}{value.display_unit}'
             converted = value.converted()
-            pairs.append((original, f'{converted.value:.2g}{converted.display_unit}'))
+            pairs.append((original, f'{converted.value:g}{converted.display_unit}'))
 
         # Pad for width since this is monospace
         width = max(len(original) for original, _ in pairs)
