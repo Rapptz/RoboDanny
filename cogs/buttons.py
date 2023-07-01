@@ -394,7 +394,7 @@ UNIT_CONVERSIONS: dict[str, ConvertibleUnit] = {
     'm': ConvertibleUnit(lambda v: (v * 3.28084, 'ft'), r'm|(?:meter|metre)s?'),
     'ft': ConvertibleUnit(lambda v: (v * 0.3048, 'm'), r'ft|feet|foot'),
     'cm': ConvertibleUnit(lambda v: (v * 0.393701, 'in'), r'cm|(?:centimeter|centimetre)s?'),
-    'in': ConvertibleUnit(lambda v: (v * 2.54, 'cm'), r'in|inches?'),
+    'in': ConvertibleUnit(lambda v: (v * 2.54, 'cm'), r'in|inch(?:es)?'),
     'mi': ConvertibleUnit(lambda v: (v * 1.60934, 'km'), r'mi|miles?'),
     'kg': ConvertibleUnit(lambda v: (v * 2.20462, 'lb'), r'kg|kilograms?'),
     'lb': ConvertibleUnit(lambda v: (v * 0.453592, 'kg'), r'(?:lb|pound)s?'),
