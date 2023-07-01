@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Callable, MutableMapping, NamedTuple, Optional, TypedDict, List
+from typing import TYPE_CHECKING, Any, Callable, MutableMapping, NamedTuple, Optional, Set, TypedDict
 from typing_extensions import Self, Annotated
 from discord.ext import commands, menus
 from discord import app_commands
@@ -439,15 +439,15 @@ class Unit(NamedTuple):
 
 
 class UnitCollector(commands.Converter):
-    async def convert(self, ctx: Context, argument: str) -> list[Unit]:
-        units = []
+    async def convert(self, ctx: Context, argument: str) -> set[Unit]:
+        units = set()
         for match in UNIT_CONVERSION_REGEX.finditer(argument):
             value = float(match.group('value'))
             unit = match.lastgroup
             if unit is None:
                 raise commands.BadArgument('Could not find a unit')
 
-            units.append(Unit(value, unit))
+            units.add(Unit(value, unit))
 
         if not units:
             raise commands.BadArgument('Could not find a unit')
@@ -974,7 +974,7 @@ class Buttons(commands.Cog):
         return [app_commands.Choice(name=word, value=word) for word in result][:25]
 
     @commands.command(name='convert')
-    async def _convert(self, ctx: Context, *, values: Annotated[List[Unit], UnitCollector] = None):
+    async def _convert(self, ctx: Context, *, values: Annotated[Set[Unit], UnitCollector] = None):
         """Converts between various units."""
 
         if values is None:
