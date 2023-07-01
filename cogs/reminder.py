@@ -25,16 +25,16 @@ if TYPE_CHECKING:
 
 class MaybeAcquire:
     def __init__(self, connection: Optional[asyncpg.Connection], *, pool: asyncpg.Pool) -> None:
-        self.connection: Optional[asyncpg.Connection] = connection
+        self._connection: Optional[asyncpg.Connection] = connection
         self.pool: asyncpg.Pool = pool
         self._cleanup: bool = False
 
     async def __aenter__(self) -> asyncpg.Connection:
-        if self.connection is None:
+        if self._connection is None:
             self._cleanup = True
             self._connection = c = await self.pool.acquire()
             return c
-        return self.connection
+        return self._connection
 
     async def __aexit__(self, *args) -> None:
         if self._cleanup:
