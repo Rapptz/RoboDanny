@@ -975,7 +975,23 @@ class Buttons(commands.Cog):
 
     @commands.command(name='convert')
     async def _convert(self, ctx: Context, *, values: Annotated[Set[Unit], UnitCollector] = None):
-        """Converts between various units."""
+        """Converts between various units.
+
+        Supported unit conversions:
+
+        - km -> mi
+        - m -> ft
+        - ft -> m
+        - cm -> in
+        - in -> cm
+        - mi -> km
+        - kg -> lb
+        - lb -> kg
+        - L -> gal
+        - gal -> L
+        - °C -> °F
+        - °F -> °C
+        """
 
         if values is None:
             reply = ctx.replied_message
