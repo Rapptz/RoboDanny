@@ -262,7 +262,6 @@ async def parse_free_dictionary_for_word(session: ClientSession, *, word: str) -
 
     async with session.get(url, headers=headers) as resp:
         if resp.status != 200:
-            log.info('Got non-200 status code from free dictionary for word %r: %s', word, resp.status)
             return None
 
         text = await resp.text()
@@ -271,7 +270,6 @@ async def parse_free_dictionary_for_word(session: ClientSession, *, word: str) -
         try:
             definitions = document.get_element_by_id('Definition')
         except KeyError:
-            log.info('Could not find definition element')
             return None
 
         h1 = document.find('h1')
@@ -279,13 +277,11 @@ async def parse_free_dictionary_for_word(session: ClientSession, *, word: str) -
 
         section = definitions.xpath("section[@data-src='hm' or @data-src='hc_dict' or @data-src='rHouse']")
         if not section:
-            log.info('Could not find section element')
             return None
 
         node = section[0]
         h2: Optional[Any] = node.find('h2')
         if h2 is None:
-            log.info('Could not find word element')
             return None
 
         try:
