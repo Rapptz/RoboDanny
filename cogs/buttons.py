@@ -44,9 +44,10 @@ SPOILER_EMOJI_ID = 430469957042831371
 DICTIONARY_EMBED_COLOUR = discord.Colour(0x5F9EB3)
 
 
-def html_to_markdown(node: Any, *, include_spans: bool = False) -> str:
+def html_to_markdown(node: Any, *, include_spans: bool = False, base_url: Optional[yarl.URL] = None) -> str:
     text = []
     italics_marker = '_'
+
     for child in node:
         if child.tag == 'i':
             text.append(f'{italics_marker}{child.text.strip()}{italics_marker}')
@@ -58,7 +59,11 @@ def html_to_markdown(node: Any, *, include_spans: bool = False) -> str:
             text.append(f'**{child.text.strip()}**')
         elif child.tag == 'a':
             # No markup for links
-            text.append(child.text)
+            if base_url is None:
+                text.append(child.text)
+            else:
+                url = base_url.join(yarl.URL(child.attrib['href']))
+                text.append(f'[{child.text}]({url})')
         elif include_spans and child.tag == 'span':
             text.append(child.text)
 
@@ -148,14 +153,16 @@ class FreeDictionaryWord:
     pronunciation: Optional[str]
     meanings: list[FreeDictionaryMeaning]
     phrasal_verbs: list[FreeDictionaryPhrasalVerb]
+    etymology: Optional[str]
 
-    def __init__(self, raw_word: str, word: str, node: Any) -> None:
+    def __init__(self, raw_word: str, word: str, node: Any, base_url: yarl.URL) -> None:
         self.raw_word = raw_word
         self.word = word
         self.meanings = []
         self.phrasal_verbs = []
         self.get_pronunciation(node)
         self.get_meanings(node)
+        self.get_etymology(node, base_url)
 
     def get_pronunciation(self, node) -> None:
         self.pronunciation_url = None
@@ -226,6 +233,18 @@ class FreeDictionaryWord:
             meaning = FreeDictionaryMeaning(div, 'phrasal verb')
             self.phrasal_verbs.append(FreeDictionaryPhrasalVerb(word, meaning))
 
+    def get_etymology(self, node: Any, base_url: yarl.URL) -> None:
+        etyseg = node.xpath("./div[@class='etyseg']")
+        if not etyseg:
+            self.etymology = None
+            return
+
+        etyseg = etyseg[0]
+        self.etymology = etyseg.text + html_to_markdown(etyseg, include_spans=True, base_url=base_url)
+
+        if self.etymology.startswith('[') and self.etymology.endswith(']'):
+            self.etymology = self.etymology[1:-1]
+
     def to_json(self) -> dict[str, Any]:
         return {
             'raw_word': self.raw_word,
@@ -240,6 +259,7 @@ class FreeDictionaryWord:
                 }
                 for verb in self.phrasal_verbs
             ],
+            'etymology': self.etymology,
         }
 
 
@@ -285,7 +305,7 @@ async def parse_free_dictionary_for_word(session: ClientSession, *, word: str) -
             return None
 
         try:
-            return FreeDictionaryWord(raw_word, h2.text, node)
+            return FreeDictionaryWord(raw_word, h2.text, node, resp.url)
         except RuntimeError:
             log.exception('Error happened while parsing free dictionary')
             return None
@@ -336,6 +356,10 @@ class FreeDictionaryWordMeaningPageSource(menus.ListPageSource):
         embed = discord.Embed(title=title, colour=DICTIONARY_EMBED_COLOUR)
         embed.set_author(name=heading)
         embed.description = entry.markdown
+
+        if self.word.etymology:
+            embed.add_field(name='Etymology', value=self.word.etymology, inline=False)
+
         return embed
 
 
@@ -1005,6 +1029,7 @@ class Buttons(commands.Cog):
     async def on_convert_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.BadArgument):
             await ctx.send(str(error))
+
 
 async def setup(bot: RoboDanny):
     await bot.add_cog(Buttons(bot))
