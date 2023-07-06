@@ -120,7 +120,7 @@ class TimeZone(NamedTuple):
 
         # Prioritise aliases because they handle short codes slightly better
         if argument in ctx.cog._timezone_aliases:
-            return cls(key=argument, label=ctx.cog._timezone_aliases[argument])
+            return cls(key=ctx.cog._timezone_aliases[argument], label=argument)
 
         if argument in ctx.cog.valid_timezones:
             return cls(key=argument, label=argument)
