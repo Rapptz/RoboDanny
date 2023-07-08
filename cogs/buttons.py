@@ -72,6 +72,9 @@ def html_to_markdown(node: Any, *, include_spans: bool = False, base_url: Option
 
     return ''.join(text).strip()
 
+def inner_trim(s: str, *, _regex=re.compile(r'\s+')) -> str:
+    return _regex.sub(' ', s.strip())
+
 
 class FreeDictionaryDefinition(NamedTuple):
     definition: str
@@ -85,12 +88,13 @@ class FreeDictionaryDefinition(NamedTuple):
         number = node.find('b')
         definition: str = node.text or ''
         if number is not None:
-            tail = number.tail and number.tail.strip()
+            tail = number.tail
             node.remove(number)
             if tail:
                 definition = tail
 
         definition += html_to_markdown(node, include_spans=False)
+        definition = inner_trim(definition)
 
         example: Optional[str] = None
         example_nodes = node.xpath("./span[@class='illustration']")
