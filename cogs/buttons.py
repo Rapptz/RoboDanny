@@ -195,7 +195,7 @@ class FreeDictionaryWord:
         if data_src == 'hm':
             child_nodes = node.xpath("./div[@class='pseg']")
         elif data_src == 'hc_dict':
-            child_nodes = node.findall('div')
+            child_nodes = node.xpath('./div[not(@class)]')
         elif data_src == 'rHouse':
             child_nodes = node
 
