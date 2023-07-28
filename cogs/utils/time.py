@@ -168,7 +168,7 @@ class TimeTransformer(app_commands.Transformer):
         if reminder is not None:
             tzinfo = await reminder.get_tzinfo(interaction.user.id)
 
-        now = interaction.created_at
+        now = interaction.created_at.astimezone(tzinfo)
         try:
             short = ShortTime(value, now=now, tzinfo=tzinfo)
         except commands.BadArgument:
