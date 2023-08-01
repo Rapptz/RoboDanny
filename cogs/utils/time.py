@@ -337,6 +337,10 @@ def human_timedelta(
     now = now.replace(microsecond=0)
     dt = dt.replace(microsecond=0)
 
+    # Make sure they're both in the timezone
+    now = now.astimezone(datetime.timezone.utc)
+    dt = dt.astimezone(datetime.timezone.utc)
+
     # This implementation uses relativedelta instead of the much more obvious
     # divmod approach with seconds because the seconds approach is not entirely
     # accurate once you go over 1 week in terms of accuracy since you have to
