@@ -542,6 +542,9 @@ class Reminder(commands.Cog):
         using the "timezone set" command.
         """
 
+        if len(when.arg) >= 1500:
+            return await ctx.send('Reminder must be fewer than 1500 characters.')
+
         zone = await self.get_timezone(ctx.author.id)
         timer = await self.create_timer(
             when.dt,
@@ -567,7 +570,7 @@ class Reminder(commands.Cog):
         self,
         interaction: discord.Interaction,
         when: app_commands.Transform[datetime.datetime, time.TimeTransformer],
-        text: str = '…',
+        text: app_commands.Range[str, 1, 1500] = '…',
     ):
         """Sets a reminder to remind you of something at a specific time."""
 
