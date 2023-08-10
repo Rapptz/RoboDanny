@@ -136,7 +136,7 @@ class FrontPageSource(menus.PageSource):
             embed.add_field(
                 name='Who are you?',
                 value=(
-                    "I'm a bot made by Danny#0007. I'm the oldest running Discord bot! I've been running since "
+                    "I'm a bot made by `danny`. I'm the oldest running Discord bot! I've been running since "
                     f'{created_at}. I have features such as moderation, tags, starboard, and more. You can get more '
                     'information on my commands by using the dropdown below.\n\n'
                     "I'm also open source. You can see my code on [GitHub](https://github.com/Rapptz/RoboDanny)!"
