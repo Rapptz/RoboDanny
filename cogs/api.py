@@ -428,30 +428,21 @@ class API(commands.Cog):
     
     @commands.hybrid_command()
     @commands.has_permissions(manage_messages=True)
-    @app_commands.describe(duration="The slowmode duration in seconds or 0 to disable", unit="The time unit for the duration")
+    @app_commands.describe(duration="The slowmode duration or 0s to disable")
     @app_commands.guild_only()
     @app_commands.guilds(DISCORD_API_ID)
-    @app_commands.choices(unit=[
-        app_commands.Choice(name="Seconds", value="s"),
-        app_commands.Choice(name="Minutes", value="m"),
-        app_commands.Choice(name="Hours", value="h"),
-    ])
-    async def slowmode(self, ctx: GuildContext, duration: app_commands.Range[int, 0], unit: Optional[str]):
+    async def slowmode(self, ctx: GuildContext, duration: time.ShortTime):
         """Applies slowmode to this channel"""
 
-        slowmode_delay = duration
-
-        if unit == 'm':
-            slowmode_delay *= 60
-        elif unit == 'h':
-            slowmode_delay *= 3600
+        delta = duration.dt - time.datetime.datetime.now()
+        slowmode_delay = int(delta.total_seconds())
         
         if slowmode_delay > 21600:
             await ctx.reply("Provided slowmode duration is too long!", ephemeral=True)
         else:
             await ctx.channel.edit(slowmode_delay=slowmode_delay, reason=f'Responsible moderator: {ctx.author.name}')
-            if duration > 0:
-                await ctx.reply(f"Configured slowmode to {duration}{unit}", ephemeral=True)
+            if slowmode_delay > 0:
+                await ctx.reply(f"Configured slowmode to {slowmode_delay} seconds", ephemeral=True)
             else:
                 await ctx.reply(f"Disabled slowmode", ephemeral=True)
 
