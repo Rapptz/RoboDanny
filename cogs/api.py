@@ -425,7 +425,7 @@ class API(commands.Cog):
                     output.append(f'\N{KEYCAP TEN} {user}: {count}')
 
         await ctx.send('\n'.join(output))
-    
+
     @commands.hybrid_command()
     @commands.has_permissions(manage_messages=True)
     @app_commands.describe(duration="The slowmode duration or 0s to disable")
@@ -436,7 +436,7 @@ class API(commands.Cog):
 
         delta = duration.dt - ctx.message.created_at
         slowmode_delay = int(delta.total_seconds())
-        
+
         if slowmode_delay > 21600:
             await ctx.reply("Provided slowmode duration is too long!", ephemeral=True)
         else:
