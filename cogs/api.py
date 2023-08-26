@@ -434,7 +434,7 @@ class API(commands.Cog):
     async def slowmode(self, ctx: GuildContext, duration: time.ShortTime):
         """Applies slowmode to this channel"""
 
-        delta = duration.dt - time.datetime.datetime.now()
+        delta = duration.dt - ctx.message.created_at
         slowmode_delay = int(delta.total_seconds())
         
         if slowmode_delay > 21600:
