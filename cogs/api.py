@@ -426,6 +426,26 @@ class API(commands.Cog):
 
         await ctx.send('\n'.join(output))
 
+    @commands.hybrid_command()
+    @commands.has_permissions(manage_messages=True)
+    @app_commands.describe(duration="The slowmode duration or 0s to disable")
+    @app_commands.guild_only()
+    @app_commands.guilds(DISCORD_API_ID)
+    async def slowmode(self, ctx: GuildContext, duration: time.ShortTime):
+        """Applies slowmode to this channel"""
+
+        delta = duration.dt - ctx.message.created_at
+        slowmode_delay = int(delta.total_seconds())
+
+        if slowmode_delay > 21600:
+            await ctx.reply("Provided slowmode duration is too long!", ephemeral=True)
+        else:
+            await ctx.channel.edit(slowmode_delay=slowmode_delay, reason=f'Responsible moderator: {ctx.author.name}')
+            if slowmode_delay > 0:
+                await ctx.reply(f"Configured slowmode to {slowmode_delay} seconds", ephemeral=True)
+            else:
+                await ctx.reply(f"Disabled slowmode", ephemeral=True)
+
     def library_name(self, channel: Union[discord.abc.GuildChannel, discord.Thread]) -> str:
         # language_<name>
         name = channel.name
