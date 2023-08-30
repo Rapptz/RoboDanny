@@ -172,7 +172,7 @@ if TYPE_CHECKING:
 
     class BaseMatchSettingPayload(TypedDict):
         vsStages: list[StagePayload]
-        vsRule: VsRulePayload
+        vsRule: Optional[VsRulePayload]
 
     class RegularMatchSettingPayload(BaseMatchSettingPayload):
         __isVsSetting: Literal['RegularMatchSetting']
@@ -181,7 +181,7 @@ if TYPE_CHECKING:
     class RankedMatchSettingPayload(BaseMatchSettingPayload):
         __isVsSetting: Literal['BankaraMatchSetting']
         __typename: Literal['BankaraMatchSetting']
-        mode: Literal['OPEN', 'CHALLENGE']
+        bankaraMode: Literal['OPEN', 'CHALLENGE']
 
     class XMatchSettingPayload(BaseMatchSettingPayload):
         __isVsSetting: Literal['XMatchSetting']
@@ -366,8 +366,8 @@ class SplatNet3:
         The session to use for making requests.
     """
 
-    APP_VERSION = '2.5.1'
-    WEB_VIEW_VERSION = '3.0.0-0742bda0'
+    APP_VERSION = '2.7.0'
+    WEB_VIEW_VERSION = '4.0.0-091d4283'
 
     def __init__(self, session_token: str, *, session: aiohttp.ClientSession) -> None:
         self.session_token = session_token
@@ -695,7 +695,7 @@ class SplatNet3:
 
     async def schedule(self) -> Optional[SplatNetSchedule]:
         # Called StageScheduleQuery internally
-        data = await self.cached_graphql_query('d1f062c14f74f758658b2703a5799002')
+        data = await self.cached_graphql_query('9b6b90568f990b2a14f04c25dd6eb53b35cc12ac815db85ececfccee64215edd')
         data = data.get('data', {})
         if not data:
             return None
@@ -703,7 +703,7 @@ class SplatNet3:
 
     async def shop(self) -> Optional[SplatNetShopPayload]:
         # Called GesotownQuery internally
-        data = await self.cached_graphql_query('a43dd44899a09013bcfd29b4b13314ff')
+        data = await self.cached_graphql_query('d6f94d4c05a111957bcd65f8649d628b02bf32d81f26f1d5b56eaef438e55bab')
         data = data.get('data', {}).get('gesotown', {})
         if not data:
             return None
@@ -712,17 +712,19 @@ class SplatNet3:
     async def latest_battles(self) -> dict[str, Any]:
         # Called LatestBattleHistoriesQuery internally
         # Too lazy to type this payload
-        data = await self.cached_graphql_query('0d90c7576f1916469b2ae69f64292c02')
+        data = await self.cached_graphql_query('b24d22fd6cb251c515c2b90044039698aa27bc1fab15801d83014d919cd45780')
         return data.get('data', {})
 
     async def battle_info_for(self, id: str) -> dict[str, Any]:
         # Called VsHistoryDetailQuery internally
-        data = await self.cached_graphql_query('9ee0099fbe3d8db2a838a75cf42856dd', variables={'vsResultId': id})
+        data = await self.cached_graphql_query(
+            'f893e1ddcfb8a4fd645fd75ced173f18b2750e5cfba41d2669b9814f6ceaec46', variables={'vsResultId': id}
+        )
         return data.get('data', {})
 
     async def outfit_equipment(self) -> dict[str, Any]:
         # Called MyOutfitCommonDataEquipmentsQuery internally
-        data = await self.cached_graphql_query('d29cd0c2b5e6bac90dd5b817914832f8')
+        data = await self.cached_graphql_query('45a4c343d973864f7bb9e9efac404182be1d48cf2181619505e9b7cd3b56a6e8')
         return data.get('data', {})
 
 
@@ -845,10 +847,12 @@ class SplatNetSchedule:
             inner = payload['regularMatchSetting']
             if inner is not None:
                 stages = inner['vsStages']
-                rule = inner['vsRule']['name']
-                self.regular.append(
-                    Rotation(label='Regular Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
-                )
+                vs = inner['vsRule']
+                if vs is not None:
+                    rule = vs['name']
+                    self.regular.append(
+                        Rotation(label='Regular Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                    )
 
         splatfest: list[BaseScheduleRotationPayload] = data.get('festSchedules', {}).get('nodes', [])
         self.splatfest: list[Rotation] = []
@@ -858,10 +862,12 @@ class SplatNetSchedule:
             inner = payload.get('festMatchSetting')
             if inner is not None:
                 stages = inner['vsStages']
-                rule = inner['vsRule']['name']
-                self.splatfest.append(
-                    Rotation(label='Splatfest', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
-                )
+                vs = inner['vsRule']
+                if vs is not None:
+                    rule = vs['name']
+                    self.splatfest.append(
+                        Rotation(label='Splatfest', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                    )
 
         ranked: list[RankedScheduleRotationPayload] = data.get('bankaraSchedules', {}).get('nodes', [])
         self.ranked_series: list[Rotation] = []
@@ -872,8 +878,12 @@ class SplatNetSchedule:
             inner = payload['bankaraMatchSettings'] or []
             for inner_setting in inner:
                 stages = inner_setting['vsStages']
-                rule = inner_setting['vsRule']['name']
-                mode = inner_setting['mode']
+                vs = inner_setting['vsRule']
+                if vs is None:
+                    continue
+
+                rule = vs['name']
+                mode = inner_setting['bankaraMode']
                 rotation = Rotation(start_time=start_time, end_time=end_time, rule=rule, stages=stages)
                 if mode == 'OPEN':
                     rotation.label = 'Anarchy Battle (Open)'
@@ -891,10 +901,12 @@ class SplatNetSchedule:
             inner = payload['xMatchSetting']
             if inner is not None:
                 stages = inner['vsStages']
-                rule = inner['vsRule']['name']
-                self.x_rank.append(
-                    Rotation(label='X Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
-                )
+                vs = inner['vsRule']
+                if vs is not None:
+                    rule = vs['name']
+                    self.x_rank.append(
+                        Rotation(label='X Battle', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                    )
 
         self.challenge: list[ChallengeRotation] = []
         challenge: list[EventScheduleRotationPayload] = data.get('eventSchedules', {}).get('nodes', [])
@@ -930,7 +942,7 @@ class SplatNetSchedule:
 
     @property
     def soonest_expiry(self) -> Optional[datetime.datetime]:
-        expiry_times = []
+        expiry_times: list[datetime.datetime] = []
         for sequence in (self.regular, self.ranked_series, self.ranked_open, self.x_rank, self.salmon_run):
             if sequence:
                 expiry_times.append(sequence[0].end_time)
@@ -986,7 +998,8 @@ class ChallengeRotation:
         self.description: str = event['desc']
         self.rules: str = self._strip_html(event['regulation'])
         self.stages: list[str] = [stage['name'] for stage in data['vsStages']]
-        self.mode: str = data['vsRule']['name']
+        vs = data['vsRule']
+        self.mode: str = vs['name'] if vs is not None else 'Unknown'
         self.times: list[RotationTime] = [RotationTime.from_json(time) for time in periods]
 
     @staticmethod
