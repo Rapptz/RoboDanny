@@ -385,7 +385,7 @@ class SpamChecker:
     """This spam checker does a few things.
 
     1) It checks if a user has spammed more than 10 times in 12 seconds
-    2) It checks if the content has been spammed 15 times in 17 seconds.
+    2) It checks if the content has been spammed 5 times in 10 seconds.
     3) It checks if new users have spammed 30 times in 35 seconds.
     4) It checks if "fast joiners" have spammed 10 times in 12 seconds.
     5) It checks if a member spammed `config.mention_count` mentions in 15 seconds.
@@ -397,7 +397,7 @@ class SpamChecker:
     """
 
     def __init__(self):
-        self.by_content = CooldownByContent.from_cooldown(15, 17.0, commands.BucketType.member)
+        self.by_content = CooldownByContent.from_cooldown(5, 10.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join: Optional[datetime.datetime] = None
         self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
