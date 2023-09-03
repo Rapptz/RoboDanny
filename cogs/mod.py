@@ -388,7 +388,7 @@ class SpamChecker:
     2) It checks if the content has been spammed 15 times in 17 seconds.
     3) It checks if new users have spammed 30 times in 35 seconds.
     4) It checks if "fast joiners" have spammed 10 times in 12 seconds.
-    5) It checks if a member spammed `config.mention_count * 2` mentions in 12 seconds.
+    5) It checks if a member spammed `config.mention_count` mentions in 15 seconds.
 
     The second case is meant to catch alternating spam bots while the first one
     just catches regular singular spam bots.
@@ -412,9 +412,9 @@ class SpamChecker:
         if not config.mention_count:
             return None
 
-        mention_threshold = config.mention_count * 2
+        mention_threshold = config.mention_count
         if self._by_mentions_rate != mention_threshold:
-            self._by_mentions = commands.CooldownMapping.from_cooldown(mention_threshold, 12, commands.BucketType.member)
+            self._by_mentions = commands.CooldownMapping.from_cooldown(mention_threshold, 15, commands.BucketType.member)
             self._by_mentions_rate = mention_threshold
         return self._by_mentions
 
