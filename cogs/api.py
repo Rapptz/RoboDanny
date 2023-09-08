@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator, Optional, TypedDict, Union
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator, NamedTuple, Optional, TypedDict, Union
 from typing_extensions import Annotated
 
 from discord.ext import commands
 from discord import app_commands
+
 from .utils import fuzzy, cache, time
 import asyncio
 import datetime
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from bot import RoboDanny
     from asyncpg import Record, Connection
     from cogs.reminder import Timer
+    from cogs.dpy import DPYExclusive
 
 
 DISCORD_API_ID = 81384788765712384
@@ -165,11 +167,20 @@ class BotUser(commands.Converter):
             return user
 
 
+class RepositoryExample(NamedTuple):
+    path: str
+    url: str
+
+    def to_choice(self) -> discord.app_commands.Choice[str]:
+        return discord.app_commands.Choice(name=self.path, value=self.path)
+
+
 class API(commands.Cog):
     """Discord API exclusive things."""
 
     faq_entries: dict[str, str]
     _rtfm_cache: dict[str, dict[str, str]]
+    repo_examples: list[RepositoryExample]
 
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
@@ -810,6 +821,32 @@ class API(commands.Cog):
             for node in nodes:
                 self.faq_entries[''.join(node.itertext()).strip()] = base_url + node.get('href').strip()
 
+    async def refresh_examples(self) -> None:
+        dpy: Optional[DPYExclusive] = self.bot.get_cog('discord.py')  # type: ignore
+        if dpy is None:
+            return
+
+        try:
+            tree = await dpy.github_request('GET', 'repos/Rapptz/discord.py/git/trees/master', params={'recursive': '1'})
+        except:
+            return
+
+        self.repo_examples = []
+        for file in tree['tree']:
+            if file['type'] != 'blob':
+                continue
+
+            path: str = file['path']
+            if not path.startswith('examples/'):
+                continue
+
+            if not path.endswith('.py'):
+                continue
+
+            url = f'https://github.com/Rapptz/discord.py/blob/master/{path}'
+            # 9 is the length of "examples/"
+            self.repo_examples.append(RepositoryExample(path[9:], url))
+
     @commands.hybrid_command()
     @app_commands.describe(query='The FAQ entry to look up')
     async def faq(self, ctx: Context, *, query: Optional[str] = None):
@@ -843,6 +880,33 @@ class API(commands.Cog):
 
         matches = fuzzy.extract_matches(current, self.faq_entries, scorer=fuzzy.partial_ratio, score_cutoff=40)[:10]
         return [app_commands.Choice(name=key, value=key) for key, _, _, in matches][:10]
+
+    @commands.hybrid_command(name='examples')
+    @app_commands.describe(example='The path of the example to look for')
+    async def examples(self, ctx: GuildContext, *, example: Optional[str] = None):
+        """Searches and returns examples from the discord.py repository."""
+        if not hasattr(self, 'repo_examples'):
+            await self.refresh_examples()
+
+        if example is None:
+            return await ctx.send(f'<https://github.com/Rapptz/discord.py/tree/master/examples>')
+
+        matches = fuzzy.finder(example, self.repo_examples, key=lambda e: e.path)[:5]
+        if not matches:
+            return await ctx.send('No examples found.')
+
+        to_send = '\n'.join(f'[{e.path}](<{e.url}>)' for e in matches)
+        await ctx.send(to_send, reference=ctx.replied_reference)
+
+    @examples.autocomplete('example')
+    async def examples_autocomplete(self, interaction: discord.Interaction, current: str):
+        if not hasattr(self, 'repo_examples'):
+            await interaction.response.autocomplete([])
+            await self.refresh_examples()
+            return []
+
+        matches = fuzzy.finder(current, self.repo_examples, key=lambda e: e.path)[:25]
+        return [e.to_choice() for e in matches]
 
 
 async def setup(bot: RoboDanny):
