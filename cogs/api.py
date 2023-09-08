@@ -387,6 +387,7 @@ class API(commands.Cog):
         async with ctx.typing():
             await self.build_rtfm_lookup_table()
             await self.refresh_faq_cache()
+            await self.refresh_examples()
 
         await ctx.send('\N{THUMBS UP SIGN}')
 
