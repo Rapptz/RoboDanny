@@ -204,6 +204,7 @@ if TYPE_CHECKING:
     class FestMatchSettingPayload(BaseMatchSettingPayload):
         __isVsSetting: Literal['FestMatchSetting']
         __typename: Literal['FestMatchSetting']
+        festMode: Literal['CHALLENGE', 'REGULAR']
 
     MatchSettingPayload = Union[
         RegularMatchSettingPayload,
@@ -219,7 +220,7 @@ if TYPE_CHECKING:
     class BaseScheduleRotationPayload(RotationTimePeriodPayload):
         startTime: str
         endTime: str
-        festMatchSetting: Optional[FestMatchSettingPayload]
+        festMatchSettings: list[FestMatchSettingPayload]
 
     class RegularScheduleRotationPayload(BaseScheduleRotationPayload):
         regularMatchSetting: RegularMatchSettingPayload
@@ -829,6 +830,7 @@ class SplatNetSchedule:
         'x_rank',
         'salmon_run',
         'splatfest',
+        'splatfest_pro',
         'challenge',
     )
 
@@ -856,18 +858,26 @@ class SplatNetSchedule:
 
         splatfest: list[BaseScheduleRotationPayload] = data.get('festSchedules', {}).get('nodes', [])
         self.splatfest: list[Rotation] = []
+        self.splatfest_pro: list[Rotation] = []
         for payload in splatfest:
             start_time = fromisoformat(payload['startTime'])
             end_time = fromisoformat(payload['endTime'])
-            inner = payload.get('festMatchSetting')
-            if inner is not None:
+            settings = payload.get('festMatchSettings') or []
+            for inner in settings:
                 stages = inner['vsStages']
                 vs = inner['vsRule']
                 if vs is not None:
                     rule = vs['name']
-                    self.splatfest.append(
-                        Rotation(label='Splatfest', start_time=start_time, end_time=end_time, rule=rule, stages=stages)
+                    rotation = Rotation(
+                        label='Splatfest', start_time=start_time, end_time=end_time, rule=rule, stages=stages
                     )
+                    mode = inner['festMode']
+                    if mode == 'CHALLENGE':
+                        rotation.label = 'Splatfest (Pro)'
+                        self.splatfest_pro.append(rotation)
+                    elif mode == 'REGULAR':
+                        rotation.label = 'Splatfest (Open)'
+                        self.splatfest.append(rotation)
 
         ranked: list[RankedScheduleRotationPayload] = data.get('bankaraSchedules', {}).get('nodes', [])
         self.ranked_series: list[Rotation] = []
@@ -924,7 +934,10 @@ class SplatNetSchedule:
 
     def pairs(self) -> tuple[tuple[str, list[Rotation]], ...]:
         if self.splatfest:
-            return (('Splatfest', self.splatfest),)
+            return (
+                ('Splatfest (Open)', self.splatfest),
+                ('Splatfest (Pro)', self.splatfest_pro),
+            )
 
         return (
             ('Anarchy Battle (Series)', self.ranked_series),
@@ -1811,6 +1824,8 @@ def mode_key(argument: str) -> str:
         return 'ranked_series'
     elif lower.startswith('turf') or lower.startswith('regular'):
         return 'regular'
+    elif lower in ('fest pro', 'splatfest pro', 'splatfest pro battle'):
+        return 'splatfest_pro'
     elif lower.startswith(('fest', 'splatfest')):
         return 'splatfest'
     elif lower in ('x', 'x battle', 'x rank'):
@@ -2319,6 +2334,8 @@ class Splatoon(commands.GroupCog):
             'ranked_open': 'Anarchy Battle (Open)',
             'league': 'League Battle',
             'x_rank': 'X Battle',
+            'splatfest': 'Splatfest (Open)',
+            'splatfest_pro': 'Splatfest (Pro)',
         }
 
         kind = mode_to_kind.get(mode, 'Unknown')
@@ -2338,6 +2355,7 @@ class Splatoon(commands.GroupCog):
             'ranked_open': 0xF54910,
             'league': 0xF02D7D,
             'x_rank': 0x10DB9B,
+            'splatfest_pro': SPLATOON_3_PURPLE,
         }
         p.embed.colour = mode_to_colour.get(mode, 0xCFF622)
         p.embed.title = kind
@@ -2351,7 +2369,8 @@ class Splatoon(commands.GroupCog):
             app_commands.Choice(name='Anarchy Battle (Open)', value='ranked_open'),
             app_commands.Choice(name='X Battle', value='x_rank'),
             app_commands.Choice(name='Turf War', value='regular'),
-            app_commands.Choice(name='Splatfest', value='splatfest'),
+            app_commands.Choice(name='Splatfest (Open)', value='splatfest'),
+            app_commands.Choice(name='Splatfest (Pro)', value='splatfest_pro'),
             app_commands.Choice(name='Challenge', value='challenge'),
         ]
     )
@@ -2412,8 +2431,13 @@ class Splatoon(commands.GroupCog):
     @commands.hybrid_command()
     async def splatfest(self, ctx: Context):
         """Shows information about the currently running NA Splatfest, if any."""
-        # TODO: Temporary until reverse engineer in the future
-        await ctx.send('No Splatfest has been announced.')
+        if not self.sp3_map_data:
+            return await ctx.send('No Splatfest data found...')
+
+        if not self.sp3_map_data.splatfest or not self.sp3_map_data.splatfest_pro:
+            return await ctx.send('No Splatfest is running yet')
+
+        await self.paginated_generic_splatoon3_schedule(ctx)
 
     @commands.hybrid_command()
     @app_commands.describe(query='The weapon name, sub, or special to search for')
