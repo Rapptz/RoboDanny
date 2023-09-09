@@ -400,6 +400,7 @@ class SpamChecker:
         self.by_content = CooldownByContent.from_cooldown(5, 10.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join: Optional[datetime.datetime] = None
+        self.last_created: Optional[datetime.datetime] = None
         self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
         self._by_mentions: Optional[commands.CooldownMapping] = None
         self._by_mentions_rate: Optional[int] = None
@@ -460,6 +461,17 @@ class SpamChecker:
         if is_fast:
             self.fast_joiners[member.id] = True
         return is_fast
+
+    def is_suspicious_join(self, member: discord.Member) -> bool:
+        created = member.created_at
+        if self.last_created is None:
+            self.last_created = created
+            return False
+
+        # Check if the account was created within 24 hours of the previous account
+        is_suspicious = abs((created - self.last_created).total_seconds()) <= 86400.0
+        self.last_created = created
+        return is_suspicious
 
     def is_mention_spam(self, message: discord.Message, config: ModConfig) -> bool:
         mapping = self.by_mentions(config)
@@ -745,6 +757,9 @@ class Mod(commands.Cog):
             colour = 0xDD5F53  # red
             if is_new:
                 title = 'Member Joined (Very New Member)'
+        elif checker.is_suspicious_join(member):
+            colour = 0xDDA453  # yellow
+            title = 'Member Joined (Suspicious Member)'
         else:
             colour = 0x53DDA4  # green
 
