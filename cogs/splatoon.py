@@ -2286,6 +2286,9 @@ class Splatoon(commands.GroupCog):
             return await ctx.send('Sorry, no map data has been found yet.')
 
         grouped = self.sp3_map_data.grouped_by_date()
+        if not grouped:
+            return await ctx.send('Sorry, no map data found somehow...')
+
         source = SchedulePageSource(grouped)
         menu = NotificationPages(source, ctx=ctx, kind='stage')
         await menu.start()
