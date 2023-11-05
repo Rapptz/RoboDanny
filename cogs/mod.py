@@ -387,7 +387,7 @@ class SpamChecker:
     1) It checks if a user has spammed more than 10 times in 12 seconds
     2) It checks if the content has been spammed 5 times in 10 seconds.
     3) It checks if new users have spammed 30 times in 35 seconds.
-    4) It checks if "fast joiners" have spammed 10 times in 12 seconds.
+    4) It checks if "fast joiners" have spammed 5 times in 7 seconds.
     5) It checks if a member spammed `config.mention_count` mentions in 15 seconds.
 
     The second case is meant to catch alternating spam bots while the first one
@@ -407,7 +407,7 @@ class SpamChecker:
 
         # user_id flag mapping (for about 30 minutes)
         self.fast_joiners: MutableMapping[int, bool] = cache.ExpiringCache(seconds=1800.0)
-        self.hit_and_run = commands.CooldownMapping.from_cooldown(10, 12, commands.BucketType.channel)
+        self.hit_and_run = commands.CooldownMapping.from_cooldown(5, 7, commands.BucketType.channel)
 
     def by_mentions(self, config: ModConfig) -> Optional[commands.CooldownMapping]:
         if not config.mention_count:
@@ -482,6 +482,9 @@ class SpamChecker:
         mention_bucket = mapping.get_bucket(message, current)
         mention_count = sum(not m.bot and m.id != message.author.id for m in message.mentions)
         return mention_bucket is not None and mention_bucket.update_rate_limit(current, tokens=mention_count) is not None
+
+    def remove_member(self, user: discord.abc.User) -> None:
+        self.fast_joiners.pop(user.id, None)
 
 
 ## Checks
@@ -785,6 +788,14 @@ class Mod(commands.Cog):
             except (discord.Forbidden, discord.NotFound):
                 async with self._disable_lock:
                     await self.disable_automod_broadcast(guild_id)
+
+    @commands.Cog.listener()
+    async def on_raw_member_remove(self, payload: discord.RawMemberRemoveEvent):
+        checker = self._spam_check.get(payload.guild_id)
+        if checker is None:
+            return
+
+        checker.remove_member(payload.user)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
