@@ -440,6 +440,9 @@ class SpamChecker:
     def get_flagged_member(self, user_id: int, /) -> Optional[FlaggedMember]:
         return self.flagged_users.get(user_id)
 
+    def flag_member(self, member: discord.Member, /) -> None:
+        self.flagged_users[member.id] = FlaggedMember(member, member.joined_at or discord.utils.utcnow())
+
     def by_mentions(self, config: ModConfig) -> Optional[commands.CooldownMapping]:
         if not config.mention_count:
             return None
@@ -807,6 +810,7 @@ class Mod(commands.Cog):
             colour = 0x53DDA4  # green
 
             if is_new:
+                checker.flag_member(member)
                 colour = 0xDDA453  # yellow
                 title = 'Member Joined (Very New Member)'
 
