@@ -1,4 +1,5 @@
 from __future__ import annotations
+import enum
 from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Optional, List, Union
 from typing_extensions import Annotated
 
@@ -378,12 +379,13 @@ class PurgeFlags(commands.FlagConverter):
 
 
 class FlaggedMember:
-    __slots__ = ('id', 'joined_at', 'display_name')
+    __slots__ = ('id', 'joined_at', 'display_name', 'messages')
 
     def __init__(self, user: discord.abc.User, joined_at: datetime.datetime):
         self.id = user.id
         self.display_name = str(user)
         self.joined_at = joined_at
+        self.messages: int = 0
 
     @property
     def created_at(self) -> datetime.datetime:
@@ -391,6 +393,14 @@ class FlaggedMember:
 
     def __str__(self) -> str:
         return self.display_name
+
+
+class SpamCheckerReason(enum.Enum):
+    spammer = 'spamming'
+    flagged_mention = 'suspicious mentions'
+
+    def __str__(self) -> str:
+        return self.value
 
 
 # TODO: add this to d.py maybe
@@ -427,6 +437,9 @@ class SpamChecker:
         self.flagged_users: MutableMapping[int, FlaggedMember] = cache.ExpiringCache(seconds=2700.0)
         self.hit_and_run = commands.CooldownMapping.from_cooldown(5, 7, commands.BucketType.channel)
 
+    def get_flagged_member(self, user_id: int, /) -> Optional[FlaggedMember]:
+        return self.flagged_users.get(user_id)
+
     def by_mentions(self, config: ModConfig) -> Optional[commands.CooldownMapping]:
         if not config.mention_count:
             return None
@@ -443,31 +456,37 @@ class SpamChecker:
         ninety_days_ago = now - datetime.timedelta(days=90)
         return member.created_at > ninety_days_ago and member.joined_at is not None and member.joined_at > seven_days_ago
 
-    def is_spamming(self, message: discord.Message) -> bool:
+    def is_spamming(self, message: discord.Message) -> Optional[SpamCheckerReason]:
         if message.guild is None:
-            return False
+            return None
 
         current = message.created_at.timestamp()
 
-        if message.author.id in self.flagged_users:
+        flagged = self.flagged_users.get(message.author.id)
+        if flagged is not None:
+            flagged.messages += 1
             bucket = self.hit_and_run.get_bucket(message)
             if bucket and bucket.update_rate_limit(current):
-                return True
+                return SpamCheckerReason.spammer
+
+            # Special case for joining and just spamming mentions at some point
+            if flagged.messages <= 10 and message.raw_mentions:
+                return SpamCheckerReason.flagged_mention
 
         if self.is_new(message.author):  # type: ignore
             new_bucket = self.new_user.get_bucket(message)
             if new_bucket and new_bucket.update_rate_limit(current):
-                return True
+                return SpamCheckerReason.spammer
 
         user_bucket = self.by_user.get_bucket(message)
         if user_bucket and user_bucket.update_rate_limit(current):
-            return True
+            return SpamCheckerReason.spammer
 
         content_bucket = self.by_content.get_bucket(message)
         if content_bucket and content_bucket.update_rate_limit(current):
-            return True
+            return SpamCheckerReason.spammer
 
-        return False
+        return None
 
     def is_fast_join(self, member: discord.Member) -> bool:
         joined = member.joined_at or discord.utils.utcnow()
@@ -666,11 +685,12 @@ class Mod(commands.Cog):
             return
 
         checker = self._spam_check[guild_id]
-        if not checker.is_spamming(message):
+        reason = checker.is_spamming(message)
+        if reason is None:
             return
 
         try:
-            await member.ban(reason='Auto-ban for spamming')
+            await member.ban(reason=f'Auto-ban for {reason}')
         except discord.HTTPException:
             log.info('[RoboMod] Failed to ban %s (ID: %s) from server %s.', member, member.id, member.guild)
         else:
