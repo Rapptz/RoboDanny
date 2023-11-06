@@ -1531,15 +1531,20 @@ class Mod(commands.Cog):
 
             predicates.append(joined_before)
 
+        is_only_raid = args.raid and len(predicates) == 3
         if len(predicates) == 3 and not args.raid:
             return await ctx.send('Missing at least one filter to use')
 
-        members = {m.id: m for m in members if all(p(m) for p in predicates)}
-        if args.raid:
-            checker = self._spam_check[ctx.guild.id]
-            members.update(checker.flagged_users)
-            if args.reason is None:
-                args.reason = await ActionReason().convert(ctx, 'Raid detected')
+        checker = self._spam_check[ctx.guild.id]
+        if is_only_raid:
+            members = checker.flagged_users
+        else:
+            members = {m.id: m for m in members if all(p(m) for p in predicates)}
+            if args.raid:
+                members.update(checker.flagged_users)
+
+        if args.reason is None and args.raid:
+            args.reason = await ActionReason().convert(ctx, 'Raid detected')
 
         if len(members) == 0:
             return await ctx.send('No members found matching criteria.')
