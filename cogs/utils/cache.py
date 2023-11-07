@@ -49,7 +49,8 @@ class ExpiringCache(dict):
 
     def __getitem__(self, key: str):
         self.__verify_cache_integrity()
-        return super().__getitem__(key)
+        v, _ = super().__getitem__(key)
+        return v
 
     def __setitem__(self, key: str, value: Any):
         super().__setitem__(key, (value, time.monotonic()))
