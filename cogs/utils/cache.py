@@ -52,6 +52,12 @@ class ExpiringCache(dict):
         v, _ = super().__getitem__(key)
         return v
 
+    def get(self, key: str, default: Any = None):
+        v = super().get(key, default)
+        if v is default:
+            return default
+        return v[0]
+
     def __setitem__(self, key: str, value: Any):
         super().__setitem__(key, (value, time.monotonic()))
 
