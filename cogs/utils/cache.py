@@ -61,6 +61,12 @@ class ExpiringCache(dict):
     def __setitem__(self, key: str, value: Any):
         super().__setitem__(key, (value, time.monotonic()))
 
+    def values(self):
+        return map(lambda x: x[0], super().values())
+
+    def items(self):
+        return map(lambda x: (x[0], x[1][0]), super().items())
+
 
 class Strategy(enum.Enum):
     lru = 1
