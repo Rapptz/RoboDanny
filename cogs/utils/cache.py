@@ -39,7 +39,7 @@ class ExpiringCache(dict):
     def __verify_cache_integrity(self):
         # Have to do this in two steps...
         current_time = time.monotonic()
-        to_remove = [k for (k, (v, t)) in self.items() if current_time > (t + self.__ttl)]
+        to_remove = [k for (k, (v, t)) in super().items() if current_time > (t + self.__ttl)]
         for k in to_remove:
             del self[k]
 
