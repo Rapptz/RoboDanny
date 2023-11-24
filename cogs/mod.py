@@ -507,7 +507,7 @@ class SpamChecker:
         self.by_content = CooldownByContent.from_cooldown(5, 10.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join: Optional[datetime.datetime] = None
-        self.last_created: Optional[datetime.datetime] = None
+        self.last_member: Optional[discord.Member] = None
         self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
         self._by_mentions: Optional[commands.CooldownMapping] = None
         self._by_mentions_rate: Optional[int] = None
@@ -572,6 +572,9 @@ class SpamChecker:
 
     def is_fast_join(self, member: discord.Member) -> bool:
         joined = member.joined_at or discord.utils.utcnow()
+        if self.last_member is None:
+            self.last_member = member
+
         if self.last_join is None:
             self.last_join = joined
             return False
@@ -579,19 +582,25 @@ class SpamChecker:
         self.last_join = joined
         if is_fast:
             self.flagged_users[member.id] = FlaggedMember(member, joined)
+            if self.last_member.id not in self.flagged_users:
+                self.flag_member(self.last_member)
+
         return is_fast
 
     def is_suspicious_join(self, member: discord.Member) -> bool:
         created = member.created_at
-        if self.last_created is None:
-            self.last_created = created
+        if self.last_member is None:
+            self.last_member = member
             return False
 
         # Check if the account was created within 24 hours of the previous account
-        is_suspicious = abs((created - self.last_created).total_seconds()) <= 86400.0
-        self.last_created = created
+        is_suspicious = abs((created - self.last_member.created_at).total_seconds()) <= 86400.0
         if is_suspicious:
             self.flagged_users[member.id] = FlaggedMember(member, member.joined_at or discord.utils.utcnow())
+            if self.last_member.id not in self.flagged_users:
+                self.flag_member(self.last_member)
+
+        self.last_member = member
         return is_suspicious
 
     def is_mention_spam(self, message: discord.Message, config: ModConfig) -> bool:
