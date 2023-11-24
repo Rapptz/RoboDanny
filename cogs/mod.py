@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from collections.abc import Hashable
 
 import re
+import enum
 import discord
 import datetime
 import asyncio
@@ -488,6 +489,11 @@ class CooldownByContent(commands.CooldownMapping):
         return (message.channel.id, message.content)
 
 
+class MemberJoinType(enum.Enum):
+    fast = 1
+    suspicious = 2
+
+
 class SpamChecker:
     """This spam checker does a few things.
 
@@ -570,38 +576,33 @@ class SpamChecker:
 
         return None
 
-    def is_fast_join(self, member: discord.Member) -> bool:
+    def get_join_type(self, member: discord.Member) -> Optional[MemberJoinType]:
         joined = member.joined_at or discord.utils.utcnow()
+
         if self.last_member is None:
             self.last_member = member
-
-        if self.last_join is None:
             self.last_join = joined
-            return False
-        is_fast = (joined - self.last_join).total_seconds() <= 2.0
-        self.last_join = joined
-        if is_fast:
+            return None
+
+        # Check if the member is a fast joiner
+        if self.last_join is not None:
+            is_fast = (joined - self.last_join).total_seconds() <= 2.0
+            self.last_join = joined
+            if is_fast:
+                self.flagged_users[member.id] = FlaggedMember(member, joined)
+                if self.last_member.id not in self.flagged_users:
+                    self.flag_member(self.last_member)
+                return MemberJoinType.fast
+
+        # Check if the member is a suspicious joiner
+        is_suspicious = abs((member.created_at - self.last_member.created_at).total_seconds()) <= 86400.0
+        if is_suspicious:
             self.flagged_users[member.id] = FlaggedMember(member, joined)
             if self.last_member.id not in self.flagged_users:
                 self.flag_member(self.last_member)
+            return MemberJoinType.suspicious
 
-        return is_fast
-
-    def is_suspicious_join(self, member: discord.Member) -> bool:
-        created = member.created_at
-        if self.last_member is None:
-            self.last_member = member
-            return False
-
-        # Check if the account was created within 24 hours of the previous account
-        is_suspicious = abs((created - self.last_member.created_at).total_seconds()) <= 86400.0
-        if is_suspicious:
-            self.flagged_users[member.id] = FlaggedMember(member, member.joined_at or discord.utils.utcnow())
-            if self.last_member.id not in self.flagged_users:
-                self.flag_member(self.last_member)
-
-        self.last_member = member
-        return is_suspicious
+        return None
 
     def is_mention_spam(self, message: discord.Message, config: ModConfig) -> bool:
         mapping = self.by_mentions(config)
@@ -896,11 +897,12 @@ class Mod(commands.Cog):
 
         # Do the broadcasted message to the channel
         title = 'Member Joined'
-        if checker.is_fast_join(member):
+        flag = checker.get_join_type(member)
+        if flag is MemberJoinType.fast:
             colour = 0xDD5F53  # red
             if is_new:
                 title = 'Member Joined (Very New Member)'
-        elif checker.is_suspicious_join(member):
+        elif flag is MemberJoinType.suspicious:
             colour = 0xDDA453  # yellow
             title = 'Member Joined (Suspicious Member)'
         else:
