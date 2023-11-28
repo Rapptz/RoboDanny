@@ -1669,7 +1669,7 @@ class Mod(commands.Cog):
             return await ctx.send('Aborting.')
 
         count = 0
-        for member in members.values():
+        for member in list(members.values()):
             try:
                 await ctx.guild.ban(member, reason=reason)
             except discord.HTTPException:
