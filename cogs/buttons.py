@@ -794,7 +794,7 @@ class Buttons(commands.Cog):
 
         files = []
         total_bytes = 0
-        eight_mib = 8 * 1024 * 1024
+        eight_mib = 25 * 1024 * 1024
         for attach in ctx.message.attachments:
             async with ctx.session.get(attach.url) as resp:
                 if resp.status != 200:
@@ -907,7 +907,7 @@ class Buttons(commands.Cog):
         The only media types supported are png, gif, jpeg, mp4,
         and webm.
 
-        Only 8MiB of total media can be uploaded at once.
+        Only 25MiB of total media can be uploaded at once.
         Sorry, Discord limitation.
 
         To opt-in to a post's spoiler you must press the button.
