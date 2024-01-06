@@ -48,6 +48,7 @@ initial_extensions = (
     'cogs.todo',
     'cogs.minigames',
     'cogs.opencollective',
+    'cogs.dictionary',
 )
 
 
