@@ -794,7 +794,7 @@ class Buttons(commands.Cog):
 
         files = []
         total_bytes = 0
-        eight_mib = 8 * 1024 * 1024
+        max_mib = 25 * 1024 * 1024
         for attach in ctx.message.attachments:
             async with ctx.session.get(attach.url) as resp:
                 if resp.status != 200:
@@ -803,14 +803,14 @@ class Buttons(commands.Cog):
                 content_length = int(resp.headers['Content-Length'])
 
                 # file too big, skip it
-                if (total_bytes + content_length) > eight_mib:
+                if (total_bytes + content_length) > max_mib:
                     continue
 
                 total_bytes += content_length
                 fp = io.BytesIO(await resp.read())
                 files.append(discord.File(fp, filename=attach.filename))
 
-            if total_bytes >= eight_mib:
+            if total_bytes >= max_mib:
                 break
 
         # on mobile, messages that are deleted immediately sometimes persist client side
@@ -907,7 +907,7 @@ class Buttons(commands.Cog):
         The only media types supported are png, gif, jpeg, mp4,
         and webm.
 
-        Only 8MiB of total media can be uploaded at once.
+        Only 25MiB of total media can be uploaded at once.
         Sorry, Discord limitation.
 
         To opt-in to a post's spoiler you must press the button.
