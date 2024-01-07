@@ -305,6 +305,7 @@ class Meta(commands.Cog):
         def to_string(c):
             digit = f'{ord(c):x}'
             name = unicodedata.name(c, 'Name not found.')
+            c = '\\`' if c == '`' else c
             return f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {name} **\N{EM DASH}** {c}'
 
         msg = '\n'.join(map(to_string, characters))
