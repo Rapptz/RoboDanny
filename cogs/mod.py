@@ -592,6 +592,7 @@ class SpamChecker:
                 self.flagged_users[member.id] = FlaggedMember(member, joined)
                 if self.last_member.id not in self.flagged_users:
                     self.flag_member(self.last_member)
+                self.last_member = member
                 return MemberJoinType.fast
 
         # Check if the member is a suspicious joiner
@@ -600,8 +601,10 @@ class SpamChecker:
             self.flagged_users[member.id] = FlaggedMember(member, joined)
             if self.last_member.id not in self.flagged_users:
                 self.flag_member(self.last_member)
+            self.last_member = member
             return MemberJoinType.suspicious
 
+        self.last_member = member
         return None
 
     def is_mention_spam(self, message: discord.Message, config: ModConfig) -> bool:
