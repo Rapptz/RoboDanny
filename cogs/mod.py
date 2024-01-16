@@ -558,7 +558,12 @@ class SpamChecker:
                 return MultipleSpammers(list(bucket.tagged))
 
             # Special case for joining and just spamming mentions at some point
-            if flagged.messages <= 10 and message.raw_mentions:
+            if (
+                flagged.messages <= 10
+                and message.raw_mentions
+                or '@everyone' in message.content
+                or '@here' in message.content
+            ):
                 return SpamCheckerResult.flagged_mention()
 
         if self.is_new(message.author):  # type: ignore
