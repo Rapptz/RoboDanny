@@ -510,7 +510,7 @@ class SpamChecker:
     """
 
     def __init__(self):
-        self.by_content = CooldownByContent.from_cooldown(5, 10.0, commands.BucketType.member)
+        self.by_content = CooldownByContent.from_cooldown(5, 15.0, commands.BucketType.member)
         self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
         self.last_join: Optional[datetime.datetime] = None
         self.last_member: Optional[discord.Member] = None
@@ -520,7 +520,7 @@ class SpamChecker:
 
         # user_id flag mapping (for about 45 minutes)
         self.flagged_users: MutableMapping[int, FlaggedMember] = cache.ExpiringCache(seconds=2700.0)
-        self.hit_and_run = TaggedCooldownMapping(5, 10, commands.BucketType.channel, tagger=lambda msg: msg.author)
+        self.hit_and_run = TaggedCooldownMapping(5, 15, commands.BucketType.channel, tagger=lambda msg: msg.author)
 
     def get_flagged_member(self, user_id: int, /) -> Optional[FlaggedMember]:
         return self.flagged_users.get(user_id)
