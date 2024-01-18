@@ -753,7 +753,7 @@ class Mod(commands.Cog):
     @tasks.loop(seconds=10.0)
     async def bulk_send_messages(self):
         async with self._batch_message_lock:
-            for ((guild_id, channel_id), messages) in self.message_batches.items():
+            for (guild_id, channel_id), messages in self.message_batches.items():
                 guild = self.bot.get_guild(guild_id)
                 channel: Optional[discord.abc.Messageable] = guild and guild.get_channel(channel_id)  # type: ignore
                 if channel is None:
@@ -813,7 +813,6 @@ class Mod(commands.Cog):
         member: discord.Member,
         multiple: bool = False,
     ) -> None:
-
         if multiple:
             reason = f'Spamming mentions over multiple messages ({mention_count} mentions)'
         else:
@@ -1677,6 +1676,7 @@ class Mod(commands.Cog):
             return await ctx.send('Aborting.')
 
         count = 0
+        total = len(members)
         for member in list(members.values()):
             try:
                 await ctx.guild.ban(member, reason=reason)
@@ -1685,7 +1685,7 @@ class Mod(commands.Cog):
             else:
                 count += 1
 
-        await ctx.send(f'Banned {count}/{len(members)}')
+        await ctx.send(f'Banned {count}/{total}')
 
     @massban.error
     async def massban_error(self, ctx: GuildContext, error: commands.CommandError):
