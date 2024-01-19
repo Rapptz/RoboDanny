@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, Optional, List, Union, Generic, TypeVar
 from typing_extensions import Annotated
-from time import time as unix_time
 
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -10,7 +9,8 @@ from .utils.paginator import SimplePages
 from .utils.formats import plural, human_join
 from .utils.converters import Snowflake
 from collections import Counter, defaultdict
-from collections.abc import Hashable
+from collections.abc import Hashable, Sequence
+from lru import LRU
 
 import re
 import enum
@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 
 
 HashableT = TypeVar('HashableT', bound=Hashable)
+K = TypeVar('K')
+V = TypeVar('V')
 
 log = logging.getLogger(__name__)
 
@@ -416,77 +418,85 @@ class SpamCheckerResult:
 
 
 class MultipleSpammers(SpamCheckerResult):
-    def __init__(self, members: list[discord.abc.Snowflake], *, reason: str = 'Auto-ban for spamming') -> None:
+    def __init__(self, members: Sequence[discord.abc.Snowflake], *, reason: str = 'Auto-ban for spamming') -> None:
         super().__init__(reason)
-        self.members: list[discord.abc.Snowflake] = members
+        self.members: Sequence[discord.abc.Snowflake] = members
 
 
-class TaggedCooldown(commands.Cooldown, Generic[HashableT]):
-    def __init__(self, rate: int, per: float) -> None:
-        super().__init__(rate, per)
-        self.tagged: set[HashableT] = set()
+class RateLimit(Generic[V]):
+    def __init__(self, rate: int, per: float, *, key: Callable[[discord.Message], V], maxsize: int = 256) -> None:
+        self.lookup = LRU(maxsize)
+        self.rate = rate
+        self.per = per
+        self.key = key
 
-    def update_rate_limit(self, current: float | None = None, *, tokens: int = 1) -> float | None:
-        current = current or unix_time()
-        self._last = current
+    @property
+    def ratio(self) -> float:
+        return self.per / self.rate
 
-        self._tokens = self.get_tokens(current)
+    def is_ratelimited(self, message: discord.Message) -> bool:
+        now = message.created_at
+        key = self.key(message)
+        tat = max(self.lookup.get(key) or now, now)
+        diff = (tat - now).total_seconds()
+        max_interval = self.per - self.ratio
+        if diff > max_interval:
+            return True
 
-        # first token used means that we start a new rate limit window
-        if self._tokens == self.rate:
-            self.tagged.clear()
-            self._window = current
-
-        # decrement tokens by specified number
-        self._tokens -= tokens
-
-        # check if we are rate limited and return retry-after
-        if self._tokens < 0:
-            return self.per - (current - self._window)
-
-    def reset(self) -> None:
-        super().reset()
-        self.tagged.clear()
-
-    def copy(self) -> TaggedCooldown:
-        return TaggedCooldown(self.rate, self.per)
-
-    def __repr__(self) -> str:
-        return f'<TaggedCooldown rate: {self.rate} per: {self.per} tokens: {self._tokens} tagged: {self.tagged!r}>'
+        new_tat = max(tat, now) + datetime.timedelta(seconds=self.ratio)
+        self.lookup[key] = new_tat
+        return False
 
 
-class TaggedCooldownMapping(commands.CooldownMapping[discord.Message], Generic[HashableT]):
-    _cache: dict[Any, TaggedCooldown[HashableT]]
-    _cooldown: TaggedCooldown[HashableT]
-
+class TaggedRateLimit(Generic[V, HashableT]):
     def __init__(
         self,
         rate: int,
         per: float,
-        type: Callable[[discord.Message], Any],
         *,
+        key: Callable[[discord.Message], V],
         tagger: Callable[[discord.Message], HashableT],
-    ):
-        super().__init__(TaggedCooldown(rate, per), type)
-        self.tagger: Callable[[discord.Message], HashableT] = tagger
+        maxsize: int = 256,
+    ) -> None:
+        self.lookup: MutableMapping[V, tuple[datetime.datetime, set[HashableT]]] = LRU(maxsize)
+        self.rate = rate
+        self.per = per
+        self.key = key
+        self.tagger = tagger
 
-    def get_bucket(self, message: discord.Message, current: float | None = None) -> TaggedCooldown[HashableT] | None:
-        return super().get_bucket(message, current)  # type: ignore
+    @property
+    def ratio(self) -> float:
+        return self.per / self.rate
 
-    def update_rate_limit(self, message: discord.Message, current: float | None = None, tokens: int = 1) -> float | None:
-        bucket = self.get_bucket(message, current)
-        if bucket is None:
-            return None
+    def is_ratelimited(self, message: discord.Message) -> Optional[list[HashableT]]:
+        now = message.created_at
+        key = self.key(message)
+        value = self.lookup.get(key)
+        if value is None:
+            tat = now
+            tagged = set()
+        else:
+            tat = max(value[0], now)
+            tagged = value[1]
 
-        retry_after = bucket.update_rate_limit(current, tokens=tokens)
-        bucket.tagged.add(self.tagger(message))
-        return retry_after
+            # Clear tagged members that were there from the previous window
+            # Honestly, unsure how this works but from testing it works as I expect
+            if value[0] < now:
+                tagged.clear()
 
+        tag = self.tagger(message)
+        tagged.add(tag)
 
-# TODO: add this to d.py maybe
-class CooldownByContent(commands.CooldownMapping):
-    def _bucket_key(self, message: discord.Message) -> tuple[int, str]:
-        return (message.channel.id, message.content)
+        diff = (tat - now).total_seconds()
+        max_interval = self.per - self.ratio
+        if diff > max_interval:
+            copy = list(tagged)
+            tagged.clear()
+            return copy
+
+        new_tat = max(tat, now) + datetime.timedelta(seconds=self.ratio)
+        self.lookup[key] = (new_tat, tagged)
+        return None
 
 
 class MemberJoinType(enum.Enum):
@@ -510,17 +520,17 @@ class SpamChecker:
     """
 
     def __init__(self):
-        self.by_content = CooldownByContent.from_cooldown(5, 15.0, commands.BucketType.member)
-        self.by_user = commands.CooldownMapping.from_cooldown(10, 12.0, commands.BucketType.user)
+        self.by_content = RateLimit(5, 15.0, key=lambda msg: (msg.channel.id, msg.content))
+        self.by_user = RateLimit(10, 12.0, key=lambda msg: msg.author.id)
         self.last_join: Optional[datetime.datetime] = None
         self.last_member: Optional[discord.Member] = None
-        self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
+        self.new_user = RateLimit(30, 35.0, key=lambda msg: msg.channel.id)
         self._by_mentions: Optional[commands.CooldownMapping] = None
         self._by_mentions_rate: Optional[int] = None
 
         # user_id flag mapping (for about 45 minutes)
         self.flagged_users: MutableMapping[int, FlaggedMember] = cache.ExpiringCache(seconds=2700.0)
-        self.hit_and_run = TaggedCooldownMapping(5, 15, commands.BucketType.channel, tagger=lambda msg: msg.author)
+        self.hit_and_run = TaggedRateLimit(5, 15, key=lambda msg: msg.channel.id, tagger=lambda msg: msg.author)
 
     def get_flagged_member(self, user_id: int, /) -> Optional[FlaggedMember]:
         return self.flagged_users.get(user_id)
@@ -548,14 +558,12 @@ class SpamChecker:
         if message.guild is None:
             return None
 
-        current = message.created_at.timestamp()
-
         flagged = self.flagged_users.get(message.author.id)
         if flagged is not None:
             flagged.messages += 1
-            bucket = self.hit_and_run.get_bucket(message)
-            if bucket and bucket.update_rate_limit(current):
-                return MultipleSpammers(list(bucket.tagged))
+            spammers = self.hit_and_run.is_ratelimited(message)
+            if spammers:
+                return MultipleSpammers(spammers)
 
             # Special case for joining and just spamming mentions at some point
             if (
@@ -567,16 +575,13 @@ class SpamChecker:
                 return SpamCheckerResult.flagged_mention()
 
         if self.is_new(message.author):  # type: ignore
-            new_bucket = self.new_user.get_bucket(message)
-            if new_bucket and new_bucket.update_rate_limit(current):
+            if self.new_user.is_ratelimited(message):
                 return SpamCheckerResult.spammer()
 
-        user_bucket = self.by_user.get_bucket(message)
-        if user_bucket and user_bucket.update_rate_limit(current):
+        if self.by_user.is_ratelimited(message):
             return SpamCheckerResult.spammer()
 
-        content_bucket = self.by_content.get_bucket(message)
-        if content_bucket and content_bucket.update_rate_limit(current):
+        if self.by_content.is_ratelimited(message):
             return SpamCheckerResult.spammer()
 
         return None
