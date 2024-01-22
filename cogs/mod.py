@@ -1396,6 +1396,7 @@ class Mod(commands.Cog):
         return Counter(m.author.display_name for m in deleted)
 
     @commands.command()
+    @commands.cooldown(1, 5.0, type=commands.BucketType.channel)
     async def cleanup(self, ctx: GuildContext, search: int = 100):
         """Cleans up the bot's messages from the channel.
 
