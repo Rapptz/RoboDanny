@@ -606,7 +606,8 @@ class SpamChecker:
                 return MemberJoinType.fast
 
         # Check if the member is a suspicious joiner
-        is_suspicious = abs((member.created_at - self.last_member.created_at).total_seconds()) <= 86400.0
+        threshold = datetime.timedelta(days=3).total_seconds()
+        is_suspicious = abs((member.created_at - self.last_member.created_at).total_seconds()) <= threshold
         if is_suspicious:
             self.flagged_users[member.id] = FlaggedMember(member, joined)
             if self.last_member.id not in self.flagged_users:
