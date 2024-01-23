@@ -1661,7 +1661,7 @@ class Mod(commands.Cog):
                 members.update(checker.flagged_users)
 
         if args.reason is None and args.raid:
-            args.reason = await ActionReason().convert(ctx, 'Raid detected')
+            args.reason = 'Raid detected'
 
         if len(members) == 0:
             return await ctx.send('No members found matching criteria.')
