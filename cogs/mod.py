@@ -1730,6 +1730,8 @@ class SpamChecker:
         self._by_mentions_rate: Optional[int] = None
         self._join_rate: Optional[tuple[int, int]] = None
         self.auto_gatekeeper: Optional[GatekeeperRateLimit] = None
+        # Enabled if alerts are on but gatekeeper isn't
+        self._default_join_spam = GatekeeperRateLimit(10, 5)
 
         # user_id flag mapping (for about 45 minutes)
         self.flagged_users: MutableMapping[int, FlaggedMember] = cache.ExpiringCache(seconds=2700.0)
@@ -1850,6 +1852,12 @@ class SpamChecker:
             return self.auto_gatekeeper.is_ratelimited(member)
 
         return []
+
+    def is_alertable_join_spam(self, member: discord.Member) -> list[discord.Member]:
+        if self.auto_gatekeeper is not None:
+            return []
+
+        return self._default_join_spam.is_ratelimited(member)
 
     def remove_member(self, user: discord.abc.User) -> None:
         self.flagged_users.pop(user.id, None)
@@ -2224,6 +2232,16 @@ class Mod(commands.Cog):
                 checker.flag_member(member)
                 colour = 0xDDA453  # yellow
                 title = 'Member Joined (Very New Member)'
+
+        if config.automod_flags.alerts:
+            spammers = checker.is_alertable_join_spam(member)
+            if spammers:
+                msg = (
+                    f'Detected {plural(len(spammers)):member} joining in rapid succession. Please review.'
+                )
+                view = discord.ui.View(timeout=None)
+                view.add_item(GatekeeperAlertMassbanButton(self))
+                await config.send_alert(content=msg, view=view)
 
         e = discord.Embed(title=title, colour=colour)
         e.timestamp = now
