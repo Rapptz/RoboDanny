@@ -228,7 +228,9 @@ class RNG(commands.Cog):
         fourth_winner, results = self._bestof_choices(second_winner, third_winner, 5)
         formatted_results = ', '.join('Win' if r == fourth_winner else 'Loss' for r in results)
         if fourth_winner == second_winner:
-            to_send.append(f'4. {second_winner} vs {third_winner}: **{fourth_winner} won the championship ({formatted_results})!**')
+            to_send.append(
+                f'4. {second_winner} vs {third_winner}: **{fourth_winner} won the championship ({formatted_results})!**'
+            )
             return to_send
         else:
             to_send.append(f'4. {second_winner} vs {third_winner}: {fourth_winner} wins! ({formatted_results})')
@@ -305,6 +307,7 @@ class RNG(commands.Cog):
             results = self.simulate_round_robin(list(choices))
 
         await ctx.send('\n'.join(results))
+
 
 async def setup(bot: RoboDanny):
     await bot.add_cog(RNG(bot))
