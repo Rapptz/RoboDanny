@@ -2180,7 +2180,7 @@ class Mod(commands.Cog):
         if config.is_muted(member):
             return await config.apply_mute(member, 'Member was previously muted.')
 
-        if not config.automod_flags.joins or not config.automod_flags.gatekeeper:
+        if not config.automod_flags.joins and not config.automod_flags.gatekeeper:
             return
 
         now = discord.utils.utcnow()
