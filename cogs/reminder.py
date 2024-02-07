@@ -574,6 +574,8 @@ class Reminder(commands.Cog):
     ):
         """Sets a reminder to remind you of something at a specific time."""
 
+        await interaction.response.defer()
+        message = await interaction.original_response()
         zone = await self.get_timezone(interaction.user.id)
         timer = await self.create_timer(
             when,
@@ -582,11 +584,11 @@ class Reminder(commands.Cog):
             interaction.channel_id,
             text,
             created=interaction.created_at,
-            message_id=None,
+            message_id=message.id,
             timezone=zone or 'UTC',
         )
         delta = time.human_timedelta(when, source=timer.created_at)
-        await interaction.response.send_message(f"Alright {interaction.user.mention}, in {delta}: {text}")
+        await interaction.followup.send(f"Alright {interaction.user.mention}, in {delta}: {text}")
 
     @reminder_set.error
     async def reminder_set_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
