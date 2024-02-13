@@ -480,6 +480,7 @@ class Tags(commands.Cog):
             clean_content = f'{clean_content}\n{msg.attachments[0].url}'
 
         if len(clean_content) > 2000:
+            self.remove_in_progress_tag(ctx.guild.id, name)
             return await ctx.send('Tag content is a maximum of 2000 characters.')
 
         try:
