@@ -179,6 +179,16 @@ class RNG(commands.Cog):
 
         await ctx.send(rng.choice(choices))
 
+    @random.command()
+    async def shuffle(self, ctx: Context, *choices: Annotated[str, commands.clean_content]):
+        """Shuffles the selected choices.
+
+        To denote multiple choices, you should use double quotes.
+        """
+        selected = list(choices)
+        rng.shuffle(selected)
+        await ctx.send('\n'.join(f'{i}. {choice}' for i, choice in enumerate(selected, start=1)))
+
     def _bestof_choices(self, first: str, second: str, best_of: int) -> tuple[str, list[str]]:
         """Plays a best of N game between two choices and returns the status of each game in a list."""
         wins_needed = (best_of // 2) + 1
