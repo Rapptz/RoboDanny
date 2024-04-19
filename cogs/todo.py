@@ -443,12 +443,19 @@ class EditTodoModal(ui.Modal, title='Edit Todo'):
                 channel_id = int(match.group('channel_id'))
                 guild_id = match.group('guild_id')
                 guild_id = None if guild_id == '@me' else int(guild_id)
-                channel = self.item.bot.get_partial_messageable(channel_id, guild_id=guild_id)
+                channel = await self.item.cog.get_readable_channel(channel_id, guild_id=guild_id, user=interaction.user)
+                if channel is None:
+                    await interaction.followup.send(
+                        'Sorry, either you or I do not have access to that channel.', ephemeral=True
+                    )
+                    return
+
                 message = await self.item.cog.get_message(channel, message_id)
                 if message is None:
                     await interaction.followup.send(
                         'That message was not found, sorry. Maybe it was deleted or I can\'t see it.', ephemeral=True
                     )
+                    return
 
             kwargs['message'] = message
 
@@ -802,6 +809,35 @@ class Todo(commands.Cog):
     @property
     def display_emoji(self) -> discord.PartialEmoji:
         return discord.PartialEmoji(name='\N{CLIPBOARD}')
+
+    async def get_readable_channel(
+        self, channel_id: int, guild_id: Optional[int], user: discord.abc.User
+    ) -> Optional[discord.abc.Messageable]:
+        if guild_id is None:
+            try:
+                channel = await self.bot.fetch_channel(channel_id)
+            except:
+                return None
+            if isinstance(channel, discord.DMChannel) and channel.recipient == user:
+                return channel
+            elif isinstance(channel, discord.GroupChannel) and user in channel.recipients:
+                return channel
+            else:
+                return None
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return None
+        channel = guild.get_channel_or_thread(channel_id)
+        if channel is None or not isinstance(channel, discord.abc.Messageable):
+            return None
+
+        if isinstance(user, discord.Member):
+            perms = channel.permissions_for(user)
+            if not perms.read_messages:
+                return None
+            return channel
+        return None
 
     async def get_message(self, channel: discord.abc.Messageable, message_id: int) -> Optional[discord.Message]:
         try:
