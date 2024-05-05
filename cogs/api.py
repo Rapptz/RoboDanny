@@ -573,7 +573,7 @@ class API(commands.Cog):
             'tempblock',
             ctx.guild.id,
             ctx.author.id,
-            ctx.channel.id,
+            channel.id,
             member.id,
             created=created_at,
             timezone=zone or 'UTC',
