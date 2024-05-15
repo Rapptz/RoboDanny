@@ -21,6 +21,7 @@ DISCORD_PY_BOTS_ROLE = 381980817125015563
 DISCORD_PY_JP_ROLE = 490286873311182850
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELP_FORUM = 985299059441025044
+DISCORD_PY_SHOWCASE_FORUM = 1065212540595998740
 DISCORD_PY_SOLVED_TAG = 985309124285837312
 
 GITHUB_TODO_COLUMN = 9341868
@@ -307,25 +308,26 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread) -> None:
-        if thread.parent_id != DISCORD_PY_HELP_FORUM:
+        if thread.parent_id != DISCORD_PY_HELP_FORUM and thread.parent_id != DISCORD_PY_SHOWCASE_FORUM:
             return
 
-        if len(thread.name) <= 20:
-            low_quality_title = (
-                'This thread has been automatically closed due to a potentially low quality title. '
-                'Your title should be descriptive of the problem you are having.\n\n'
-                'Please remake your thread with a new and more descriptive title.'
-            )
-            try:
-                await thread.send(low_quality_title)
-            except discord.Forbidden as e:
-                # Race condition with Discord...
-                if e.code == 40058:
-                    await asyncio.sleep(2)
+        if thread.parent_id == DISCORD_PY_HELP_FORUM:
+            if len(thread.name) <= 20:
+                low_quality_title = (
+                    'This thread has been automatically closed due to a potentially low quality title. '
+                    'Your title should be descriptive of the problem you are having.\n\n'
+                    'Please remake your thread with a new and more descriptive title.'
+                )
+                try:
                     await thread.send(low_quality_title)
+                except discord.Forbidden as e:
+                    # Race condition with Discord...
+                    if e.code == 40058:
+                        await asyncio.sleep(2)
+                        await thread.send(low_quality_title)
 
-            await thread.edit(archived=True, locked=True, reason='Low quality title.')
-            return
+                await thread.edit(archived=True, locked=True, reason='Low quality title.')
+                return
 
         message = thread.get_partial_message(thread.id)
         try:
