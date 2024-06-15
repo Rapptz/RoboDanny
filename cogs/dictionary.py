@@ -44,11 +44,14 @@ class Cell:
         The URL for the word's page.
     word: Optional[Word]
         The main word that defines this cell.
+    romaji: Optional[str]
+        The romaji of the word
     other_words: List[Word]
         Other words that are part of this cell.
     """
 
     url: Optional[str]
+    romaji: Optional[str]
     word: Optional[Word]
     other_words: list[Word]
 
@@ -59,7 +62,9 @@ class Cell:
         url_node = node.find("./div[@class='gloss-rtext']/a[@class='info-link']")
         if url_node is not None:
             self.url = 'https://ichi.moe' + url_node.get('href')
+            self.romaji = url_node.text_content().strip()
         else:
+            self.romaji = None
             self.url = None
 
         words = definition_list_to_words(node.find("./div/dl[@class='alternatives']"))
@@ -470,18 +475,35 @@ class IchiPageSource(menus.ListPageSource):
             grouped.append((key, list(groups)))
         return sorted(grouped, key=lambda t: len(t[1]), reverse=True)
 
-    def format_word(self, embed: discord.Embed, word: Word):
+    def format_word_title(self, word: str, romaji: Optional[str] = None):
+        # if the word is ending with an "】", then we don't need to add a space.
+        # Due to this character having extra padding, this would look far apart.
+        if word.endswith('】'):
+            return word.strip() + (f"({romaji})" if romaji else '')
+
+        return word.strip() + (f"  ({romaji})" if romaji else '')
+
+    def format_word(self, embed: discord.Embed, word: Word, romaji: Optional[str] = None):
         builder = [word.description] if word.description else []
         self.format_definition_list(builder, word)
-        embed.add_field(name=word.raw_word, value='\n'.join(builder) or '...', inline=False)
 
-    def format_counter(self, embed: discord.Embed, word: Counter):
+        embed.add_field(
+            name=self.format_word_title(word.raw_word, romaji),
+            value='\n'.join(builder) or '...',
+            inline=False
+        )
+
+    def format_counter(self, embed: discord.Embed, word: Counter, romaji: Optional[str] = None):
         value = f'Value: {word.value}'
         builder = [word.description, value] if word.description else [value]
         self.format_definition_list(builder, word)
-        embed.add_field(name=word.raw_word, value='\n'.join(builder) or '...', inline=False)
 
-    def format_conjugated_word(self, embed: discord.Embed, word: ConjugatedWord):
+        embed.add_field(
+            name=self.format_word_title(word.raw_word, romaji),
+            value='\n'.join(builder) or '...', inline=False
+        )
+
+    def format_conjugated_word(self, embed: discord.Embed, word: ConjugatedWord, romaji: Optional[str] = None):
         conj = word.via if word.via else word
         builder = [word.description] if word.description else []
         if word.definitions:
@@ -492,28 +514,39 @@ class IchiPageSource(menus.ListPageSource):
                 builder.append(f'{conj.property.full_type} for {conj.gloss.raw_word}')
             self.format_definition_list(builder, conj.gloss)
 
-        embed.add_field(name=word.raw_word, value='\n'.join(builder) or '...', inline=False)
+        embed.add_field(
+            name=self.format_word_title(word.raw_word, romaji),
+            value='\n'.join(builder) or '...',
+            inline=False
+        )
 
     def format_compound_word(self, embed: discord.Embed, word: CompoundWord):
         embed.description = f'Compound: {word.fragments}'
         for compound in word.compounds:
             self.format_dispatch(embed, compound)
 
-    def format_dispatch(self, embed: discord.Embed, word: Optional[Word]):
+    def format_dispatch(self, embed: discord.Embed, word: Optional[Word], romaji: Optional[str] = None):
         if isinstance(word, ConjugatedWord):
-            self.format_conjugated_word(embed, word)
+            self.format_conjugated_word(embed, word, romaji)
         elif isinstance(word, CompoundWord):
             self.format_compound_word(embed, word)
         elif isinstance(word, Counter):
-            self.format_counter(embed, word)
+            self.format_counter(embed, word, romaji)
         elif word is not None:
-            self.format_word(embed, word)
+            self.format_word(embed, word, romaji)
 
     def format_page(self, menu, cell: Cell):
         e = discord.Embed(title=menu.query_string, colour=0xDB00A5)
-        self.format_dispatch(e, cell.word)
-        for word in cell.other_words:
-            self.format_dispatch(e, word)
+
+        romajis = (cell.romaji or "").split("/")
+        self.format_dispatch(
+            e,
+            cell.word,
+            romajis.pop(0) if romajis else None
+        )
+
+        for (word, romaji) in zip(cell.other_words, romajis):
+            self.format_dispatch(e, word, romaji)
 
         e.set_footer(text=f'Page {menu.current_page + 1}/{self.get_max_pages()}')
         return e
