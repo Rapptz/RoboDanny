@@ -285,7 +285,7 @@ class API(commands.Cog):
             content=message.content,
             files=[await attachment.to_file() for attachment in message.attachments]
         )
-        await thread.send(f'This thread was created on behalf of {message.author}. Please continue your discussion for help in here.')
+        await thread.send(f'This thread was created on behalf of {message.author.mention}. Please continue your discussion for help in here.')
 
         await self._attempt_general_block(interaction.user, message.author)  # type: ignore # we know it's a member here due to aforemention guild guard
 
