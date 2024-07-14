@@ -174,11 +174,11 @@ class BotUser(commands.Converter):
             return user
 
 
-class CreateHelpThreadModal(discord.ui.Modal, title="Create help thread"):
-    thread_name = discord.ui.TextInput(label="Thread title", placeholder="Name for the help thread...", min_length=15, max_length=100)
+class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
+    thread_name = discord.ui.TextInput(label='Thread title', placeholder='Name for the help thread...', min_length=15, max_length=100)
 
     def __init__(self) -> None:
-        super().__init__(custom_id="dpy-create-thread-modal")
+        super().__init__(custom_id='dpy-create-thread-modal')
 
 
 class RepositoryExample(NamedTuple):
@@ -199,7 +199,7 @@ class API(commands.Cog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
-        self.create_thread_context = discord.app_commands.ContextMenu(name="Create help thread", callback=self.create_thread_callback)
+        self.create_thread_context = discord.app_commands.ContextMenu(name='Create help thread', callback=self.create_thread_callback)
         self.bot.tree.add_command(self.create_thread_context, guild=discord.Object(id=DISCORD_PY_GUILD))
 
     @property
@@ -227,12 +227,12 @@ class API(commands.Cog):
         if not reminder:
             return # we can't apply the timed role.
 
-        await member.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason="Rule 16 - requesting help in general.")
+        await member.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason='Rule 16 - requesting help in general.')
 
         now = discord.utils.utcnow()
         await reminder.create_timer(
             now + datetime.timedelta(hours=1),
-            "general_block",
+            'general_block',
             moderator.id,
             member.id,
             created=now
