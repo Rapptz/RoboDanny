@@ -218,7 +218,7 @@ class API(commands.Cog):
             role = discord.Object(id=USER_BOTS_ROLE)
             await member.add_roles(role)
 
-    async def cog_unload(self) -> None:
+    def cog_unload(self) -> None:
         self.bot.tree.remove_command(
             self.create_thread_context.name,
             guild=discord.Object(id=DISCORD_PY_GUILD),
