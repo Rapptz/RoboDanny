@@ -58,9 +58,9 @@ def is_discord_py_helper(member: discord.Member) -> bool:
 
     return member._roles.has(DISCORD_PY_HELPER_ROLE)
 
-def can_use_no_general(interaction: discord.Interaction) -> bool:
+def can_use_no_general(member: discord.Member) -> bool:
     # Using `ban_members` over `manage_roles` since Documentation Manager has that
-    return interaction.user.guild_permissions.ban_members or interaction.user.get_role(DISCORD_PY_HELPER_ROLE)  # type: ignore # interaction.user is a Member
+    return member.guild_permissions.ban_members or member._roles.has(DISCORD_PY_HELPER_ROLE)
 
 
 def can_use_block():
@@ -267,6 +267,9 @@ class API(commands.Cog):
 
 
     async def create_thread_callback(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        if not can_use_no_general(interaction.user):  # type: ignore # discord.Member since we're guild guarded
+            return await interaction.response.send_message('Sorry, this command is not available to you!')
+
         modal = CreateHelpThreadModal()
         await interaction.response.send_modal(modal)
         _waited = await modal.wait()
