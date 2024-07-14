@@ -180,6 +180,9 @@ class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
     def __init__(self) -> None:
         super().__init__(custom_id='dpy-create-thread-modal')
 
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        self.stop()
+
 
 class RepositoryExample(NamedTuple):
     path: str
