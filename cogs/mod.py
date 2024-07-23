@@ -3546,6 +3546,7 @@ class Mod(commands.Cog):
         if search is None:
             search = 100
 
+        await ctx.defer()
         if require_prompt:
             confirm = await ctx.prompt(f'Are you sure you want to delete {plural(search):message}?', timeout=30)
             if not confirm:
@@ -3553,7 +3554,6 @@ class Mod(commands.Cog):
 
         before = discord.Object(id=flags.before) if flags.before else None
         after = discord.Object(id=flags.after) if flags.after else None
-        await ctx.defer()
 
         if before is None and ctx.interaction is not None:
             # If no before: is passed and we're in a slash command,
