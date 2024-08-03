@@ -25,6 +25,7 @@ import argparse, shlex
 import logging
 import asyncpg
 import io
+from transformers import pipeline
 
 if TYPE_CHECKING:
     from bot import RoboDanny
@@ -42,8 +43,24 @@ V = TypeVar('V')
 
 log = logging.getLogger(__name__)
 
-## Misc utilities
+# Load the NLP model
+# This is a pre-trained model suitable for sentiment analysis, but this can be probably used to catch help requests as well.
+# This might need some fine-tuning with a strong help messages dataset in order to catch at least 99% of them and not fail often.
+nlp_model = pipeline('text-classification', model='distilbert-base-uncased-finetuned-sst-2-english') 
+TARGET_CHANNEL_ID = 336642776609456130  # The channel ID where the bot needs to check for help requests.
+HELP_CHANNEL_ID = 985299059441025044 # The right help channel to redirect the requester to.
 
+def is_help_request(content):
+    result = nlp_model(content)
+    label = result[0]['label']
+    score = result[0]['score']
+    
+    # For sentiment analysis, typically LABEL_1 is positive and LABEL_0 is negative.
+    # You can use the score to set a threshold for higher confidence.
+    # Here, we'll consider LABEL_1 with a high score as an indication of a help request.
+    return label == 'LABEL_1' and score > 0.7  # Adjust threshold as necessary
+
+## Misc utilities
 
 class Arguments(argparse.ArgumentParser):
     def error(self, message: str):
@@ -2143,6 +2160,15 @@ class Mod(commands.Cog):
         if author.guild_permissions.manage_messages:
             return
 
+        if message.channel.id == TARGET_CHANNEL_ID:
+            if is_help_request(message.content):
+                response = (
+                    f"Hello {message.author.mention}, it looks like you need help.\n"
+                    f"Please use the <#{HELP_CHANNEL_ID}> channel for assistance.\n"
+                    "You'll get more focused help there! 👋"
+                )
+                await message.reply(response)
+        
         guild_id = message.guild.id
         config = await self.get_guild_config(guild_id)
         if config is None:
