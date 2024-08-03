@@ -2168,6 +2168,7 @@ class Mod(commands.Cog):
                     "You'll get more focused help there! 👋"
                 )
                 await message.reply(response)
+            continue
         
         guild_id = message.guild.id
         config = await self.get_guild_config(guild_id)
