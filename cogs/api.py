@@ -176,6 +176,7 @@ class BotUser(commands.Converter):
 
 class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
     thread_name = discord.ui.TextInput(label='Thread title', placeholder='Name for the help thread...', min_length=15, max_length=100)
+    should_mute = discord.ui.TextInput(label='Apply mute?', default="Yes", min_length=2, max_length=3)
 
     def __init__(self) -> None:
         super().__init__(custom_id='dpy-create-thread-modal')
@@ -287,7 +288,8 @@ class API(commands.Cog):
         )
         await thread.send(f'This thread was created on behalf of {message.author.mention}. Please continue your discussion for help in here.')
 
-        await self._attempt_general_block(interaction.user, message.author)  # type: ignore # we know it's a member here due to aforemention guild guard
+        if modal.should_mute.value.lower() == "yes":
+            await self._attempt_general_block(interaction.user, message.author)  # type: ignore # we know it's a member here due to aforemention guild guard
 
     def parse_object_inv(self, stream: SphinxObjectFileReader, url: str) -> dict[str, str]:
         # key: URL
