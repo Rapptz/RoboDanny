@@ -175,7 +175,7 @@ class BotUser(commands.Converter):
 
 
 class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
-    thread_name = discord.ui.TextInput(label='Thread title', placeholder='Name for the help thread...', min_length=15, max_length=100)
+    thread_name = discord.ui.TextInput(label='Thread title', placeholder='Name for the help thread...', min_length=20, max_length=100)
     should_mute = discord.ui.TextInput(label='Apply mute?', default="Yes", min_length=2, max_length=3)
 
     def __init__(self) -> None:
