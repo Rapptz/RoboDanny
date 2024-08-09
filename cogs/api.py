@@ -183,6 +183,7 @@ class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         self.stop()
+        await interaction.response.send_message('Thread created now.', ephemeral=True)
 
 
 class RepositoryExample(NamedTuple):
@@ -226,12 +227,17 @@ class API(commands.Cog):
             type=self.create_thread_context.type
         )
 
-    async def _attempt_general_block(self, moderator: discord.Member, member: discord.Member) -> None:
+    async def _attempt_general_block(self, moderator: discord.Member, member: Union[discord.User, discord.Member]) -> None:
         reminder: Optional[ReminderCog] = self.bot.get_cog('Reminder') # type: ignore # type downcasting
         if not reminder:
             return # we can't apply the timed role.
 
-        await member.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason='Rule 16 - requesting help in general.')
+        resolved = moderator.guild.get_member(member.id) if isinstance(member, discord.User) else member
+
+        if not resolved:
+            return # left the guild(?)
+
+        await resolved.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason='Rule 16 - requesting help in general.')
 
         now = discord.utils.utcnow()
         await reminder.create_timer(
@@ -276,11 +282,10 @@ class API(commands.Cog):
 
         modal = CreateHelpThreadModal()
         await interaction.response.send_modal(modal)
-        _waited = await modal.wait()
-        if _waited:
+        if await modal.wait():
             return # we return on timeout, rather than proceeding
 
-        forum: discord.ForumChannel = await interaction.guild.get_channel(DISCORD_PY_HELP_FORUM)  # type: ignore # can only be executed from the guild
+        forum: discord.ForumChannel = interaction.guild.get_channel(DISCORD_PY_HELP_CHANNEL)  # pyright: ignore[reportAssignmentType,reportOptionalMemberAccess] # we know the type via ID and that guild is present
         thread, _ = await forum.create_thread(
             name=modal.thread_name.value,
             content=message.content,
@@ -289,7 +294,7 @@ class API(commands.Cog):
         await thread.send(f'This thread was created on behalf of {message.author.mention}. Please continue your discussion for help in here.')
 
         if modal.should_mute.value.lower() == "yes":
-            await self._attempt_general_block(interaction.user, message.author)  # type: ignore # we know it's a member here due to aforemention guild guard
+            await self._attempt_general_block(interaction.user, message.author) # pyright: ignore[reportArgumentType] # can only be executed from the guild
 
     def parse_object_inv(self, stream: SphinxObjectFileReader, url: str) -> dict[str, str]:
         # key: URL
