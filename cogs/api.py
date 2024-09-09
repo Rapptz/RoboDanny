@@ -60,7 +60,7 @@ def is_discord_py_helper(member: discord.Member) -> bool:
 
 def can_use_no_general(member: discord.Member) -> bool:
     # Using `ban_members` over `manage_roles` since Documentation Manager has that
-    return member.guild_permissions.ban_members or member._roles.has(DISCORD_PY_HELPER_ROLE)
+    return member.guild_permissions.ban_members or is_discord_py_helper(member)
 
 
 def can_use_block():
