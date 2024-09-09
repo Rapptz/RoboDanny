@@ -240,11 +240,13 @@ class API(commands.Cog):
         if not resolved:
             return # left the guild(?)
 
-        await resolved.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason='Rule 16 - requesting help in general.')
-
         now = discord.utils.utcnow()
+        then = now + datetime.timedelta(hours=1)
+
+        await resolved.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason=f'Temp no general role by {moderator} (ID: {moderator.id}) until {discord.utils.format_dt(then), "F"}')
+
         await reminder.create_timer(
-            now + datetime.timedelta(hours=1),
+            then,
             'general_block',
             moderator.id,
             member.id,
@@ -689,6 +691,32 @@ class API(commands.Cog):
                 send_messages_in_threads=False,
                 reason=reason,
             )
+        except:
+            await ctx.send('\N{THUMBS DOWN SIGN}')
+        else:
+            await ctx.send(f'Blocked {member} for {time.format_relative(duration.dt)}.')
+
+    @commands.command(name="tempnogeneral", aliases=["tempng"])
+    @can_use_tempblock()
+    async def temp_no_general(self, ctx: GuildContext, duration: time.FutureTime, *, member: discord.Member):
+        """Temporarily blocks a user from your the general category of channels.
+
+        The duration can be a a short time form, e.g. 30d or a more human
+        duration such as "until thursday at 3PM" or a more concrete time
+        such as "2017-12-31".
+
+        Note that times are in UTC.
+        """
+
+        if member.top_role >= ctx.author.top_role:
+            return
+
+        created_at = ctx.message.created_at
+        if is_discord_py_helper(ctx.author) and duration.dt > (created_at + datetime.timedelta(minutes=60)):
+            return await ctx.send('Helpers can only block for up to an hour.')
+
+        try:
+            await self._attempt_general_block(ctx.author, member)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
