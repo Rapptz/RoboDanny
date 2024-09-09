@@ -181,6 +181,9 @@ class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
     def __init__(self) -> None:
         super().__init__(custom_id='dpy-create-thread-modal')
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        await interaction.response.send_message(f'Sorry, something went wrong.\n\n{error}', ephemeral=True)
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
         self.stop()
         await interaction.response.send_message('Thread created now.', ephemeral=True)
