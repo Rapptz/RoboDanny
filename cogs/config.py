@@ -55,18 +55,12 @@ else:
         async def convert(self, ctx: Context, argument: str) -> str:
             lowered = argument.lower()
 
-            # fmt: off
-            valid_commands = {
-                c.qualified_name
-                for c in ctx.bot.walk_commands()
-                if c.cog_name not in ('Config', 'Admin')
-            }
-            # fmt: on
+            command = ctx.bot.get_command(lowered)
 
-            if lowered not in valid_commands:
+            if command is None or command.cog_name in ('Config', 'Admin'):
                 raise commands.BadArgument(f'Command {lowered!r} is not valid.')
 
-            return lowered
+            return command.qualified_name
 
 
 class ResolvedCommandPermissions:
