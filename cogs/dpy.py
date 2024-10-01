@@ -243,7 +243,10 @@ class DPYExclusive(commands.Cog, name='discord.py'):
             last_message = discord.utils.snowflake_time(thread.last_message_id)
             expires = last_message + datetime.timedelta(minutes=thread.auto_archive_duration)
             if now > expires:
-                await thread.edit(archived=True, reason='Auto-archived due to inactivity.')
+                try:
+                    await thread.edit(archived=True, reason='Auto-archived due to inactivity.')
+                except discord.HTTPException:
+                    pass
 
     @auto_archive_old_forum_threads.before_loop
     async def before_auto_archive_old_forum_threads(self):
