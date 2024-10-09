@@ -990,7 +990,6 @@ class GatekeeperSetUpView(discord.ui.View):
         self.update_state(invalidate=False)
 
     def update_state(self, *, invalidate: bool = True) -> None:
-
         if invalidate:
             self.cog.invalidate_gatekeeper(self.gatekeeper.id)
 
@@ -2257,9 +2256,7 @@ class Mod(commands.Cog):
         if config.automod_flags.alerts:
             spammers = checker.is_alertable_join_spam(member)
             if spammers:
-                msg = (
-                    f'Detected {plural(len(spammers)):member} joining in rapid succession. Please review.'
-                )
+                msg = f'Detected {plural(len(spammers)):member} joining in rapid succession. Please review.'
                 view = discord.ui.View(timeout=None)
                 view.add_item(GatekeeperAlertMassbanButton(self))
                 await config.send_alert(content=msg, view=view)
@@ -3494,6 +3491,7 @@ class Mod(commands.Cog):
         """
 
         await ctx.defer()
+
         predicates: list[Callable[[discord.Message], Any]] = []
         if flags.bot:
             if flags.webhooks:
@@ -3534,6 +3532,11 @@ class Mod(commands.Cog):
             require_prompt = True
             predicates.append(lambda m: True)
 
+        # Only allow deleting recent messages
+        # Technically a breaking change since the old purge allowed single deletes
+        threshold = discord.utils.utcnow() - datetime.timedelta(days=14)
+        predicates.append(lambda m: m.created_at >= threshold)
+
         op = all if flags.require == 'all' else any
 
         def predicate(m: discord.Message) -> bool:
@@ -3547,11 +3550,6 @@ class Mod(commands.Cog):
         if search is None:
             search = 100
 
-        if require_prompt:
-            confirm = await ctx.prompt(f'Are you sure you want to delete up to {plural(search):message}?', timeout=30)
-            if not confirm:
-                return await ctx.send('Aborting.')
-
         before = discord.Object(id=flags.before) if flags.before else None
         after = discord.Object(id=flags.after) if flags.after else None
 
@@ -3561,12 +3559,28 @@ class Mod(commands.Cog):
             # To work around this, we need to get the deferred message's ID and avoid deleting it.
             before = await ctx.interaction.original_response()
 
-        try:
-            deleted = await ctx.channel.purge(limit=search, before=before, after=after, check=predicate)
-        except discord.Forbidden as e:
+        if not ctx.bot_permissions.manage_messages:
             return await ctx.send('I do not have permissions to delete messages.')
+
+        try:
+            deleted = [msg async for msg in ctx.channel.history(limit=search, before=before, after=after) if predicate(msg)]
+        except discord.Forbidden as e:
+            return await ctx.send('I do not have permissions to search for messages.')
         except discord.HTTPException as e:
             return await ctx.send(f'Error: {e} (try a smaller search?)')
+
+        if require_prompt:
+            confirm = await ctx.prompt(f'Are you sure you want to delete {plural(len(deleted)):message}?', timeout=30)
+            if not confirm:
+                return await ctx.send('Aborting.')
+
+        for chunk in discord.utils.as_chunks(deleted, 100):
+            try:
+                await ctx.channel.delete_messages(chunk, reason=f'Action done by {ctx.author} (ID: {ctx.author.id}): Purge')
+            except discord.Forbidden:
+                return await ctx.send('I do not have permissions to delete messages.')
+            except discord.HTTPException as e:
+                return await ctx.send(f'Error while deleting: {e}')
 
         spammers = Counter(m.author.display_name for m in deleted)
         deleted = len(deleted)
