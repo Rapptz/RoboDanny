@@ -643,6 +643,7 @@ class Tags(commands.Cog):
     async def stats(self, ctx: GuildContext, *, member: discord.User = None):
         """Gives tag statistics for a member or the server."""
 
+        await ctx.defer()
         if member is None:
             await self.guild_tag_stats(ctx)
         else:
