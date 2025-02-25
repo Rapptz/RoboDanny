@@ -321,6 +321,16 @@ class Buttons(commands.Cog):
         """depress"""
         await ctx.send('*depressed*')
 
+    @commands.command(hidden=True)
+    async def funny(self, ctx: Context):
+        """fun"""
+        await ctx.send('Very funny.')
+    
+    @commands.command(hidden=True)
+    async def unfunny(self, ctx: Context):
+        """unfun"""
+        await ctx.send('Not funny.')
+
     @commands.command()
     async def love(self, ctx: Context):
         """What is love?"""
