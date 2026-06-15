@@ -289,7 +289,9 @@ class RoboDanny(commands.AutoShardedBot):
                 needs_resolution.append(member_id)
 
         total_need_resolution = len(needs_resolution)
-        if total_need_resolution == 1:
+        if total_need_resolution == 0:
+            return
+        elif total_need_resolution == 1:
             shard: discord.ShardInfo = self.get_shard(guild.shard_id)  # type: ignore  # will never be None
             if shard.is_ws_ratelimited():
                 try:
