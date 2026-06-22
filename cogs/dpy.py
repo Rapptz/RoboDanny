@@ -315,6 +315,7 @@ class DPYExclusive(commands.Cog, name='discord.py'):
 
         if len(thread.name) <= 20:
             low_quality_title = (
+                f'<@!{thread.owner_id}>\n'
                 'This thread has been automatically closed due to a potentially low quality title. '
                 'Your title should be descriptive of the problem you are having.\n\n'
                 'Please remake your thread with a new and more descriptive title.'
