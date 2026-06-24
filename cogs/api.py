@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from asyncpg import Record, Connection
     from cogs.reminder import Timer
     from cogs.dpy import DPYExclusive
+    from cogs.reminder import Reminder as ReminderCog, Timer
 
 
 DISCORD_API_ID = 81384788765712384
@@ -33,6 +34,7 @@ DISCORD_PY_JP_CATEGORY = 490287576670928914
 DISCORD_PY_JP_STAFF_ROLE = 490320652230852629
 DISCORD_PY_PROF_ROLE = 381978395270971407
 DISCORD_PY_HELPER_ROLE = 558559632637952010
+DISCORD_PY_NO_GENERAL_ROLE = 1258249274899169290
 # DISCORD_PY_HELP_CHANNELS = (381965515721146390, 738572311107469354, 985299059441025044)
 DISCORD_PY_HELP_CHANNEL = 985299059441025044
 
@@ -55,6 +57,10 @@ def is_discord_py_helper(member: discord.Member) -> bool:
         return False
 
     return member._roles.has(DISCORD_PY_HELPER_ROLE)
+
+def can_use_no_general(member: discord.Member) -> bool:
+    # Using `ban_members` over `manage_roles` since Documentation Manager has that
+    return member.guild_permissions.ban_members or is_discord_py_helper(member)
 
 
 def can_use_block():
@@ -168,6 +174,21 @@ class BotUser(commands.Converter):
             return user
 
 
+class CreateHelpThreadModal(discord.ui.Modal, title='Create help thread'):
+    thread_name = discord.ui.TextInput(label='Thread title', placeholder='Name for the help thread...', min_length=20, max_length=100)
+    should_mute = discord.ui.TextInput(label='Apply mute?', default="Yes", min_length=2, max_length=3)
+
+    def __init__(self) -> None:
+        super().__init__(custom_id='dpy-create-thread-modal')
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        await interaction.response.send_message(f'Sorry, something went wrong.\n\n{error}', ephemeral=True)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        self.stop()
+        await interaction.response.send_message('Thread created now.', ephemeral=True)
+
+
 class RepositoryExample(NamedTuple):
     path: str
     url: str
@@ -186,6 +207,8 @@ class API(commands.Cog):
     def __init__(self, bot: RoboDanny):
         self.bot: RoboDanny = bot
         self.issue = re.compile(r'##(?P<number>[0-9]+)')
+        self.create_thread_context = discord.app_commands.ContextMenu(name='Create help thread', callback=self.create_thread_callback)
+        self.bot.tree.add_command(self.create_thread_context, guild=discord.Object(id=DISCORD_PY_GUILD))
 
     @property
     def display_emoji(self) -> discord.PartialEmoji:
@@ -199,6 +222,84 @@ class API(commands.Cog):
         if member.bot:
             role = discord.Object(id=USER_BOTS_ROLE)
             await member.add_roles(role)
+
+    def cog_unload(self) -> None:
+        self.bot.tree.remove_command(
+            self.create_thread_context.name,
+            guild=discord.Object(id=DISCORD_PY_GUILD),
+            type=self.create_thread_context.type
+        )
+
+    async def _attempt_general_block(self, moderator: discord.Member, member: Union[discord.User, discord.Member]) -> None:
+        reminder: Optional[ReminderCog] = self.bot.get_cog('Reminder') # type: ignore # type downcasting
+        if not reminder:
+            return # we can't apply the timed role.
+
+        resolved = moderator.guild.get_member(member.id) if isinstance(member, discord.User) else member
+
+        if not resolved:
+            return # left the guild(?)
+
+        now = discord.utils.utcnow()
+        then = now + datetime.timedelta(hours=1)
+
+        await resolved.add_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason=f'Temp no general role by {moderator} (ID: {moderator.id}) until {discord.utils.format_dt(then), "F"}')
+
+        await reminder.create_timer(
+            then,
+            'general_block',
+            moderator.id,
+            member.id,
+            created=now
+        )
+
+    @commands.Cog.listener()
+    async def on_general_block_timer_complete(self, timer: Timer) -> None:
+        moderator_id, member_id = timer.args
+        await self.bot.wait_until_ready()
+
+        guild = self.bot.get_guild(DISCORD_PY_GUILD)
+        if guild is None:
+            # RIP
+            return
+
+        member = await self.bot.get_or_fetch_member(guild, member_id)
+        if member is None:
+            # They left the guild
+            return
+
+        moderator = await self.bot.get_or_fetch_member(guild, moderator_id)
+        if moderator is None:
+            try:
+                moderator = await self.bot.fetch_user(moderator_id)
+            except discord.HTTPException:
+                moderator = f'Mod ID: {moderator_id}'
+            else:
+                moderator = f'{moderator} (ID: {moderator_id})'
+
+        reason = f'Automatic removal of role from timer made on {timer.created_at} by {moderator}.'
+        await member.remove_roles(discord.Object(id=DISCORD_PY_NO_GENERAL_ROLE), reason=reason)
+
+
+    async def create_thread_callback(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        if not can_use_no_general(interaction.user):  # type: ignore # discord.Member since we're guild guarded
+            return await interaction.response.send_message('Sorry, this command is not available to you!')
+
+        modal = CreateHelpThreadModal()
+        await interaction.response.send_modal(modal)
+        if await modal.wait():
+            return # we return on timeout, rather than proceeding
+
+        forum: discord.ForumChannel = interaction.guild.get_channel(DISCORD_PY_HELP_CHANNEL)  # pyright: ignore[reportAssignmentType,reportOptionalMemberAccess] # we know the type via ID and that guild is present
+        thread, _ = await forum.create_thread(
+            name=modal.thread_name.value,
+            content=message.content,
+            files=[await attachment.to_file() for attachment in message.attachments]
+        )
+        await thread.send(f'This thread was created on behalf of {message.author.mention}. Please continue your discussion for help in here.')
+
+        if modal.should_mute.value.lower() == "yes":
+            await self._attempt_general_block(interaction.user, message.author) # pyright: ignore[reportArgumentType] # can only be executed from the guild
 
     def parse_object_inv(self, stream: SphinxObjectFileReader, url: str) -> dict[str, str]:
         # key: URL
@@ -590,6 +691,32 @@ class API(commands.Cog):
                 send_messages_in_threads=False,
                 reason=reason,
             )
+        except:
+            await ctx.send('\N{THUMBS DOWN SIGN}')
+        else:
+            await ctx.send(f'Blocked {member} for {time.format_relative(duration.dt)}.')
+
+    @commands.command(name="tempnogeneral", aliases=["tempng"])
+    @can_use_tempblock()
+    async def temp_no_general(self, ctx: GuildContext, duration: time.FutureTime, *, member: discord.Member):
+        """Temporarily blocks a user from your the general category of channels.
+
+        The duration can be a a short time form, e.g. 30d or a more human
+        duration such as "until thursday at 3PM" or a more concrete time
+        such as "2017-12-31".
+
+        Note that times are in UTC.
+        """
+
+        if member.top_role >= ctx.author.top_role:
+            return
+
+        created_at = ctx.message.created_at
+        if is_discord_py_helper(ctx.author) and duration.dt > (created_at + datetime.timedelta(minutes=60)):
+            return await ctx.send('Helpers can only block for up to an hour.')
+
+        try:
+            await self._attempt_general_block(ctx.author, member)
         except:
             await ctx.send('\N{THUMBS DOWN SIGN}')
         else:
